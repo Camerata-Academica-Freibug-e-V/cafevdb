@@ -114,6 +114,9 @@
         "Make the DependencyFactory extendable": "../dev-scripts/lib/patches/doctrine/migrations/extendable-dependency-factory.patch",
         "Handle micro-second resolution in executedAt": "../dev-scripts/lib/patches/doctrine/migrations/handle-micro-second-resolution.patch"
       },
+      "rotdrop/nextcloud-app-toolkit": {
+        "Use the connection type provider with recent DBAL": "../patches/composer/nextcloud-app-toolkit-type-provider.patch"
+      },
       "nesbot/carbon": {
         "Fix setAccessible() deprecation": "../dev-scripts/lib/patches/nesbot/carbon/fix-set-accessible-deprecation.php"
       },

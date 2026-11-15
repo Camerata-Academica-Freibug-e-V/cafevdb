@@ -1,0 +1,27 @@
+--- a/src/Doctrine/ORM/AbstractEntityManager.php
++++ b/src/Doctrine/ORM/AbstractEntityManager.php
+@@ -111,10 +111,20 @@
+         }
+         $instance = new $phpType;
+         $typeName = $instance->getName();
+-        if (!Type::hasType($typeName)) {
+-          Type::addType($typeName, $phpType);
++        $configuration = $connection->getConfiguration();
++        if (method_exists($configuration, 'getTypeProvider')) {
++          $typeProvider = $configuration->getTypeProvider();
++          if (!$typeProvider->has($typeName)) {
++            $typeProvider->register($typeName, $phpType);
++          } else {
++            $typeProvider->override($typeName, $phpType);
++          }
+-        } else {
+-          Type::overrideType($typeName, $phpType);
++        } else {
++          if (!Type::hasType($typeName)) {
++            Type::addType($typeName, $phpType);
++          } else {
++            Type::overrideType($typeName, $phpType);
++          }
+         }
+         if (!empty($sqlType)) {
+           $platform->registerDoctrineTypeMapping($sqlType, $typeName);
