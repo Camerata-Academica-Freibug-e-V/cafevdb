@@ -22,7 +22,7 @@
     "doctrine/annotations": "*",
     "doctrine/dbal": "^4.0",
     "doctrine/migrations": "*",
-    "doctrine/orm": "dev-production/3.7.x/cafevdb",
+    "doctrine/orm": "dev-production/3.8.x/cafevdb",
     "gedmo/doctrine-extensions": "3.7.x-dev",
     "maennchen/zipstream-php": "^3.0.0",
     "mediamonks/doctrine-extensions": "0.1.x-dev",
@@ -56,14 +56,8 @@
       "url": "https://github.com/rotdrop/nextcloud-app-toolkit"
     },
     {
-      "type": "path",
-      "url": "3rdparty/doctrine-orm",
-      "options": {
-        "versions": {
-          "doctrine/orm": "dev-production/3.7.x/cafevdb"
-        },
-        "symlink": false
-      }
+      "type": "vcs",
+      "url": "https://github.com/rotdrop/orm"
     },
     {
       "type": "path",
