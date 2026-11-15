@@ -40,7 +40,6 @@ use OCA\CAFEVDB\Service\EventsService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Storage\UserStorage;
 use OCA\CAFEVDB\Tests\MockProvider;
-use OCA\RotDrop\Tests\DeprecationException;
 
 /**
  * Misuse the PHPUnit framework to generate test-data for the members
@@ -181,6 +180,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\UserPreferencesTrait::class)]
 class ArtifactsTest extends TestCase
 {
+  use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\EnableDeprecationsTrait;
   use \OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
   use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Entities\EntityGeneratorTrait;
   use \OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
@@ -189,8 +189,7 @@ class ArtifactsTest extends TestCase
   /** {@inheritdoc} */
   public function setup(): void
   {
-    error_reporting(E_ALL);
-    DeprecationException::throwOnDeprecations(exclude: '/OCP\\\\IConfig\\:\\:(get|set|delete)AppValue/');
+    self::enableDeprecations();
 
     $this->databaseProvider = \OCP\Server::get(DatabaseProvider::class);
 
@@ -198,12 +197,6 @@ class ArtifactsTest extends TestCase
       // echo 'STARTING DB SERVER' . PHP_EOL;
       $this->databaseProvider->startServer();
     }
-  }
-
-  /** @return void */
-  public function tearDown(): void
-  {
-    restore_error_handler();
   }
 
   /** @return void */
