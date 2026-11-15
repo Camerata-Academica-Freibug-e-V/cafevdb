@@ -38,16 +38,59 @@ use OCA\CAFEVDB\Service\L10N\BiDirectionalL10N;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\Carbon;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Platforms\MariaDBPlatform;
-use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Types\Type;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\DriverManager;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Types\TypeRegistry;
+use OCA\CAFEVDB\Wrapped\Doctrine\Deprecations\Deprecation;
+use OCA\CAFEVDB\Wrapped\Doctrine\ORM\EntityManagerInterface;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\DBAL\Types\ArrayType;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\DBAL\Types\DecimalRationalMonetaryType;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\DBAL\Types\UuidType;
+use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\MutableTypeProvider;
+use OCA\RotDrop\Tests\DeprecationException;
 use OCA\RotDrop\DevScripts\PhpToTypeScript\GenerateEntityMetadata;
 
 /** Exercise real entity metadata without an application database connection. */
 #[Attributes\CoversNothing]
 class OfflineEntityManagerTest extends TestCase
 {
+  /** @return void */
+  public function testCarbonTypeRegistrationWithoutDeprecations(): void
+  {
+    Deprecation::enableWithTriggerError();
+    Deprecation::withoutDeduplication();
+    DeprecationException::throwOnDeprecations();
+    try {
+      foreach ([new TypeRegistry(), new MutableTypeProvider(new TypeRegistry())] as $provider) {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $connection->getConfiguration()->setTypeProvider($provider);
+        $wrapped = $this->createStub(EntityManagerInterface::class);
+        $wrapped->method('getConnection')->willReturn($connection);
+        $entityManager = $this->getMockBuilder(EntityManager::class)
+          ->disableOriginalConstructor()
+          ->onlyMethods(['getWrappedObject', 'getConnection'])
+          ->getMock();
+        $entityManager->method('getWrappedObject')->willReturn($wrapped);
+        $entityManager->method('getConnection')->willReturn($connection);
+        $registerTypes = new \ReflectionMethod(EntityManager::class, 'registerTypes');
+        $registerTypes->invoke($entityManager);
+        $registerTypes->invoke($entityManager);
+
+        self::assertSame($provider, $connection->getConfiguration()->getTypeProvider());
+        foreach (['date', 'datetime', 'datetimetz'] as $name) {
+          self::assertSame(Carbon\Doctrine\DateTimeType::class, $provider->get($name)::class);
+          self::assertSame(Carbon\Doctrine\DateTimeImmutableType::class, $provider->get($name . '_immutable')::class);
+        }
+        foreach ([UuidType::class, DecimalRationalMonetaryType::class, ArrayType::class] as $typeClass) {
+          self::assertInstanceOf($typeClass, $provider->get($typeClass::NAME));
+          self::assertSame($typeClass::NAME, $connection->getDatabasePlatform()->getDoctrineTypeMapping($typeClass::NAME));
+        }
+        self::assertFalse($connection->isConnected());
+      }
+    } finally {
+      restore_error_handler();
+    }
+  }
+
   /** @return void */
   public function testMetadataWithExplicitServerVersion(): void
   {
@@ -59,12 +102,13 @@ class OfflineEntityManagerTest extends TestCase
     self::assertFalse($connection->isConnected());
     self::assertSame('11.7.0-MariaDB', $connection->getParams()['serverVersion']);
     $platform = $connection->getDatabasePlatform();
+    $provider = $connection->getConfiguration()->getTypeProvider();
     self::assertInstanceOf(MariaDBPlatform::class, $platform);
     foreach ([UuidType::class, DecimalRationalMonetaryType::class, ArrayType::class] as $typeClass) {
-      self::assertInstanceOf($typeClass, Type::getType($typeClass::NAME));
+      self::assertInstanceOf($typeClass, $provider->get($typeClass::NAME));
       self::assertSame($typeClass::NAME, $platform->getDoctrineTypeMapping($typeClass::NAME));
     }
-    self::assertInstanceOf(Carbon\Doctrine\DateTimeType::class, Type::getType('datetime'));
+    self::assertInstanceOf(Carbon\Doctrine\DateTimeType::class, $provider->get('datetime'));
 
     $generator = new GenerateEntityMetadata(
       devScriptsFolder: dirname(__DIR__, 4) . '/dev-scripts',
