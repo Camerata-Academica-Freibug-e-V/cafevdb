@@ -35,11 +35,8 @@ declare global {
   }
 }
 
-// this triggers a deprecation warning from NC core ;)
-console.debug('Expect a deprecation warning ...');
 const windowJQuery = window.jQuery;
 
-// jQuery still installs itself globally ...
 console.debug('JQUERY INSTANCES window / self', {
   global: windowJQuery?.fn.jquery,
   local: localJQuery.fn.jquery,

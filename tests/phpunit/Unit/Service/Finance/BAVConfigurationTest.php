@@ -38,6 +38,8 @@ use OCA\CAFEVDB\Wrapped\rotdrop\bav\DataBackend\Orm\Doctrine\DoctrineBackendCont
 use OCA\CAFEVDB\Wrapped\rotdrop\bav\DataBackend\Orm\Doctrine\DoctrineDataBackend;
 
 #[Attributes\CoversClass(BAVConfiguration::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Common\ConsoleLogger::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\DeprecationLogger::class)]
 class BAVConfigurationTest extends TestCase
 {
   /**

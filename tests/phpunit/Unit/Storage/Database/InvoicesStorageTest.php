@@ -34,7 +34,6 @@ use OCA\CAFEVDB\Common\TimeFactory;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Storage\Database as DatabaseStorage;
 use OCA\CAFEVDB\Tests\MockProvider;
-use OCA\RotDrop\Tests\DeprecationException;
 
 /** Test aspects of the invoices storage. */
 #[Attributes\CoversClass(DatabaseStorage\InvoicesStorage::class)]
@@ -145,6 +144,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Traits\TranslatableEnumTrait::class)]
 class InvoicesStorageTest extends TestCase
 {
+  use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\EnableDeprecationsTrait;
   use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Entities\EntityGeneratorTrait;
   use \OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
   use \OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
@@ -164,7 +164,7 @@ class InvoicesStorageTest extends TestCase
   /** {@inheritdoc} */
   public function setup(): void
   {
-    DeprecationException::throwOnDeprecations(exclude: '/OCP\\\\IConfig\\:\\:(get|set|delete)AppValue/');
+    self::enableDeprecations();
 
     $this->generateCalendarBackend();
 
@@ -196,12 +196,6 @@ class InvoicesStorageTest extends TestCase
     $this->storage = new DatabaseStorage\InvoicesStorage([
       'configService' => $this->mockProvider->getConfigService(),
     ]);
-  }
-
-  /** @return void */
-  public function tearDown(): void
-  {
-    restore_error_handler();
   }
 
   /**

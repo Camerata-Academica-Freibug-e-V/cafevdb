@@ -33,7 +33,6 @@ use PHPUnit\Framework\TestCase;
 
 use OCA\CAFEVDB\Service\InstrumentationService;
 use OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Entities\EntityGeneratorTrait;
-use OCA\RotDrop\Tests\DeprecationException;
 
 /** Test the EventsService class. */
 #[Attributes\CoversClass(InstrumentationService::class)]
@@ -143,6 +142,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Traits\TranslatableEnumTrait::class)]
 class InstrumentationServiceTest extends TestCase
 {
+  use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\EnableDeprecationsTrait;
   use EntityGeneratorTrait;
   use \OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
   use \OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
@@ -150,13 +150,7 @@ class InstrumentationServiceTest extends TestCase
   /** {@inheritdoc} */
   public function setup(): void
   {
-    DeprecationException::throwOnDeprecations(exclude: '/OCP\\\\IConfig\\:\\:(get|set|delete)AppValue/');
-  }
-
-  /** @return void */
-  public function tearDown(): void
-  {
-    restore_error_handler();
+    self::enableDeprecations();
   }
 
   /** @return void */

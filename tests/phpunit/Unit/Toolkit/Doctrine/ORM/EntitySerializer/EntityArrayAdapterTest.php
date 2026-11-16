@@ -41,7 +41,6 @@ use OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Entities\EntityGeneratorTrait;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\EntitySerializer;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\EntitySerializer\EntityArrayAdapter;
 use OCA\RotDrop\Tests\DatabaseProvider;
-use OCA\RotDrop\Tests\DeprecationException;
 
 /** Test aspects of the EntityArrayAdapter */
 #[Attributes\CoversClass(EntityArrayAdapter::class)]
@@ -125,6 +124,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\UserPreferencesTrait::class)]
 class EntityArrayAdapterTest extends TestCase
 {
+  use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\EnableDeprecationsTrait;
   use EntityGeneratorTrait;
 
   private EntityArrayAdapter $entityArrayAdapter;
@@ -134,8 +134,7 @@ class EntityArrayAdapterTest extends TestCase
   /** {@inheritdoc} */
   public function setup(): void
   {
-    error_reporting(E_ALL);
-    DeprecationException::throwOnDeprecations(exclude: '/OCP\\\\IConfig\\:\\:(get|set|delete)AppValue/');
+    self::enableDeprecations();
 
     self::$uuidIndex = 0;
 
