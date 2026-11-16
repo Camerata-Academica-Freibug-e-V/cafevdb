@@ -69,8 +69,8 @@ class OfflineEntityManagerTest extends TestCase
           ->disableOriginalConstructor()
           ->onlyMethods(['getWrappedObject', 'getConnection'])
           ->getMock();
-        $entityManager->method('getWrappedObject')->willReturn($wrapped);
-        $entityManager->method('getConnection')->willReturn($connection);
+        $entityManager->expects($this->atLeastOnce())->method('getWrappedObject')->willReturn($wrapped);
+        $entityManager->expects($this->atLeastOnce())->method('getConnection')->willReturn($connection);
         $registerTypes = new \ReflectionMethod(EntityManager::class, 'registerTypes');
         $registerTypes->invoke($entityManager);
         $registerTypes->invoke($entityManager);
