@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">20.75% </span>
+                <span class="strong">14.15% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>22/106</span>
+                <span class='fraction'>15/106</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">20.4% </span>
+                <span class="strong">18.36% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>10/49</span>
+                <span class='fraction'>9/49</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">18.18% </span>
+                <span class="strong">4.54% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>4/22</span>
+                <span class='fraction'>1/22</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">20.95% </span>
+                <span class="strong">14.28% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>22/105</span>
+                <span class='fraction'>15/105</span>
             </div>
         
             
@@ -754,24 +754,24 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -780,7 +780,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1117,20 +1117,20 @@ const mySmallConfig = {
   },
 };
 &nbsp;
-const myGetConfig = function(plusConfig: Record&lt;string, unknown&gt;) {
-  <span class="missing-if-branch" title="if path not taken" >I</span>if (typeof plusConfig === 'undefined') {
+const myGetConfig = <span class="fstat-no" title="function not covered" >function(p</span>lusConfig: Record&lt;string, unknown&gt;) {
+<span class="cstat-no" title="statement not covered" >  if (typeof plusConfig === 'undefined') {</span>
 <span class="cstat-no" title="statement not covered" >    plusConfig = {};</span>
   }
-  return { ...myConfig, ...plusConfig };
+<span class="cstat-no" title="statement not covered" >  return { ...myConfig, ...plusConfig };</span>
 };
 &nbsp;
-const myInit = (lang: string) =&gt; {
-  myConfig.language = lang;
-  const allconfig = myGetConfig({
+const <span class="fstat-no" title="function not covered" >myInit = (l</span>ang: string) =&gt; {
+<span class="cstat-no" title="statement not covered" >  myConfig.language = lang;</span>
+  const allconfig = <span class="cstat-no" title="statement not covered" >myGetConfig({</span>
     selector: `textarea.${WYSIWYG_EDITOR}`,
   });
-  console.info('WINDOW MCE', { mce: tinyMCE });
-  tinyMCE.init(allconfig);
+<span class="cstat-no" title="statement not covered" >  console.info('WINDOW MCE', { mce: tinyMCE });</span>
+<span class="cstat-no" title="statement not covered" >  tinyMCE.init(allconfig);</span>
 };
 &nbsp;
 const <span class="fstat-no" title="function not covered" >myInitElement = (e</span>lement: HTMLElement, plusConfig: RawEditorOptions) =&gt; {
@@ -1143,8 +1143,8 @@ const <span class="fstat-no" title="function not covered" >myInitElement = (e</s
 <span class="cstat-no" title="statement not covered" >  return tinyMCE.init({ ...elementConfig, target: element });</span>
 };
 &nbsp;
-$(function() {
-  myInit(getLanguage().split('-')[0]);
+$(<span class="fstat-no" title="function not covered" >function() {</span>
+<span class="cstat-no" title="statement not covered" >  myInit(getLanguage().split('-')[0]);</span>
 });
 &nbsp;
 export {
@@ -1162,7 +1162,7 @@ export {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-11-17T10:35:14.691Z
+                at 2026-11-17T12:28:34.378Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
