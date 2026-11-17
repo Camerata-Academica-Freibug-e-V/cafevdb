@@ -861,7 +861,6 @@ class FinanceService
       'location' => 'Cyber-Space',
       'categories' => $categories,
       'description' => $description,
-      'repeat' => 'doesnotrepeat',
       'calendar' => $calendarId,
       'alarm' => $alarm,
     ];

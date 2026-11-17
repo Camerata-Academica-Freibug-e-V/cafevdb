@@ -46,7 +46,7 @@ use OCA\CAFEVDB\Common\TimeFactory;
 use OCA\CAFEVDB\Common\UndoableRunQueue;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
-use OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object;
+use OCA\CAFEVDB\Service\CalendarObjectFactory;
 use OCA\CAFEVDB\Service\CalDavService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\DTO\CalendarEntryChangeSet;
@@ -107,7 +107,7 @@ class EventsServiceCalendarChangeSetTest extends TestCase
       timeFactory: $this->timeFactory,
       vCalendarService: new VCalendarService(
         $this->configService,
-        $this->createStub(OC_Calendar_Object::class),
+        $this->createStub(CalendarObjectFactory::class),
       ),
     );
   }

@@ -47,7 +47,6 @@ use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Repositories;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Repositories\EntityRepository;
 use OCA\CAFEVDB\Database\EntityManager;
-use OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object;
 use OCA\CAFEVDB\Service\CalDavService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\EventsService;
