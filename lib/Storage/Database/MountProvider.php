@@ -49,6 +49,7 @@ use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Exceptions\MissingProjectsFolderException;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\MountAuthenticationService;
 use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Storage\UserStorage;
@@ -76,6 +77,7 @@ class MountProvider implements IMountProvider
     private IUserMountCache $mountCache,
     private IDBConnection $connection,
     private IUserSession $userSession,
+    private MountAuthenticationService $mountAuthenticationService,
   ) {
     $this->l = $this->l10n();
   }
@@ -118,6 +120,11 @@ class MountProvider implements IMountProvider
     if ($userId == $this->shareOwnerId()) {
       $this->logDebug('Skipping virtual mounts for the shareholder: ' . $userId);
       return [];
+    }
+
+    if (!$this->mountAuthenticationService->authenticate($user)) {
+      $this->logDebug('No authenticated credentials for user ' . $userId);
+      return $this->getUnavailableMounts($user);
     }
 
     if (!$this->userSession->isLoggedIn()

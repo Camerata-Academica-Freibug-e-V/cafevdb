@@ -30,6 +30,21 @@ Features include
 The orchestra data-base is held separate from the cloud database and
 is based on Doctrine/ORM.
 
+Database-backed files and Collabora
+----------------------------------
+
+Database mounts require the user's password to unlock the app's encrypted
+database configuration. For validated WOPI requests, the mount provider can
+recover credentials created by the `feature/authenticated-requests-35` branch
+of `rotdrop/nextcloud-richdocuments`; stock richdocuments does not create
+them. This currently supports local users whose editor and filesystem user
+are the same, not guest or remote-user tokens.
+
+This is a security tradeoff: the fork stores the login password in a Nextcloud
+token protected with a passphrase derived from the WOPI access token, which is
+also available to the browser. Restrict access to tokens and protect their
+storage and transport. Token creation and expiry cleanup remain in the fork.
+
 Frontend builds
 ---------------
 
@@ -48,6 +63,49 @@ server-version detection and connection initialization.
 likewise use an explicit MariaDB platform for serialization metadata. Their
 repositories and entities are in-memory fixtures; they do not start an orchestra
 database server and check that serialization leaves the connection unopened.
+
+Office document credentials
+---------------------------
+
+A global response middleware provisions database-mount credentials for successful
+richdocuments `DocumentController::token()`, `index()`, and
+`createFromTemplate()` responses. It uses the returned token to load the
+authoritative WOPI record, checks filesystem authorization and matching local
+user identities, and only stores credentials for mounts marked `authenticated`.
+Other responses and ordinary mounts are left unchanged.
+
+This temporarily retains the fork's recoverable-password authentication-token
+format for compatibility with WOPI mount authentication: the lookup passphrase
+is `USER_ID@WOPI_TOKEN`, the stored token UID is the WOPI token, and the login
+name is the local user ID. Expiry follows the WOPI record. Provisioning failures
+return an error without exposing credentials or tokens in the response or log.
+It requires password credentials in the current Nextcloud login session.
+
+This covers only those three document-opening endpoints, not every richdocuments
+token producer. The mount-side authentication integration is required separately;
+this middleware does not log in WOPI requests. Removal of the fork's credential
+provisioning is performed separately.
+
+Provisioning records the authentication-token ID, synthetic UID and fixed WOPI
+expiry in CafeVDB's own `cafevdb_wopi_credentials` table in the Nextcloud database.
+The registry stores neither passwords nor derived login passphrases; the
+synthetic UID is the WOPI access token and must still be treated as sensitive.
+Run Nextcloud's app upgrade/migrations before enabling this code.
+
+`CleanupWopiCredentials` runs every ten minutes and invalidates up to 1,000
+registered expired temporary credentials per run, allowing a 60-second expiry
+grace period. It queries only the app-owned registry, then uses Nextcloud's
+`IProvider` to find and invalidate the exact credential, checking its UID, ID,
+type and name. Missing credentials are removed from the registry; operational
+failures retain the entry for retry. Ordinary app passwords are not enumerated.
+Cleanup works after WOPI-record deletion or richdocuments being disabled, without
+accessing Nextcloud's authentication tables, the orchestra database or a session.
+
+Credentials created by the fork are registered when successfully reused through
+the middleware. Legacy credentials never reused are not imported: there is no
+core-table scan. They remain subject to Nextcloud's normal token retention
+cleanup. Deploy CafeVDB and its migration before removing the fork's custom
+cleanup; leave richdocuments' standard WOPI and template cleanup enabled.
 
 User database recryption
 ------------------------
@@ -152,6 +210,21 @@ optional BAV Nextcloud app, so existing bank data is shared even though each
 app has its own namespace-wrapped library. The BAV app is not required.
 Missing bank tables are installed and populated automatically; downloads
 for installation and explicit updates use temporary files.
+
+Internal calendar updates
+-------------------------
+
+Internal calendar updates use `Service\DTO\CalendarEventChangeSet` or
+`CalendarTaskChangeSet`, derived from `CalendarEntryChangeSet`. Pass these
+objects directly to `EventsService::updateCalendarEvent()`,
+`updateCalendarTask()`, or `updateCalendarEntry()`; `toArray()` serializes dates
+and is not suitable for this service boundary. Null properties mean "leave
+unchanged"; empty strings clear text, `alarm: 0` or `alarm: []` clears alarms,
+and `related: []` clears relations. Event dates are immutable snapshots;
+all-day end dates are inclusive in the DTO and exclusive in iCalendar.
+`allDay` controls supplied dates, and an omitted end never defaults to the start.
+Calling `updateCalendarEntry()` without a change-set still writes the existing
+calendar object unchanged.
 
 PHP code quality
 ----------------

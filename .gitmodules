@@ -1,19 +1,23 @@
 [submodule "3rdparty/mediamonks-doctrine-extensions"]
 	path = 3rdparty/mediamonks-doctrine-extensions
 	url = https://github.com/rotdrop/mediamonks-doctrine-extensions.git
-	branch = feature/gedmo-dev
+	branch = feature/transform-context-field
 [submodule "3rdparty/doctrine-on-update-extension"]
 	path = 3rdparty/doctrine-on-update-extension
 	url = https://github.com/rotdrop/doctrine-on-update-extension.git
+        branch = feature/doctrine-orm-3.2.x
 [submodule "3rdparty/gedmo-doctrine-extensions"]
 	path = 3rdparty/gedmo-doctrine-extensions
 	url = https://github.com/rotdrop/DoctrineExtensions.git
+        branch = production/orm-3.8.x/cafevdb
 [submodule "3rdparty/doctrine-orm"]
 	path = 3rdparty/doctrine-orm
 	url = https://github.com/rotdrop/orm.git
+        branch = production/3.8.x/cafevdb
 [submodule "3rdparty/opentbs"]
 	path = 3rdparty/opentbs
 	url = https://github.com/rotdrop/opentbs.git
+        branch = production/cafevdb
 [submodule "3rdparty/vuejs-router"]
 	path = 3rdparty/vuejs-router
 	url = https://github.com/rotdrop/vuejs-router.git

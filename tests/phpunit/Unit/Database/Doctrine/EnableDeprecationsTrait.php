@@ -44,7 +44,7 @@ trait EnableDeprecationsTrait
     error_reporting(E_ALL);
     DoctrineDeprecation::enableWithTriggerError();
     DoctrineDeprecation::withoutDeduplication();
-    $exclude = 'Table::addColumn|OCP\\\\IConfig\\:\\:(get|set|delete)AppValue';
+    $exclude = 'Table::addColumn|Type::lookupName|VarDateTimeType|OCP\\\\IConfig\\:\\:(get|set|delete)AppValue';
     if ($extraExclude) {
       $exclude .= '|' . $extraExclude;
     }

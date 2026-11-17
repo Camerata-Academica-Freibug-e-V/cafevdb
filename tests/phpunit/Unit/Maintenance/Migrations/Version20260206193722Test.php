@@ -38,7 +38,6 @@ use OCA\CAFEVDB\Service\EventsService;
 use OCA\CAFEVDB\Storage\UserStorage;
 use OCA\CAFEVDB\Tests\MockProvider;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Exception\DriverException;
-use OCA\RotDrop\Tests\DeprecationException;
 
 /** Test integer overflow for Unix epoche after 2028. */
 #[Attributes\CoversClass(MigrationsNamespace\Version20260206193722::class)]
@@ -101,7 +100,8 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerBoundEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerClosedEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\MusicianEmailEvent::class)]
-#[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\DTO\CalendarEventData::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\ContactsCardEventListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\MusicianEmailAddressEntityListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\MusicianEntityListener::class)]
@@ -156,6 +156,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\UserPreferencesTrait::class)]
 class Version20260206193722Test extends TestCase
 {
+  use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\EnableDeprecationsTrait;
   use \OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
   use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Entities\EntityGeneratorTrait;
   use SetupMigrationTrait;
@@ -163,18 +164,10 @@ class Version20260206193722Test extends TestCase
   private const START_DATE = '20-01-2038';
   private const END_DATE = '27-01-2038';
 
-    /** {@inheritdoc} */
+  /** {@inheritdoc} */
   public function setup(): void
   {
-    \OCA\CAFEVDB\Wrapped\Doctrine\Deprecations\Deprecation::enableWithTriggerError();
-    error_reporting(E_ALL);
-    DeprecationException::throwOnDeprecations(exclude: '/Table::addColumn|OCP\\\\IConfig\\:\\:(get|set|delete)AppValue/');
-  }
-
-  /** @return void */
-  public function tearDown(): void
-  {
-    restore_error_handler();
+    self::enableDeprecations();
   }
 
   /** @return void */

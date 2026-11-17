@@ -22,8 +22,8 @@
     "doctrine/annotations": "*",
     "doctrine/dbal": "^4.0",
     "doctrine/migrations": "*",
-    "doctrine/orm": "dev-production/3.7.x/cafevdb",
-    "gedmo/doctrine-extensions": "3.7.x-dev",
+    "doctrine/orm": "dev-production/3.8.x/cafevdb",
+    "gedmo/doctrine-extensions": "3.8.x-dev",
     "maennchen/zipstream-php": "^3.0.0",
     "mediamonks/doctrine-extensions": "0.1.x-dev",
     "nesbot/carbon": "^2.46",
@@ -60,7 +60,7 @@
       "url": "3rdparty/doctrine-orm",
       "options": {
         "versions": {
-          "doctrine/orm": "dev-production/3.7.x/cafevdb"
+          "doctrine/orm": "dev-production/3.8.x/cafevdb"
         },
         "symlink": false
       }
@@ -87,7 +87,7 @@
       "url": "3rdparty/gedmo-doctrine-extensions",
       "options": {
         "versions": {
-          "gedmo/doctrine-extensions": "3.7.x-dev"
+          "gedmo/doctrine-extensions": "3.8.x-dev"
         },
         "symlink": false
       }

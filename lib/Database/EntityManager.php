@@ -61,6 +61,7 @@ use OCA\CAFEVDB\Exceptions;
 use OCA\CAFEVDB\Service\EncryptionService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\AbstractEntityManager;
+use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\MutableTypeProvider;
 use OCA\CAFEVDB\Wrapped\CJH\Doctrine\Extensions as CJH;
 use OCA\CAFEVDB\Wrapped\Doctrine as Doctrine;
 use OCA\CAFEVDB\Wrapped\DoctrineExtensions;
@@ -71,7 +72,7 @@ use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Event\ConnectionEventArgs;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Event\Listeners as DBALEventListeners;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Platforms\AbstractPlatform as DatabasePlatform;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Schema\DefaultSchemaManagerFactory;
-use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Types\Type;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Types\TypeRegistry;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Types as DBALTypes;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Configuration;
@@ -481,13 +482,23 @@ class EntityManager extends AbstractEntityManager
     parent::registerTypes();
 
     try {
-      // Override datetime stuff
-      Type::overrideType('date', \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeType::class);
-      Type::overrideType('date_immutable', \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeImmutableType::class);
-      Type::overrideType('datetime', \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeType::class);
-      Type::overrideType('datetime_immutable', \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeImmutableType::class);
-      Type::overrideType('datetimetz', \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeType::class);
-      Type::overrideType('datetimetz_immutable', \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeImmutableType::class);
+      $provider = $this->getConnection()->getConfiguration()->getTypeProvider();
+      if (!$provider instanceof TypeRegistry && !$provider instanceof MutableTypeProvider) {
+        throw new UnexpectedValueException('The connection type provider must support type replacement.');
+      }
+      foreach (['date', 'datetime', 'datetimetz'] as $name) {
+        foreach ([
+          $name => \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeType::class,
+          $name . '_immutable' => \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeImmutableType::class,
+        ] as $typeName => $typeClass) {
+          $type = new $typeClass();
+          if ($provider instanceof MutableTypeProvider) {
+            $provider->set($typeName, $type);
+          } else {
+            $provider->override($typeName, $type);
+          }
+        }
+      }
       $this->typesBound = true;
     } catch (Throwable $t) {
       throw new Exceptions\DatabaseException($this->l->t('Unable to register types with DBAL.'), previous: $t);

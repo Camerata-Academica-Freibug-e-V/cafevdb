@@ -39,8 +39,8 @@ use Sabre\VObject\Component\VEvent;
 use Sabre\VObject\Component as VComponent;
 use Sabre\VObject\Property\ICalendar;
 
-use OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumVCalendarType as VCalendarType;
+use OCA\CAFEVDB\Service\DTO\CalendarEventData;
 
 /** Operation/Builder for VCalendar objects */
 class VCalendarService
@@ -62,7 +62,7 @@ class VCalendarService
   /** {@inheritdoc} */
   public function __construct(
     protected ConfigService $configService,
-    private OC_Calendar_Object $legacyCalendarObject,
+    private CalendarObjectFactory $calendarObjectFactory,
   ) {
   }
 
@@ -82,7 +82,6 @@ class VCalendarService
    *   'to' => '30-11-2020',
    *   'totime' => '00:00:00',
    *   'calendar' => 'calendarId',
-   *   'repeat' => 'doesnotrepeat',
    *   'alarm' => [ [ 'START => -3600 ], [ 'END' => 1800 ], ]
    *   'participants' => [
    *     'organizer' => [ 'name' => NAME, 'email' => EMAIL ],
@@ -133,9 +132,6 @@ class VCalendarService
    */
   private function createVEventFromRequest(mixed $objectData):?VCalendar
   {
-    if (!isset($objectData['repeat'])) {
-      $objectData['repeat'] = 'doesnotrepeat';
-    }
     /** @var DateTimeInterface $start */
     $start = $objectData['start'] ?? null;
     if ($start instanceof DateTimeInterface) {
@@ -156,10 +152,19 @@ class VCalendarService
         $objectData['totime'] = $end->format('H:i:s');
       }
     }
-    if (is_array($objectData['categories'])) {
-      $objectData['categories'] = implode(',', $objectData['categories']);
-    }
-    $vObject = $this->legacyCalendarObject->createVCalendarFromRequest($objectData);
+    $eventData = new CalendarEventData(
+      summary: $objectData['summary'],
+      fromDate: $objectData['from'],
+      toDate: $objectData['to'],
+      allDay: $objectData['allDay'] ?? false,
+      fromTime: $objectData['fromtime'] ?? null,
+      toTime: $objectData['totime'] ?? null,
+      location: $objectData['location'] ?? null,
+      description: $objectData['description'] ?? null,
+      accessClass: $objectData['accessclass'] ?? null,
+      categories: $objectData['categories'] ?? [],
+    );
+    $vObject = $this->calendarObjectFactory->create($eventData);
     if (empty($vObject) || empty($vObject->VEVENT)) {
       return $vObject;
     }
@@ -308,57 +313,6 @@ class VCalendarService
         $vComponent->add($vAlarm);
       }
     }
-  }
-
-  /**
-   * @param VCalendar $vCalendar Sabre calendar object.
-   *
-   * @param mixed $objectData Calendar object description from HTTP request.
-   *
-   * @param VCalendarType $kind What kind of object to create.
-   *
-   * @return null|VCalendar
-   */
-  public function updateVCalendarFromRequest(VCalendar $vCalendar, mixed $objectData, VCalendarType $kind = VCalendarType::VEVENT):?VCalendar
-  {
-    switch ($kind) {
-      case VCalendarType::VEVENT:
-        return $this->updateVEventFromRequest($vCalendar, $objectData);
-      case VCalendarType::VTODO:
-        return $this->updateVTodoFromRequest($vCalendar, $objectData);
-      default:
-        return null;
-    }
-  }
-
-  /**
-   * @param VCalendar $vCalendar
-   *
-   * @param mixed $objectData Calendar object description from HTTP request.
-   *
-   * @return null|VCalendar
-   */
-  private function updateVEventFromRequest(VCalendar $vCalendar, mixed $objectData):VCalendar
-  {
-    $vCalendar = $this->legacyCalendarObject->updateVCalendarFromRequest($objectData, $vCalendar);
-    if (empty($vCalendar) || empty($objectData['alarm'])) {
-      return $vCalendar;
-    }
-    $this->addVAlarmsFromRequest($vCalendar, $vCalendar->VEVENT, $objectData);
-    $this->addParticipants($vCalendar, $vCalendar->VEVENT, $objectData);
-    $this->addRelations($vCalendar, $vCalendar->VEVENT, $objectData);
-
-    return $vCalendar;
-  }
-
-  /**
-   * @return OC_Calendar_Object The old Owncloud inherited calendar object.
-   *
-   * @todo Get rid of it.
-   */
-  public function legacyEventObject():OC_Calendar_Object
-  {
-    return $this->legacyCalendarObject;
   }
 
   /**
