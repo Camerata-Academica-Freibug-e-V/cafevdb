@@ -78,6 +78,8 @@ use OCA\CAFEVDB\Tests\Unit\Service\WordSplitterServiceTrait;
 #[Attributes\UsesClass(Listener\TranslationNotFoundListener::class)]
 #[Attributes\UsesClass(RationalNumber::class)]
 #[Attributes\UsesClass(Service\AuthorizationService::class)]
+#[Attributes\UsesClass(Service\DTO\CalendarEntryChangeSet::class)]
+#[Attributes\UsesClass(Service\DTO\CalendarEventChangeSet::class)]
 #[Attributes\UsesClass(Service\EncryptionService::class)]
 #[Attributes\UsesClass(Service\ToolTipsService::class)]
 #[Attributes\UsesClass(Util::class)]
