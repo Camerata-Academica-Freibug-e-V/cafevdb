@@ -9,23 +9,27 @@
 
 namespace OCA\CAFEVDB\Middleware;
 
+use Throwable;
+
 use OCA\CAFEVDB\Service\WopiTokenService;
 use OCA\Richdocuments\Controller\DocumentController;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Middleware;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
-use Throwable;
 
 /** Provision database-mount credentials before returning Office tokens. */
 class WopiTokenMiddleware extends Middleware
 {
+  use \OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Traits\LoggerTrait;
+
   // phpcs:disable Squiz.Commenting.FunctionComment.Missing
   public function __construct(
-    private ContainerInterface $appContainer,
-    private LoggerInterface $logger,
+    protected ContainerInterface $appContainer,
+    protected LoggerInterface $logger,
   ) {
   }
   // phpcs:enable
@@ -42,6 +46,7 @@ class WopiTokenMiddleware extends Middleware
     $data = match (true) {
       $response instanceof TemplateResponse => $response->getParams(),
       $response instanceof DataResponse => $response->getData(),
+      $response instanceof JSONResponse => $response->getData(),
       default => null,
     };
     if (!is_array($data) || !is_string($data['token'] ?? null) || $data['token'] === '') {
