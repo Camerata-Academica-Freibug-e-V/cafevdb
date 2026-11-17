@@ -77,6 +77,7 @@ use OCA\CAFEVDB\Tests\Unit\Service\SetupEventsServiceTrait;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\SepaDebitMandate::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\DTO\CalendarEventData::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\CalendarObjectCreatedEventListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConfigService::Class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EncryptionService::class)]

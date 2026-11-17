@@ -87,6 +87,7 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Legacy\PME\DefaultOptions::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\DTO\CalendarEventData::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\TranslationNotFoundListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\AuthorizationService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalDavService::class)]

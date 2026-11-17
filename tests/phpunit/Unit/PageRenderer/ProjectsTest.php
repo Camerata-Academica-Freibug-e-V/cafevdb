@@ -122,6 +122,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerClosedEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Exceptions\UndoableRunQueueException::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\DTO\CalendarEventData::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\PhpMyEdit\PhpMyEdit::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\PhpMyEdit\PhpMyEditTimer::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\ProjectEntityListener::class)]

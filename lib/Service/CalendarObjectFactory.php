@@ -52,6 +52,11 @@ class CalendarObjectFactory
   }
   // phpcs:enable
 
+  /**
+   * @param CalendarEventData $eventData Event properties.
+   *
+   * @return VCalendar
+   */
   public function create(CalendarEventData $eventData):VCalendar
   {
     $vcalendar = new VCalendar();
@@ -72,6 +77,13 @@ class CalendarObjectFactory
     return $this->populateVCalendar($eventData, $vcalendar);
   }
 
+  /**
+   * @param CalendarEventData $eventData Event properties.
+   *
+   * @param VCalendar $vcalendar Calendar containing the new event.
+   *
+   * @return VCalendar
+   */
   private function populateVCalendar(CalendarEventData $eventData, VCalendar $vcalendar):VCalendar
   {
     $vevent = $vcalendar->VEVENT;

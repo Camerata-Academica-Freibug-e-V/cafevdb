@@ -434,7 +434,6 @@ trait SetupCalendarBackendTrait
     $this->vCalendarService = new VCalendarService(
       configService: $mockProvider->getConfigService(),
       calendarObjectFactory: new CalendarObjectFactory(
-        l: $mockProvider->getL10N(),
         dateTimeZone: $this->createStub(IDateTimeZone::class),
       ),
     );

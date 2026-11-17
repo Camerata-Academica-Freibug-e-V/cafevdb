@@ -125,6 +125,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\MusicianEmailEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Exceptions\UndoableRunQueueException::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\DTO\CalendarEventData::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\CalendarObjectCreatedEventListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\CalendarObjectDeletedEventListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\CalendarObjectUpdatedEventListener::class)]
