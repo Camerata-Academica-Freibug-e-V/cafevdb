@@ -10,6 +10,7 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
+use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\MountAuthenticationService;
@@ -24,6 +25,7 @@ use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
 #[CoversClass(MountProvider::class)]
@@ -61,6 +63,9 @@ class DatabaseMountAuthorizationTest extends TestCase
     $config = $this->createStub(ConfigService::class);
     $config->method('getL10n')->willReturn($this->createStub(IL10N::class));
     $config->method('logger')->willReturn($this->createStub(LoggerInterface::class));
+    $container = $this->createMock(ContainerInterface::class);
+    $container->expects($this->never())->method('get');
+    $config->method('getAppContainer')->willReturn($container);
     $authorization = $this->createMock(AuthorizationService::class);
     $authorization->expects($this->exactly(2))->method('authorized')
       ->willReturnMap([
@@ -79,6 +84,46 @@ class DatabaseMountAuthorizationTest extends TestCase
       $mountCache,
       $this->createStub(IDBConnection::class),
       $this->createStub(IUserSession::class),
+      $authentication,
+    );
+
+    self::assertSame([], $provider->getMountsForUser($user, $this->createStub(IStorageFactory::class)));
+  }
+
+  public function testAuthenticatedMountLookupResolvesEntityManagerFromAppContainer(): void
+  {
+    $user = $this->createStub(IUser::class);
+    $user->method('getUID')->willReturn('alice');
+    $session = $this->createStub(IUserSession::class);
+    $session->method('isLoggedIn')->willReturn(true);
+    $session->method('getUser')->willReturn($user);
+    $config = $this->createStub(ConfigService::class);
+    $config->method('getL10n')->willReturn($this->createStub(IL10N::class));
+    $config->method('logger')->willReturn($this->createStub(LoggerInterface::class));
+    $authorization = $this->createStub(AuthorizationService::class);
+    $authorization->method('authorized')->willReturnMap([
+      ['alice', AuthorizationService::PERMISSION_FILESYSTEM, true],
+      ['alice', AuthorizationService::PERMISSION_FINANCE, false],
+    ]);
+    $authentication = $this->createStub(MountAuthenticationService::class);
+    $authentication->method('authenticate')->willReturn(true);
+
+    $entityManager = $this->createMock(EntityManager::class);
+    $entityManager->method('getUserId')->willReturn('alice');
+    $entityManager->expects($this->once())->method('connected')->willReturn(false);
+    $container = $this->createMock(ContainerInterface::class);
+    $container->expects($this->once())->method('get')->with(EntityManager::class)->willReturn($entityManager);
+    $config->method('getAppContainer')->willReturn($container);
+
+    $mountCache = $this->createMock(IUserMountCache::class);
+    $mountCache->expects($this->once())->method('getMountsForUser')->with($user)->willReturn([]);
+    $provider = new MountProvider(
+      $config,
+      $authorization,
+      $this->createStub(Factory::class),
+      $mountCache,
+      $this->createStub(IDBConnection::class),
+      $session,
       $authentication,
     );
 

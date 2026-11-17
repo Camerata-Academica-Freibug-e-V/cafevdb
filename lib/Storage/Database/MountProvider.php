@@ -132,21 +132,20 @@ class MountProvider implements IMountProvider
       return $this->getUnavailableMounts($user);
     }
 
-    $entityManager = EntityManager::getInstance();
-    if (empty($entityManager) || $entityManager->getUserId() !== $userId) {
-      return $this->getUnavailableMounts($user);
-    }
-
     try {
-      if (!$entityManager->connected()) {
-        return $this->getUnavailableMounts($user);
+      // The static instance is only set after construction; resolve the
+      // service so the first authenticated filesystem request can initialize it.
+      /** @var EntityManager $entityManager */
+      $entityManager = $this->di(EntityManager::class);
+      if ($entityManager->getUserId() === $userId && $entityManager->connected()) {
+        $this->entityManager = $entityManager;
+        return $this->getAuthenticatedMountsForUser($user, $loader);
       }
-      $this->entityManager = $entityManager;
-      return $this->getAuthenticatedMountsForUser($user, $loader);
     } catch (Throwable $t) {
       $this->logException($t, 'Unable to refresh database mounts for ' . $userId);
-      return $this->getUnavailableMounts($user);
     }
+
+    return $this->getUnavailableMounts($user);
   }
 
   /**
