@@ -134,7 +134,7 @@ use OCA\CAFEVDB\Tests\Unit\Storage\RootFolderStubTrait;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerBoundEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerClosedEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\MusicianEmailEvent::class)]
-#[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\ContactsCardEventListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\DatabaseStorageFileEntityListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\MusicianEmailAddressEntityListener::class)]

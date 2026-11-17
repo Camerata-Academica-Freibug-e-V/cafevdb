@@ -124,7 +124,7 @@ use OCA\CAFEVDB\Service\IProjectGroupService;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Legacy\PME\DefaultOptions::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Legacy\PME\PHPMyEdit::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
-#[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\PhpMyEdit\PhpMyEdit::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\PageRenderer\PME\Config::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\PageRenderer\Registration::class)]

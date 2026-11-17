@@ -51,7 +51,7 @@ use OCP\IL10N;
 use OCA\DAV\CalDAV\CalDavBackend;
 
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumVCalendarType as VCalendarType;
-use OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object;
+use OCA\CAFEVDB\Service\CalendarObjectFactory;
 use OCA\CAFEVDB\Service\CalDavService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\VCalendarService;
@@ -433,8 +433,7 @@ trait SetupCalendarBackendTrait
 
     $this->vCalendarService = new VCalendarService(
       configService: $mockProvider->getConfigService(),
-      legacyCalendarObject: new OC_Calendar_Object(
-        userSession: $mockProvider->getUserSession(),
+      calendarObjectFactory: new CalendarObjectFactory(
         l: $mockProvider->getL10N(),
         dateTimeZone: $this->createStub(IDateTimeZone::class),
       ),

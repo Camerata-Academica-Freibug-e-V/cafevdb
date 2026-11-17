@@ -39,7 +39,6 @@ use Sabre\VObject\Component\VEvent;
 use Sabre\VObject\Component as VComponent;
 use Sabre\VObject\Property\ICalendar;
 
-use OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumVCalendarType as VCalendarType;
 
 /** Operation/Builder for VCalendar objects */
@@ -62,7 +61,7 @@ class VCalendarService
   /** {@inheritdoc} */
   public function __construct(
     protected ConfigService $configService,
-    private OC_Calendar_Object $legacyCalendarObject,
+    private CalendarObjectFactory $calendarObjectFactory,
   ) {
   }
 
@@ -159,7 +158,7 @@ class VCalendarService
     if (is_array($objectData['categories'])) {
       $objectData['categories'] = implode(',', $objectData['categories']);
     }
-    $vObject = $this->legacyCalendarObject->createVCalendarFromRequest($objectData);
+    $vObject = $this->calendarObjectFactory->createFromRequest($objectData);
     if (empty($vObject) || empty($vObject->VEVENT)) {
       return $vObject;
     }
@@ -308,57 +307,6 @@ class VCalendarService
         $vComponent->add($vAlarm);
       }
     }
-  }
-
-  /**
-   * @param VCalendar $vCalendar Sabre calendar object.
-   *
-   * @param mixed $objectData Calendar object description from HTTP request.
-   *
-   * @param VCalendarType $kind What kind of object to create.
-   *
-   * @return null|VCalendar
-   */
-  public function updateVCalendarFromRequest(VCalendar $vCalendar, mixed $objectData, VCalendarType $kind = VCalendarType::VEVENT):?VCalendar
-  {
-    switch ($kind) {
-      case VCalendarType::VEVENT:
-        return $this->updateVEventFromRequest($vCalendar, $objectData);
-      case VCalendarType::VTODO:
-        return $this->updateVTodoFromRequest($vCalendar, $objectData);
-      default:
-        return null;
-    }
-  }
-
-  /**
-   * @param VCalendar $vCalendar
-   *
-   * @param mixed $objectData Calendar object description from HTTP request.
-   *
-   * @return null|VCalendar
-   */
-  private function updateVEventFromRequest(VCalendar $vCalendar, mixed $objectData):VCalendar
-  {
-    $vCalendar = $this->legacyCalendarObject->updateVCalendarFromRequest($objectData, $vCalendar);
-    if (empty($vCalendar) || empty($objectData['alarm'])) {
-      return $vCalendar;
-    }
-    $this->addVAlarmsFromRequest($vCalendar, $vCalendar->VEVENT, $objectData);
-    $this->addParticipants($vCalendar, $vCalendar->VEVENT, $objectData);
-    $this->addRelations($vCalendar, $vCalendar->VEVENT, $objectData);
-
-    return $vCalendar;
-  }
-
-  /**
-   * @return OC_Calendar_Object The old Owncloud inherited calendar object.
-   *
-   * @todo Get rid of it.
-   */
-  public function legacyEventObject():OC_Calendar_Object
-  {
-    return $this->legacyCalendarObject;
   }
 
   /**

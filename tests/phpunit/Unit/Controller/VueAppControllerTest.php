@@ -106,7 +106,7 @@ use OCA\CAFEVDB\Tests\Unit\Storage\RootFolderStubTrait;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Documents\OpenDocumentFiller::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Documents\TemplateService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
-#[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\PhpMyEdit\PhpMyEdit::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\PageRenderer\ConfigCheck::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\PageRenderer\Util\Navigation::class)]

@@ -96,7 +96,7 @@ use OCA\CAFEVDB\Wrapped\Doctrine\Migrations\DependencyFactory;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\EntityManager::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerBoundEvent::class)]
-#[Attributes\UsesClass(\OCA\CAFEVDB\Legacy\Calendar\OC_Calendar_Object::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalDavService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConfigService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EncryptionService::class)]
