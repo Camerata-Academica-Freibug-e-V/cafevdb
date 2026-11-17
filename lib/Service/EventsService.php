@@ -2313,7 +2313,6 @@ class EventsService
    *   'location' => WHERE (may be empty),
    *   'categories' => <list, comma separated>,
    *   'description' => TEXT,
-   *   'repeat' => 'doesnotrepeat',
    *   'calendar' => CALIDbn
    * ]
    * ```

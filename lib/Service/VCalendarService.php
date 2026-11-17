@@ -40,6 +40,7 @@ use Sabre\VObject\Component as VComponent;
 use Sabre\VObject\Property\ICalendar;
 
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumVCalendarType as VCalendarType;
+use OCA\CAFEVDB\Service\DTO\CalendarEventData;
 
 /** Operation/Builder for VCalendar objects */
 class VCalendarService
@@ -81,7 +82,6 @@ class VCalendarService
    *   'to' => '30-11-2020',
    *   'totime' => '00:00:00',
    *   'calendar' => 'calendarId',
-   *   'repeat' => 'doesnotrepeat',
    *   'alarm' => [ [ 'START => -3600 ], [ 'END' => 1800 ], ]
    *   'participants' => [
    *     'organizer' => [ 'name' => NAME, 'email' => EMAIL ],
@@ -132,9 +132,6 @@ class VCalendarService
    */
   private function createVEventFromRequest(mixed $objectData):?VCalendar
   {
-    if (!isset($objectData['repeat'])) {
-      $objectData['repeat'] = 'doesnotrepeat';
-    }
     /** @var DateTimeInterface $start */
     $start = $objectData['start'] ?? null;
     if ($start instanceof DateTimeInterface) {
@@ -155,10 +152,19 @@ class VCalendarService
         $objectData['totime'] = $end->format('H:i:s');
       }
     }
-    if (is_array($objectData['categories'])) {
-      $objectData['categories'] = implode(',', $objectData['categories']);
-    }
-    $vObject = $this->calendarObjectFactory->createFromRequest($objectData);
+    $eventData = new CalendarEventData(
+      summary: $objectData['summary'],
+      fromDate: $objectData['from'],
+      toDate: $objectData['to'],
+      allDay: $objectData['allDay'] ?? false,
+      fromTime: $objectData['fromtime'] ?? null,
+      toTime: $objectData['totime'] ?? null,
+      location: $objectData['location'] ?? null,
+      description: $objectData['description'] ?? null,
+      accessClass: $objectData['accessclass'] ?? null,
+      categories: $objectData['categories'] ?? [],
+    );
+    $vObject = $this->calendarObjectFactory->create($eventData);
     if (empty($vObject) || empty($vObject->VEVENT)) {
       return $vObject;
     }
