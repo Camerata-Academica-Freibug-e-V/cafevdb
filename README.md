@@ -153,6 +153,21 @@ app has its own namespace-wrapped library. The BAV app is not required.
 Missing bank tables are installed and populated automatically; downloads
 for installation and explicit updates use temporary files.
 
+Internal calendar updates
+-------------------------
+
+Internal calendar updates use `Service\DTO\CalendarEventChangeSet` or
+`CalendarTaskChangeSet`, derived from `CalendarEntryChangeSet`. Pass these
+objects directly to `EventsService::updateCalendarEvent()`,
+`updateCalendarTask()`, or `updateCalendarEntry()`; `toArray()` serializes dates
+and is not suitable for this service boundary. Null properties mean "leave
+unchanged"; empty strings clear text, `alarm: 0` or `alarm: []` clears alarms,
+and `related: []` clears relations. Event dates are immutable snapshots;
+all-day end dates are inclusive in the DTO and exclusive in iCalendar.
+`allDay` controls supplied dates, and an omitted end never defaults to the start.
+Calling `updateCalendarEntry()` without a change-set still writes the existing
+calendar object unchanged.
+
 PHP code quality
 ----------------
 

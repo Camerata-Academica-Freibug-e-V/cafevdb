@@ -47,9 +47,12 @@ use OCA\CAFEVDB\Exceptions;
 use OCA\CAFEVDB\PageRenderer\PMETableViewBase;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\DTO\CalendarEventChangeSet;
+use OCA\CAFEVDB\Service\DTO\CalendarTaskChangeSet;
 use OCA\CAFEVDB\Service\Finance\FinanceService;
 use OCA\CAFEVDB\Service\Finance\SepaBulkTransactionService;
 use OCA\CAFEVDB\Service\ProjectService;
+use OCA\CAFEVDB\Service\VCalendarService;
 
 /** AJAX backend for managing bank bulk transactions. */
 #[PhpToTypeScript\Attributes\TypeScript]
@@ -759,9 +762,12 @@ class SepaBulkTransactionsController extends Controller
             $related[] = $bulkTransaction->getPreNotificationTaskUid();
           }
           $related = array_filter($related);
-          $changeSet = [ 'related' => [ 'SIBLING' => $related ] ];
           $this->logInfo('RELATIONS ' . print_r($related, true));
           foreach ($calendarObjects as $calendarObject) {
+            $vCalendar = VCalendarService::getVCalendar($calendarObject);
+            $changeSet = isset($vCalendar->VEVENT)
+              ? new CalendarEventChangeSet(related: ['SIBLING' => $related])
+              : new CalendarTaskChangeSet(related: ['SIBLING' => $related]);
             $this->financeService->patchFinanceCalendarEntry($calendarObject, $changeSet);
           }
         });

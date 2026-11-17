@@ -43,6 +43,7 @@ use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Documents\OpenDocumentFiller;
 use OCA\CAFEVDB\Documents\PDFFormFiller;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\DTO\CalendarEntryChangeSet;
 use OCA\CAFEVDB\Service\EventsService;
 use OCA\CAFEVDB\Service\ImagesService;
 use OCA\CAFEVDB\Service\OrganizationalRolesService;
@@ -989,14 +990,14 @@ class FinanceService
   /**
    * @param array $object Event data previously obtained by findCalendarEntry().
    *
-   * @param array $changeSet Array of changes to apply.
+   * @param CalendarEntryChangeSet $changeSet Changes matching the calendar component type.
    *
    * @return void
    *
    * @see EventsService::updateCalendarEvent()
    * @see EventsService::updateCalendarTask()
    */
-  public function patchFinanceCalendarEntry(array $object, array $changeSet):void
+  public function patchFinanceCalendarEntry(array $object, CalendarEntryChangeSet $changeSet):void
   {
     $this->logInfo('PATCH ' . print_r(array_keys($object), true) . ' ' . print_r($changeSet, true));
     $this->eventsService->updateCalendarEntry($object, $changeSet);

@@ -68,6 +68,9 @@ use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Events\BeforeProjectDeletedEvent;
 use OCA\CAFEVDB\Events\PreProjectUpdatedEvent;
 use OCA\CAFEVDB\Exceptions;
+use OCA\CAFEVDB\Service\DTO\CalendarEntryChangeSet;
+use OCA\CAFEVDB\Service\DTO\CalendarEventChangeSet;
+use OCA\CAFEVDB\Service\DTO\CalendarTaskChangeSet;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\Carbon\CarbonImmutable;
 
@@ -2439,20 +2442,26 @@ class EventsService
    *
    * @param array $objectData Modified event object, previously obtained by findCalendarEntry().
    *
-   * @param array $changeSet Array of changes to apply.
+   * @param null|CalendarEntryChangeSet $changeSet Changes matching the calendar
+   * component type, or null to write back the existing calendar unchanged.
    *
    * @return void
    *
    * @see CalDavService::updateCalendarObject()
    */
-  public function updateCalendarEntry(array $objectData, array $changeSet = []):void
+  public function updateCalendarEntry(array $objectData, ?CalendarEntryChangeSet $changeSet = null):void
   {
     $vCalendar  = VCalendarService::getVCalendar($objectData);
-    if (!empty($changeSet)) {
-      if (!empty($vCalendar->VEVENT)) {
+    if ($vCalendar === null) {
+      throw new InvalidArgumentException('Calendar object does not contain calendar data.');
+    }
+    if ($changeSet !== null) {
+      if (isset($vCalendar->VEVENT) && $changeSet instanceof CalendarEventChangeSet) {
         $this->updateCalendarEvent($objectData, $changeSet);
-      } elseif (!empty($vCalendar->VTODO)) {
+      } elseif (isset($vCalendar->VTODO) && $changeSet instanceof CalendarTaskChangeSet) {
         $this->updateCalendarTask($objectData, $changeSet);
+      } else {
+        throw new InvalidArgumentException('Calendar change-set does not match the calendar component type.');
       }
     } else {
       $objectURI = $objectData['uri'];
@@ -2541,73 +2550,49 @@ class EventsService
    *
    * @param array $objectData To be modified event object according to $changeSet.
    *
-   * @param array $changeSet Array of changes to apply.
+   * @param CalendarEventChangeSet $changeSet Changes to apply.
    *
    * @return void
    *
    * @see CalDavService::updateCalendarObject()
    */
-  public function updateCalendarEvent(array $objectData, array $changeSet = []):void
+  public function updateCalendarEvent(array $objectData, CalendarEventChangeSet $changeSet = new CalendarEventChangeSet):void
   {
     $eventURI = $objectData['uri'];
     $calendarId = $objectData['calendarid'];
     $vCalendar  = VCalendarService::getVCalendar($objectData);
 
-    $vEvent = $vCalendar->VEVENT;
+    $vEvent = $vCalendar?->VEVENT;
+    if (!$vEvent instanceof VEvent) {
+      throw new InvalidArgumentException('Calendar object does not contain a VEVENT.');
+    }
 
-    if (!empty($changeSet['start']) || !empty($changeSet['end'])) {
+    if ($changeSet->start !== null || $changeSet->end !== null) {
       $timezone = $this->getDateTimeZone();
-      if (array_key_exists('allDay', $changeSet)) {
-        $allDay = !empty($changeSet['allDay']);
-      } else {
-        $dateValue = $vEvent->DTSTART['VALUE'];
-        $dtStart = DateTimeImmutable::createFromInterface($vEvent->DTSTART);
-        $allDay = ($dtStart == $dtStart->setTime(0, 0, 0) && $dateValue == 'DATE');
-      }
+      $allDay = $changeSet->allDay ?? ((string)$vEvent->DTSTART['VALUE'] == 'DATE');
       foreach (['start', 'end'] as $key) {
-        if (!empty($changeSet[$key])) {
+        if ($changeSet->{$key} !== null) {
           $eventProperty = 'DT' . strtoupper($key);
           if ($allDay) {
-            $date = $changeSet[$key]->setTime(0, 0, 0);
+            $date = $changeSet->{$key}->setTime(0, 0, 0);
             if ($key == 'end') {
               $date = $date->modify('+1 day'); // next day at 00:00:00
             }
             $vEvent->{$eventProperty} = $date;
             $vEvent->{$eventProperty}['VALUE'] = 'DATE';
           } else {
-            $date = $changeSet[$key]->setTimezone($timezone);
+            $date = $changeSet->{$key}->setTimezone($timezone);
+            $vEvent->{$eventProperty} = $date;
+            $vEvent->{$eventProperty}['VALUE'] = 'DATE-TIME';
           }
         }
       }
     }
-    if (array_key_exists('classification', $changeSet)) {
-      switch ($changeSet['classification']) {
-        case 'PUBLIC':
-        case 'PRIVATE':
-        case 'CONFIDENTIAL':
-          $vEvent->CLASS = $changeSet['classification'];
-          break;
-        default:
-          break;
-      }
-    }
-    if (array_key_exists('alarm', $changeSet)) {
-      $this->vCalendarService->addVAlarmsFromRequest($vCalendar, $vEvent, $changeSet);
-    }
-    if (!empty($changeSet['summary'])) {
-      $this->vCalendarService->setSummary($vCalendar, $changeSet['summary']);
-    }
-    if (array_key_exists('description', $changeSet)) {
-      $this->vCalendarService->setDescription($vCalendar, $changeSet['description']);
-    }
-    if (array_key_exists('related', $changeSet)) {
-      $this->vCalendarService->addRelations($vCalendar, $vEvent, $changeSet);
+    if ($changeSet->classification !== null) {
+      $vEvent->CLASS = $changeSet->classification;
     }
 
-    $nowDateTime = $this->timeFactory->getDateTimeImmutable();
-    $vEvent->{'LAST-MODIFIED'} = $nowDateTime;
-    $vEvent->DTSTAMP = $nowDateTime;
-
+    $this->applyCalendarEntryChanges($vCalendar, $vEvent, $changeSet);
     $this->calDavService->updateCalendarObject($calendarId, $eventURI, $vCalendar);
   }
 
@@ -2617,38 +2602,61 @@ class EventsService
    *
    * @param array $objectData To be modified event object according to $changeSet.
    *
-   * @param array $changeSet Array of changes to apply.
+   * @param CalendarTaskChangeSet $changeSet Changes to apply.
    *
    * @return void
    *
    * @see CalDavService::updateCalendarObject()
    */
-  public function updateCalendarTask(array $objectData, array $changeSet = []):void
+  public function updateCalendarTask(array $objectData, CalendarTaskChangeSet $changeSet = new CalendarTaskChangeSet):void
   {
     $taskURI = $objectData['uri'];
     $calendarId = $objectData['calendarid'];
     $vCalendar  = VCalendarService::getVCalendar($objectData);
 
-    $vTodo = $vCalendar->VTODO;
+    $vTodo = $vCalendar?->VTODO;
+    if (!$vTodo instanceof VObject\Component\VTodo) {
+      throw new InvalidArgumentException('Calendar object does not contain a VTODO.');
+    }
 
-    if (array_key_exists('alarm', $changeSet)) {
-      $this->vCalendarService->addVAlarmsFromRequest($vCalendar, $vTodo, $changeSet);
+    $this->applyCalendarEntryChanges($vCalendar, $vTodo, $changeSet);
+    $this->calDavService->updateCalendarObject($calendarId, $taskURI, $vCalendar);
+  }
+
+  /**
+   * @param VCalendar $vCalendar Calendar containing the component.
+   *
+   * @param VComponent $vObject Event or task to update.
+   *
+   * @param CalendarEntryChangeSet $changeSet Shared changes to apply.
+   *
+   * @return void
+   */
+  private function applyCalendarEntryChanges(
+    VCalendar $vCalendar,
+    VComponent $vObject,
+    CalendarEntryChangeSet $changeSet,
+  ): void {
+    if ($changeSet->alarm !== null) {
+      $this->vCalendarService->addVAlarmsFromRequest($vCalendar, $vObject, [
+        'alarm' => $changeSet->alarm,
+        'summary' => $changeSet->summary ?? (string)$vObject->SUMMARY,
+      ]);
     }
-    if (!empty($changeSet['summary'])) {
-      $this->vCalendarService->setSummary($vCalendar, $changeSet['summary']);
+    if ($changeSet->summary !== null) {
+      $this->vCalendarService->setSummary($vObject, $changeSet->summary);
     }
-    if (array_key_exists('description', $changeSet)) {
-      $this->vCalendarService->setDescription($vCalendar, $changeSet['description']);
+    if ($changeSet->description !== null) {
+      $this->vCalendarService->setDescription($vObject, $changeSet->description);
     }
-    if (array_key_exists('related', $changeSet)) {
-      $this->vCalendarService->addRelations($vCalendar, $vTodo, $changeSet);
+    if ($changeSet->related !== null) {
+      unset($vObject->{'RELATED-TO'});
+      $this->vCalendarService->addRelations($vCalendar, $vObject, ['related' => $changeSet->related]);
     }
 
     $nowDateTime = $this->timeFactory->getDateTimeImmutable();
-    $vTodo->{'LAST-MODIFIED'} = $nowDateTime;
-    $vTodo->DTSTAMP = $nowDateTime;
-
-    $this->calDavService->updateCalendarObject($calendarId, $taskURI, $vCalendar);
+    $vObject->{'LAST-MODIFIED'} = $nowDateTime;
+    $vObject->DTSTAMP = $nowDateTime;
   }
 
   /**

@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- Updating SEPA bulk-transaction submission events preserves date objects rather
+  than serializing them to strings. Typed calendar change-sets distinguish
+  omitted properties from explicit updates and also correctly apply timed dates.
 - Substitutions using the translated namespace, e.g. `${MITGLIED::VORNAME}`,
   are now resolved.
 
