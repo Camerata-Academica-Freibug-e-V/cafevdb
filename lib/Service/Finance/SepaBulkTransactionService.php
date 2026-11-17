@@ -45,9 +45,9 @@ use OCA\CAFEVDB\Database\Doctrine\ORM\Entities\SepaDebitNote as DebitNote;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Exceptions;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\DTO\CalendarEventChangeSet;
 use OCA\CAFEVDB\Service\EventsService;
 use OCA\CAFEVDB\Service\Finance\SepaBulkTransactionService\EnumExportFormat;
-use OCA\CAFEVDB\Service\Finance\SepaBulkTransactionService\EventDataDTO;
 use OCA\CAFEVDB\Service\VCalendarService;
 use OCA\CAFEVDB\Storage\Database\BankTransactionsStorage;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Common\DecimalRationalMonetary as MonetaryNumberType;
@@ -168,12 +168,12 @@ class SepaBulkTransactionService
    * not \null generate data in order to modify the event title and
    * description to reflect the "task completed" state.
    *
-   * @return EventDataDTO
+   * @return CalendarEventChangeSet
    */
   public function createSubmissionEventData(
     Entities\SepaBulkTransaction $bulkTransaction,
     ?DateTimeInterface $submitDate = null,
-  ): EventDataDTO {
+  ): CalendarEventChangeSet {
     if ($submitDate === null) {
       // new event, or submit date has been reset
       $projectName = $bulkTransaction->getProject()->getName();
@@ -205,10 +205,12 @@ class SepaBulkTransactionService
       )
         . $this->l->t('Bulk-transaction-id: %d', $bulkTransaction->getId());
 
-      return new EventDataDTO(
+      return new CalendarEventChangeSet(
         summary: $summary,
         description: $description,
         start: $submissionDeadline,
+        end: $submissionDeadline,
+        allDay: true,
         alarm: $alarmTimes,
       );
     } else {
@@ -247,10 +249,12 @@ class SepaBulkTransactionService
         }
       }
 
-      return new EventDataDTO(
+      return new CalendarEventChangeSet(
         summary: $summary,
         description: $description,
         start: $submitDate,
+        end: $submitDate,
+        allDay: true,
         alarm: 0,
       );
     }
@@ -277,7 +281,7 @@ class SepaBulkTransactionService
 
     if ($submitDate !== null) {
       // $submitDate is in UTC but means the current date in local time.
-      $today = self::getCurrentDate();
+      $today = $this->timeFactory->getDateTimeImmutable(timezone: $this->configService->getDateTimeZone())->setTime(0, 0);
       $submitDate = self::convertToTimezoneDate($submitDate, $today->getTimezone());
 
       if ($submitDate > $today) {
@@ -291,7 +295,7 @@ class SepaBulkTransactionService
     $bulkTransaction->setSubmitDate($submitDate);
 
     $this->entityManager->registerPreCommitAction(
-      function() use ($bulkTransaction, $submitDate, $today) {
+      function() use ($bulkTransaction, $submitDate) {
         $submissionTaskUri = $bulkTransaction->getSubmissionTaskUri();
         $submissionTask = $this->financeService->findFinanceCalendarEntry($submissionTaskUri);
         if ($submissionTask === null) {
@@ -309,7 +313,7 @@ class SepaBulkTransactionService
         $this->restoreCalendarObjects($stash);
       },
     )->register(
-      function() use ($bulkTransaction, $submitDate, $today) {
+      function() use ($bulkTransaction, $submitDate) {
         $submissionEventUri = $bulkTransaction->getSubmissionEventUri();
         $submissionEvent = $this->financeService->findFinanceCalendarEntry($submissionEventUri);
         if ($submissionEvent === null) {
@@ -317,7 +321,7 @@ class SepaBulkTransactionService
         }
         $stash = [ self::SUBMISSION_EVENT => Util::cloneArray($submissionEvent) ];
         $eventData = $this->createSubmissionEventData($bulkTransaction, $submitDate);
-        $this->eventsService->updateCalendarEvent($submissionEvent, $eventData->toArray());
+        $this->eventsService->updateCalendarEvent($submissionEvent, $eventData);
         return $stash;
       },
       function($stash) {
@@ -379,12 +383,10 @@ class SepaBulkTransactionService
           . $this->l->t('Date: %s', $this->dateTimeFormatter->formatDateTime($this->timeFactory->now()))
           . "\n"
           . $this->l->t('MessageId: %s', $payment->getNotificationMessageId());
-        $updateData = [
-          'description' => $description,
-        ];
-        if ($percentage == 100) {
-          $updateData['alarm'] = 0;
-        }
+        $updateData = new CalendarEventChangeSet(
+          description: $description,
+          alarm: $percentage == 100 ? 0 : null,
+        );
         $this->eventsService->updateCalendarEntry($preNotificationEvent, $updateData);
       }
     } catch (Throwable $t) {

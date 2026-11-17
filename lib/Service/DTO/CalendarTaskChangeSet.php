@@ -22,29 +22,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace OCA\CAFEVDB\Service\Finance\SepaBulkTransactionService;
+namespace OCA\CAFEVDB\Service\DTO;
 
-use DateTimeInterface;
-
-/**
- * DTO for bulk-transaction calendar event data.
- *
- * @see \OCA\CAFEVDB\Service\VCalendarService::createVCalendarFromRequest
- * @see \OCA\CAFEVDB\Service\EventsService::update
- */
-class EventDataDTO extends \OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\DTO\AbstractDTO
+/** Partial VTODO update. Task status is handled by setCalendarTaskStatus(). */
+class CalendarTaskChangeSet extends CalendarEntryChangeSet
 {
-  public readonly DateTimeInterface $end;
-
-  /** {@inheritdoc} */
-  public function __construct(
-    public readonly string $summary,
-    public readonly string $description,
-    public readonly DateTimeInterface $start,
-    ?DateTimeInterface $end = null,
-    public readonly bool $allDay = true,
-    public readonly int|array $alarm = 0,
-  ) {
-    $this->end = $end ?? $this->start;
-  }
 }
