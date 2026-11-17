@@ -166,7 +166,7 @@ class Application extends AbstractApplication
     });
 
     $context->injectFn(function(IMountProviderCollection $mountProviderCollection, DatabaseMountProvider $mountProvider) {
-      $mountProviderCollection->registerProvider($mountProvider, PHP_INT_MAX);
+      $mountProviderCollection->registerProvider($mountProvider);
     });
   }
 

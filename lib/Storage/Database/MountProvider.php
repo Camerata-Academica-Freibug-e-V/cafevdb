@@ -34,7 +34,6 @@ use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\Files\Config\ICachedMountInfo;
 use OCP\Files\Config\IMountProvider;
 use OCP\Files\Config\IUserMountCache;
-use OCP\Files\FileInfo;
 use OCP\Files\Storage\IStorageFactory;
 use OCP\Files\StorageNotAvailableException;
 use OCP\IDBConnection;
@@ -52,6 +51,7 @@ use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\MountAuthenticationService;
 use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
+use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\GroupFoldersService;
 use OCA\CAFEVDB\Storage\UserStorage;
 
 /**
@@ -179,25 +179,20 @@ class MountProvider implements IMountProvider
   {
     $userId = $user->getUID();
     $sharedFolder = $this->getSharedFolderPath();
-
-    /** @var UserStorage $userStorage */
-    $userStorage = $this->di(UserStorage::class);
-
-    // we have to install the correct user into our UserStorage support class on each call.
-    $userStorage->setUser($user);
-
-    $node = $userStorage->get($sharedFolder);
-    if (empty($node) || $node->getType() !== FileInfo::TYPE_FOLDER) {
-      throw new UnexpectedValueException('No shared folder "' . $sharedFolder . '" for ' . $userId);
-    }
     $projectsFolder = $this->getConfigValue(ConfigConstants::PROJECTS_FOLDER);
-    try {
-      $node = $node->get($projectsFolder);
-      if (empty($node) || $node->getType() !== FileInfo::TYPE_FOLDER) {
-        throw new MissingProjectsFolderException('No projects folder for ' . $userId);
-      }
-    } catch (\Throwable $t) {
-      throw new MissingProjectsFolderException('No projects folder ' . $projectsFolder . ' for ' . $userId, 0, $t);
+    if (empty($sharedFolder)) {
+      throw new UnexpectedValueException('Shared folder is not configured');
+    }
+    if (empty($projectsFolder)) {
+      throw new MissingProjectsFolderException('Projects folder is not configured');
+    }
+
+    /** @var GroupFoldersService $groupFoldersService */
+    $groupFoldersService = $this->di(GroupFoldersService::class);
+    $folderInfo = $groupFoldersService->getFolderForUser($sharedFolder, $user);
+    if ($folderInfo === null
+      || ($folderInfo->permissions & \OCP\Constants::PERMISSION_READ) === 0) {
+      throw new UnexpectedValueException('No shared folder "' . $sharedFolder . '" for ' . $userId);
     }
 
     $this->logDebug($userId . ' ' . $sharedFolder);
