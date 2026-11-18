@@ -77,9 +77,8 @@ class FilesScan
     #[Option(name: 'home-only', description: 'only scan the home storage, ignoring any mounted external storage or share')]
     bool $homeOnly = false,
   ): ExitCode {
-    $result = $this->authenticate($input, $output);
-    if ($result != ExitCode::Success) {
-      return $result;
+    if ($this->authenticate($input, $output) !== ExitCode::Success->value) {
+      return ExitCode::Failure;
     }
 
     return $this->filesScan->__invoke(
