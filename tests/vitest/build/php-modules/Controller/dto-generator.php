@@ -27,6 +27,8 @@
  * check work on semi-real data.
  */
 
+// phpcs:disable PSR1.Files.SideEffects
+
 $appDir = __DIR__ . '/../../../../..';
 
 define('ROT_DROP_DEV_SCRIPTS_APP_DIR', $appDir);
@@ -43,7 +45,7 @@ $dtoName = $argv[1];
 $outputDir = rtrim($argv[2], '/');
 
 switch ($dtoName) {
-  case array_pop(explode('\\', DTO\DownloadsShareResponse::class)):
+  case array_last(explode('\\', DTO\DownloadsShareResponse::class)):
     $dto = new DTO\DownloadsShareResponse(
       dav: 'DAV',
       expires: DateTime::createFromFormat('Y-m-d h:i:s', '2025-11-04 01:02:03'),
@@ -56,5 +58,7 @@ switch ($dtoName) {
     throw new InvalidArgumentException("Unsupported DTO: {$dtoName}");
 }
 
-mkdir($outputDir, 0700, recursive: true);
+if (!is_dir($outputDir)) {
+  @mkdir($outputDir, 0700, recursive: true);
+}
 file_put_contents($outputDir . '/' . $dtoName . '.json', json_encode($dto, JSON_PRETTY_PRINT) . PHP_EOL);

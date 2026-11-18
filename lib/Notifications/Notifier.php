@@ -45,6 +45,7 @@ class Notifier implements \OCP\Notification\INotifier
   const RECRYPT_USER_DENIED_SUBJECT = 'recrypt_user_denied';
   const RECRYPT_USER_HANDLED_SUBJECT = 'recrypt_user_handled';
   const WORD_SPLITTER_LOCALE_SUBJECT = 'word_splitter_locale';
+  const PARTICIPANT_FIELD_UPLOAD_CONFLICT_SUBJECT = 'participant_field_upload_conflict';
   const ACCEPT_ACTION = 'accept';
   const DECLINE_ACTION = 'decline';
   const PROTEST_ACTION = 'protest';
@@ -189,6 +190,16 @@ class Notifier implements \OCP\Notification\INotifier
           $notification->addParsedAction($action);
         }
         break;
+
+      case self::PARTICIPANT_FIELD_UPLOAD_CONFLICT_SUBJECT:
+        $parameters = $notification->getSubjectParameters();
+        $notification->setParsedSubject(isset($parameters['destination'])
+          ? $l->t('Upload renamed because its name is reserved for a participant-field folder')
+          : $l->t('Upload conflicts with a participant-field folder'));
+        $notification->setParsedMessage(isset($parameters['destination'])
+          ? $l->t('The file "%1$s" was renamed to "%2$s".', [$parameters['source'], $parameters['destination']])
+          : $l->t('The file "%s" could not be renamed automatically. Move or rename it to free the reserved folder path.', [$parameters['source']]));
+        return $notification;
 
       case self::WORD_SPLITTER_LOCALE_SUBJECT:
         $parameters = $notification->getSubjectParameters();

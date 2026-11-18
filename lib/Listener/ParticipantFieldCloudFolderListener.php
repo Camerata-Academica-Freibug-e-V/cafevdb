@@ -30,20 +30,9 @@ use Psr\Container\ContainerInterface;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Files;
-use OCP\Files\Events\Node\BeforeFolderCreatedEvent;
-use OCP\Files\Events\Node\BeforeNodeCopiedEvent;
-use OCP\Files\Events\Node\BeforeNodeCreatedEvent;
-use OCP\Files\Events\Node\BeforeNodeDeletedEvent;
-use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
-use OCP\Files\Events\Node\FolderCreatedEvent;
-use OCP\Files\Events\Node\NodeCopiedEvent;
-use OCP\Files\Events\Node\NodeCreatedEvent;
-use OCP\Files\Events\Node\NodeDeletedEvent;
-use OCP\Files\Events\Node\NodeRenamedEvent;
-use OCP\Files\Events\Node\NodeTouchedEvent;
+use OCP\Files\File;
 use OCP\Files\FileInfo;
 use OCP\Files\IRootFolder;
-use OCP\Files\Node as FileSystemNode;
 use OCP\HintException;
 use OCP\IL10N;
 use OCP\IUser;
@@ -63,6 +52,7 @@ use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\MusicianService;
+use OCA\CAFEVDB\Service\ParticipantFieldUploadConflictService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 
 /**
@@ -75,35 +65,15 @@ use OCA\CAFEVDB\Settings\ConfigConstants;
  *   field-value (file) is set for the respective musician
  * - update of fiels-values when a file with the correct name is added or removed
  * - disallow tweaking the README.md which is taken from the field's tooltip
- *
- * @todo To make this work BeforeFolderCreatedEvents are needed, and the
- * trashbin restore must emit a BeforeNodeRenamedEvent.
  */
 class ParticipantFieldCloudFolderListener implements IEventListener
 {
   use \OCA\CAFEVDB\Traits\ConfigTrait;
   use \OCA\CAFEVDB\Traits\EntityManagerTrait;
   use \OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Traits\UserRootFolderTrait;
+  use ParticipantFieldNodeEventsTrait;
 
-  const EVENT = [
-    NodeRenamedEvent::class,
-    NodeCopiedEvent::class,
-    NodeDeletedEvent::class,
-    NodeCreatedEvent::class,
-    FolderCreatedEvent::class,
-    BeforeNodeRenamedEvent::class,
-    BeforeNodeCopiedEvent::class,
-    BeforeNodeDeletedEvent::class,
-    BeforeNodeCreatedEvent::class,
-    BeforeFolderCreatedEvent::class,
-  ];
-
-  private const ADD_KEY = 'add';
-  private const DEL_KEY = 'remove';
-
-  private const NODE_FULL_PATH = 'fullPath';
   private const NODE_PARTIAL_PATH = 'path';
-  private const NODE_TYPE = 'type';
   private const NODE_BASE_NAME = 'baseName';
 
   private const PROJECT_YEAR_PART = 0;
@@ -155,14 +125,6 @@ class ParticipantFieldCloudFolderListener implements IEventListener
    */
   private $musicians = [];
 
-  /**
-   * @var string
-   *
-   * To distinguish mkdir from file creation we listen on FolderCreated
-   * events, remember the path and ignore the subsequent Created event.
-   */
-  private $ignoreCreatedPaths = [];
-
   // phpcs:disable Squiz.Commenting.FunctionComment.Missing
   public function __construct(
     protected ContainerInterface $appContainer,
@@ -173,87 +135,12 @@ class ParticipantFieldCloudFolderListener implements IEventListener
   /** {@inheritdoc} */
   public function handle(Event $event):void
   {
-    $nodes = [];
-    $eventClass = get_class($event);
-    $checkOnly = false;
-    switch ($eventClass) {
-      case BeforeNodeDeletedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeDeletedEvent::class:
-        /** @var NodeDeletedEvent $event */
-        /** @var FileSystemNode $node */
-        $node = $event->getNode();
-        $nodes[self::DEL_KEY] = [
-          self::NODE_FULL_PATH => $node->getPath(),
-          self::NODE_TYPE => $node->getType(),
-        ];
-        break;
-      case BeforeNodeRenamedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeRenamedEvent::class:
-        /** @var NodeRenamedEvent $event */
-        /** @var FileSystemNode $source */
-        $source = $event->getSource();
-        $nodes[self::DEL_KEY] = [
-          self::NODE_FULL_PATH => $source->getPath(),
-          self::NODE_TYPE => $source->getType(),
-        ];
-        /** @var FileSystemNode $target */
-        $target = $event->getTarget();
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $target->getPath(),
-          self::NODE_TYPE => $source->getType(), // "source" to avoid NonExistingFile isssues
-        ];
-        $this->ignoreCreatedPaths[$target->getPath()] = true; // ignore the following Created Event
-        break;
-      case BeforeNodeCopiedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeCopiedEvent::class:
-        /** @var NodeCopiedEvent $event */
-        /** @var FileSystemNode $source */
-        $source = $event->getSource();
-        /** @var FileSystemNode $target */
-        $target = $event->getTarget();
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $target->getPath(),
-          self::NODE_TYPE => $source->getType(), // "source" to avoid NonExistingFile isssues
-        ];
-        $this->ignoreCreatedPaths[$target->getPath()] = true; // ignore the following Created Event
-        break;
-      case BeforeFolderCreatedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case FolderCreatedEvent::class:
-        /** @var NodeTouchedEvent $event */
-        $path = $event->getNode()->getPath();
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $path,
-          self::NODE_TYPE => FileInfo::TYPE_FOLDER,
-        ];
-        $this->ignoreCreatedPaths[$path] = true; // ignore the following Created Event
-        break;
-      case BeforeNodeCreatedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeCreatedEvent::class:
-        /** @var NodeCreatedEvent $event */
-        $path = $event->getNode()->getPath();
-        $ignoredPath = $this->ignoreCreatedPaths[$path] ?? false;
-        unset($this->ignoreCreatedPaths[$path]);
-        if ($ignoredPath) {
-          return;
-        }
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $path,
-          self::NODE_TYPE => FileInfo::TYPE_FILE,
-        ];
-        break;
-      default:
-        return;
+    $change = $this->describeNodeEvent($event);
+    if ($change === null) {
+      return;
     }
+    [$nodes, $checkOnly, $createdNode] = $change;
+    $eventClass = get_class($event);
 
     if (!$this->initialize()) {
       return; // something went wrong
@@ -262,6 +149,9 @@ class ParticipantFieldCloudFolderListener implements IEventListener
     $userFolder = Constants::PATH_SEPARATOR . $this->getUserFolderPath($this->user->getUID());
     $sharedFolderPath = $this->getSharedFolderPath();
     $projectsPath = $this->getProjectsFolderPath();
+    if (empty($sharedFolderPath) || empty($projectsPath)) {
+      return;
+    }
 
     // strip the user-folder and match with the projects path
     foreach ($nodes as $key => &$nodeInfo) {
@@ -316,7 +206,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
       $baseName = $parts[self::BASE_NAME_PART] ?? null;
       $userIdSlug = $parts[self::USER_ID_PART];
       $fieldName = $parts[self::FIELD_NAME_PART] ?? null;
-      if (empty($baseName) && !empty($fieldName) && MusicianService::isSlugifiedFileName($fieldName, $userIdSlug)) {
+      if ($baseName === null && !empty($fieldName) && MusicianService::isSlugifiedFileName($fieldName, $userIdSlug)) {
         $baseName = $fieldName;
         $fieldName = MusicianService::unSlugifyFileName($fieldName, $userIdSlug, keepExtension: false);
       }
@@ -363,7 +253,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
           $fieldType = $field->getDataType();
           $fieldMultiplicity = $field->getMultiplicity();
           if ($checkOnly) {
-            if (empty($baseName)) {
+            if ($baseName === null) {
               if ($node[self::NODE_TYPE] == Files\FileInfo::TYPE_FILE) {
                 // disallow creating files with a conflicting name
                 $message = $this->l->t('"%1$s" belongs to the participant-field "%2$s" and must be a folder, your are trying to create a file (%3$s).', [
@@ -391,7 +281,11 @@ class ParticipantFieldCloudFolderListener implements IEventListener
             }
           }
 
-          if (!$checkOnly && empty($baseName)) {
+          if (!$checkOnly && $baseName === null && $createdNode instanceof File) {
+            $this->appContainer->get(ParticipantFieldUploadConflictService::class)->schedule($this->user->getUID(), $createdNode);
+          }
+
+          if (!$checkOnly && $baseName === null && $node[self::NODE_TYPE] === FileInfo::TYPE_FOLDER) {
             // created the README if the field has a tooltip
             $readMe = Common\Util::htmlToMarkDown($field->getTooltip());
             $path = $node[self::NODE_FULL_PATH] . Constants::PATH_SEP . Constants::README_NAME;
@@ -400,7 +294,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
             $readMeGenerator->do();
           }
 
-          if (!$checkOnly && !empty($baseName) && $baseName !== Constants::README_NAME) { // work only on the folder-contents, not the folder itself
+          if (!$checkOnly && $baseName !== null && $baseName !== Constants::README_NAME) { // work only on the folder-contents, not the folder itself
             if ($fieldType == FieldDataType::CLOUD_FOLDER) {
               /** @var Entities\ProjectParticipantFieldDatum $fieldDatum */
               $fieldDatum = $this->getFieldDatum($criterion);
@@ -492,7 +386,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
           $fieldType = $field->getDataType();
           $fieldMultiplicity = $field->getMultiplicity();
           if ($checkOnly) {
-            if (empty($baseName) && $node[self::NODE_TYPE] == Files\FileInfo::TYPE_FOLDER) {
+            if ($baseName === null && $node[self::NODE_TYPE] == Files\FileInfo::TYPE_FOLDER) {
               // the folder itself must not be deleted except if the field is
               // deleted. But then the folder is deleted from the pre-commit
               // hook and thus we are inside the current commit which already
@@ -522,7 +416,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
             }
           }
 
-          if (!$checkOnly && !empty($baseName) && $baseName !== Constants::README_NAME) {
+          if (!$checkOnly && $baseName !== null && $baseName !== Constants::README_NAME) {
             // work only on the relevant folder-contents, not the folder itself
             if ($fieldType == FieldDataType::CLOUD_FOLDER) {
               /** @var Entities\ProjectParticipantFieldDatum $fieldDatum */
@@ -561,7 +455,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
         $this->entityManager->commit();
       }
     } catch (HintException $e) {
-      $throw = $e;
+      $throw = $this->eventVeto($event, $e);
       $rollBack = !$checkOnly;
     } catch (Throwable $t) {
       $rollBack = !$checkOnly;
@@ -591,7 +485,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
   private static function matchPrefixDirectory(?string $path, string $folderPrefix)
   {
     $path = ltrim((string)$path, Constants::PATH_SEP);
-    $folderPrefix = ltrim((string)$folderPrefix, Constants::PATH_SEP);
+    $folderPrefix = trim($folderPrefix, Constants::PATH_SEP) . Constants::PATH_SEP;
     $prefixLen = strlen($folderPrefix);
     if (substr($path, 0, $prefixLen) == $folderPrefix) {
       return substr($path, $prefixLen);
