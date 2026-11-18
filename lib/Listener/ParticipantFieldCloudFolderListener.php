@@ -29,6 +29,7 @@ use Throwable;
 use Psr\Container\ContainerInterface;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
+use OCP\Exceptions\AbortedEventException;
 use OCP\Files;
 use OCP\Files\Events\Node\BeforeFolderCreatedEvent;
 use OCP\Files\Events\Node\BeforeNodeCopiedEvent;
@@ -49,6 +50,9 @@ use OCP\IL10N;
 use OCP\IUser;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface as ILogger;
+
+use OCA\Files_Trashbin\Events\BeforeNodeRestoredEvent;
+use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 
 use OCA\CAFEVDB\Common;
 use OCA\CAFEVDB\Common\UndoableFileRemove;
@@ -76,8 +80,7 @@ use OCA\CAFEVDB\Settings\ConfigConstants;
  * - update of fiels-values when a file with the correct name is added or removed
  * - disallow tweaking the README.md which is taken from the field's tooltip
  *
- * @todo To make this work BeforeFolderCreatedEvents are needed, and the
- * trashbin restore must emit a BeforeNodeRenamedEvent.
+ * @todo To make this work BeforeFolderCreatedEvents are needed.
  */
 class ParticipantFieldCloudFolderListener implements IEventListener
 {
@@ -96,6 +99,8 @@ class ParticipantFieldCloudFolderListener implements IEventListener
     BeforeNodeDeletedEvent::class,
     BeforeNodeCreatedEvent::class,
     BeforeFolderCreatedEvent::class,
+    BeforeNodeRestoredEvent::class,
+    NodeRestoredEvent::class,
   ];
 
   private const ADD_KEY = 'add';
@@ -196,10 +201,15 @@ class ParticipantFieldCloudFolderListener implements IEventListener
         /** @var NodeRenamedEvent $event */
         $source = $event->getSource();
         $target = $event->getTarget();
+        $sourcePath = $source->getPath();
+        if (preg_match('~^/[^/]+/files_trashbin/files/~', $sourcePath)) {
+          // The trashbin events handle this operation even on servers that emit rename hooks for it.
+          return;
+        }
         // Only one endpoint is guaranteed to exist when this event fires.
         $type = ($checkOnly ? $source : $target)->getType();
         $nodes[self::DEL_KEY] = [
-          self::NODE_FULL_PATH => $source->getPath(),
+          self::NODE_FULL_PATH => $sourcePath,
           self::NODE_TYPE => $type,
         ];
         $nodes[self::ADD_KEY] = [
@@ -207,6 +217,17 @@ class ParticipantFieldCloudFolderListener implements IEventListener
           self::NODE_TYPE => $type,
         ];
         $this->ignoreCreatedPaths[$target->getPath()] = true; // ignore the following Created Event
+        break;
+      case BeforeNodeRestoredEvent::class:
+        $checkOnly = true;
+        // fallthrough
+      case NodeRestoredEvent::class:
+        /** @var BeforeNodeRestoredEvent|NodeRestoredEvent $event */
+        $target = $event->getTarget();
+        $nodes[self::ADD_KEY] = [
+          self::NODE_FULL_PATH => $target->getPath(),
+          self::NODE_TYPE => ($checkOnly ? $event->getSource() : $target)->getType(),
+        ];
         break;
       case BeforeNodeCopiedEvent::class:
         $checkOnly = true;
@@ -561,7 +582,9 @@ class ParticipantFieldCloudFolderListener implements IEventListener
         $this->entityManager->commit();
       }
     } catch (HintException $e) {
-      $throw = $e;
+      $throw = $eventClass === BeforeNodeRestoredEvent::class
+        ? new AbortedEventException($e->getMessage(), previous: $e)
+        : $e;
       $rollBack = !$checkOnly;
     } catch (Throwable $t) {
       $rollBack = !$checkOnly;
