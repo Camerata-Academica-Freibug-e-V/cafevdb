@@ -194,17 +194,17 @@ class ParticipantFieldCloudFolderListener implements IEventListener
         // fallthrough
       case NodeRenamedEvent::class:
         /** @var NodeRenamedEvent $event */
-        /** @var FileSystemNode $source */
         $source = $event->getSource();
+        $target = $event->getTarget();
+        // Only one endpoint is guaranteed to exist when this event fires.
+        $type = ($checkOnly ? $source : $target)->getType();
         $nodes[self::DEL_KEY] = [
           self::NODE_FULL_PATH => $source->getPath(),
-          self::NODE_TYPE => $source->getType(),
+          self::NODE_TYPE => $type,
         ];
-        /** @var FileSystemNode $target */
-        $target = $event->getTarget();
         $nodes[self::ADD_KEY] = [
           self::NODE_FULL_PATH => $target->getPath(),
-          self::NODE_TYPE => $source->getType(), // "source" to avoid NonExistingFile isssues
+          self::NODE_TYPE => $type,
         ];
         $this->ignoreCreatedPaths[$target->getPath()] = true; // ignore the following Created Event
         break;
