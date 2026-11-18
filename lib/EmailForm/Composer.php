@@ -56,6 +56,7 @@ use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumGender;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumParticipantFieldDataType as FieldDataType;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumParticipantFieldMultiplicity as FieldMultiplicity;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumParticipationStatus as ParticipationStatus;
+use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumProjectTemporalType as ProjectType;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\Util as DBUtil;
 use OCA\CAFEVDB\Database\EntityManager;
@@ -5807,7 +5808,7 @@ Euer Camerata Vorstand (${GLOBAL::ORGANIZER})
       [
         'path' => $downloadsPath,
         'share' => $downloadsShare,
-      ] = $projectService->ensureDownloadsShare($this->project, noCreate: true);
+      ] = $projectService->ensureDownloadsShare($this->project, noCreate: $this->project->getType() !== ProjectType::TEMPORARY);
       if ($downloadsShare !== null) {
         $downloadsFolder = $downloadsShare->getNode();
         $downloadsPath .= Constants::PATH_SEP;
