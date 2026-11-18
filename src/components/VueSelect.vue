@@ -710,6 +710,8 @@ defineExpose({
 
   :deep(.nc-select.v-select.select .vs__dropdown-toggle) {
     padding-block-start: 0;
+    // Keep NcSelect's high-z-index action buttons below overlapping dialogs.
+    isolation: isolate;
   }
 
   :deep(.nc-select.v-select.select.vs--multiple .vs__dropdown-toggle) {
