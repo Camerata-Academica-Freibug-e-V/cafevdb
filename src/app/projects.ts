@@ -225,7 +225,7 @@ const projectViewPopup = async function(
     initialValue: 'View',
     reloadName: pmeSys('operation'),
     reloadValue: 'View',
-    // [pmeSys('operation')]: 'View',
+    [pmeSys('operation')]: 'View',
     [pmeSys('rec')]: { id: projectId },
     modalDialog: true,
     modified: false,
