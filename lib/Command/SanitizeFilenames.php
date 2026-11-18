@@ -91,9 +91,8 @@ class SanitizeFilenames
     ?string $charReplacement = null,
   ): ExitCode {
 
-    $result = $this->authenticate($input, $output);
-    if ($result != ExitCode::Success) {
-      return $result;
+    if ($this->authenticate($input, $output) !== ExitCode::Success->value) {
+      return ExitCode::Failure;
     }
 
     $this->entityManager->beginTransaction();
