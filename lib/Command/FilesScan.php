@@ -30,15 +30,11 @@ use OCP\Console\Attribute\Option;
 use OCP\Console\ExitCode;
 use OCP\Console\IInput;
 use OCP\Console\IOutput;
-use OCP\EventDispatcher\IEventDispatcher;
-use OCP\Files\IRootFolder;
+use OCP\Console\ISignalHandler;
 use OCP\IL10N;
 use OCP\IUserManager;
 use OCP\IUserSession;
-use OC\FilesMetadata\FilesMetadataManager;
-use OC\Files\SetupManager;
 use Psr\Container\ContainerInterface;
-use Psr\Log\LoggerInterface;
 
 /** Authenticated files-scan which is thus also able to scan the database-backed mounts */
 #[AsCommand(
