@@ -29,28 +29,15 @@ use Throwable;
 use Psr\Container\ContainerInterface;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
-use OCP\Exceptions\AbortedEventException;
 use OCP\Files;
-use OCP\Files\Events\Node\BeforeNodeCopiedEvent;
-use OCP\Files\Events\Node\BeforeNodeCreatedEvent;
-use OCP\Files\Events\Node\BeforeNodeDeletedEvent;
-use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
-use OCP\Files\Events\Node\NodeCopiedEvent;
-use OCP\Files\Events\Node\NodeCreatedEvent;
-use OCP\Files\Events\Node\NodeDeletedEvent;
-use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\File;
 use OCP\Files\FileInfo;
 use OCP\Files\IRootFolder;
-use OCP\Files\Node as FileSystemNode;
 use OCP\HintException;
 use OCP\IL10N;
 use OCP\IUser;
 use OCP\IUserSession;
 use Psr\Log\LoggerInterface as ILogger;
-
-use OCA\Files_Trashbin\Events\BeforeNodeRestoredEvent;
-use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 
 use OCA\CAFEVDB\Common;
 use OCA\CAFEVDB\Common\UndoableFileRemove;
@@ -84,26 +71,9 @@ class ParticipantFieldCloudFolderListener implements IEventListener
   use \OCA\CAFEVDB\Traits\ConfigTrait;
   use \OCA\CAFEVDB\Traits\EntityManagerTrait;
   use \OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Traits\UserRootFolderTrait;
+  use ParticipantFieldNodeEventsTrait;
 
-  const EVENT = [
-    NodeRenamedEvent::class,
-    NodeCopiedEvent::class,
-    NodeDeletedEvent::class,
-    NodeCreatedEvent::class,
-    BeforeNodeRenamedEvent::class,
-    BeforeNodeCopiedEvent::class,
-    BeforeNodeDeletedEvent::class,
-    BeforeNodeCreatedEvent::class,
-    BeforeNodeRestoredEvent::class,
-    NodeRestoredEvent::class,
-  ];
-
-  private const ADD_KEY = 'add';
-  private const DEL_KEY = 'remove';
-
-  private const NODE_FULL_PATH = 'fullPath';
   private const NODE_PARTIAL_PATH = 'path';
-  private const NODE_TYPE = 'type';
   private const NODE_BASE_NAME = 'baseName';
 
   private const PROJECT_YEAR_PART = 0;
@@ -155,11 +125,6 @@ class ParticipantFieldCloudFolderListener implements IEventListener
    */
   private $musicians = [];
 
-  /**
-   * @var array<string, int> Copy targets whose generic create event is redundant.
-   */
-  private $ignoreCreatedPaths = [];
-
   // phpcs:disable Squiz.Commenting.FunctionComment.Missing
   public function __construct(
     protected ContainerInterface $appContainer,
@@ -170,98 +135,12 @@ class ParticipantFieldCloudFolderListener implements IEventListener
   /** {@inheritdoc} */
   public function handle(Event $event):void
   {
-    $nodes = [];
-    $eventClass = get_class($event);
-    $checkOnly = false;
-    $createdNode = null;
-    switch ($eventClass) {
-      case BeforeNodeDeletedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeDeletedEvent::class:
-        /** @var NodeDeletedEvent $event */
-        /** @var FileSystemNode $node */
-        $node = $event->getNode();
-        $nodes[self::DEL_KEY] = [
-          self::NODE_FULL_PATH => $node->getPath(),
-          self::NODE_TYPE => $node->getType(),
-        ];
-        break;
-      case BeforeNodeRenamedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeRenamedEvent::class:
-        /** @var NodeRenamedEvent $event */
-        $source = $event->getSource();
-        $target = $event->getTarget();
-        $sourcePath = $source->getPath();
-        if (preg_match('~^/[^/]+/files_trashbin/files/~', $sourcePath)) {
-          // The trashbin events handle this operation even on servers that emit rename hooks for it.
-          return;
-        }
-        // Only one endpoint is guaranteed to exist when this event fires.
-        $type = ($checkOnly ? $source : $target)->getType();
-        $nodes[self::DEL_KEY] = [
-          self::NODE_FULL_PATH => $sourcePath,
-          self::NODE_TYPE => $type,
-        ];
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $target->getPath(),
-          self::NODE_TYPE => $type,
-        ];
-        break;
-      case BeforeNodeRestoredEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeRestoredEvent::class:
-        /** @var BeforeNodeRestoredEvent|NodeRestoredEvent $event */
-        $target = $event->getTarget();
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $target->getPath(),
-          self::NODE_TYPE => ($checkOnly ? $event->getSource() : $target)->getType(),
-        ];
-        break;
-      case BeforeNodeCopiedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeCopiedEvent::class:
-        /** @var NodeCopiedEvent $event */
-        /** @var FileSystemNode $source */
-        $source = $event->getSource();
-        /** @var FileSystemNode $target */
-        $target = $event->getTarget();
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $target->getPath(),
-          self::NODE_TYPE => $source->getType(), // "source" to avoid NonExistingFile isssues
-        ];
-        if (!$checkOnly) {
-          $this->ignoreCreatedPaths[$target->getPath()] = $target->getId();
-        }
-        break;
-      case BeforeNodeCreatedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case NodeCreatedEvent::class:
-        /** @var BeforeNodeCreatedEvent|NodeCreatedEvent $event */
-        $node = $event->getNode();
-        $path = $node->getPath();
-        if (!$checkOnly && isset($this->ignoreCreatedPaths[$path])) {
-          $copiedId = $this->ignoreCreatedPaths[$path];
-          unset($this->ignoreCreatedPaths[$path]);
-          if ($node->getId() === $copiedId) {
-            return;
-          }
-        }
-        // Stock Nextcloud uses the same placeholder for files and mkdir before creation.
-        $createdNode = $checkOnly ? null : $node;
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $path,
-          self::NODE_TYPE => $createdNode?->getType(),
-        ];
-        break;
-      default:
-        return;
+    $change = $this->describeNodeEvent($event);
+    if ($change === null) {
+      return;
     }
+    [$nodes, $checkOnly, $createdNode] = $change;
+    $eventClass = get_class($event);
 
     if (!$this->initialize()) {
       return; // something went wrong
@@ -576,9 +455,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
         $this->entityManager->commit();
       }
     } catch (HintException $e) {
-      $throw = $eventClass === BeforeNodeRestoredEvent::class
-        ? new AbortedEventException($e->getMessage(), previous: $e)
-        : $e;
+      $throw = $this->eventVeto($event, $e);
       $rollBack = !$checkOnly;
     } catch (Throwable $t) {
       $rollBack = !$checkOnly;

@@ -2,7 +2,8 @@
 /**
  * Orchestra member, musician and project management application.
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * @author GitHub Copilot <223556219+Copilot@users.noreply.github.com>
+ * @license AGPL-3.0-or-later
  */
 
 namespace OCA\CAFEVDB\Service;

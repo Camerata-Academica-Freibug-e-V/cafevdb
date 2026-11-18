@@ -15,15 +15,18 @@ use OCP\Files\FileInfo;
 use OCP\Files\Node;
 use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
 use OCA\CAFEVDB\Listener\ParticipantFieldCloudFolderListener;
+use OCA\CAFEVDB\Listener\ParticipantFieldNodeEventsTrait;
 use OCA\Files_Trashbin\Events\BeforeNodeRestoredEvent;
 use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 
 /** Tests filesystem event handling before participant-field lookup. */
 #[CoversClass(ParticipantFieldCloudFolderListener::class)]
+#[CoversTrait(ParticipantFieldNodeEventsTrait::class)]
 final class ParticipantFieldCloudFolderListenerTest extends TestCase
 {
   /** The target of a pre-rename event need not exist yet. */
