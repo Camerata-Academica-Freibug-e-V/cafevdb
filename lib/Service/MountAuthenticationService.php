@@ -11,9 +11,7 @@
 
 namespace OCA\CAFEVDB\Service;
 
-use OC\Authentication\Token\IProvider as TokenProvider;
 use OCA\Richdocuments\Db\WopiMapper;
-use OCA\Richdocuments\Middleware\WOPIMiddleware;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -29,15 +27,16 @@ class MountAuthenticationService
     private IUserSession $userSession,
     private IRequest $request,
     private EncryptionService $encryptionService,
-    private TokenProvider $tokenProvider,
+    private WopiCredentialStore $credentialStore,
     private ContainerInterface $appContainer,
     private LoggerInterface $logger,
+    private WopiRequestService $wopiRequestService,
   ) {
   }
   // phpcs:enable
 
   /**
-   * Authenticate a mount user, using the fork's WOPI credentials if needed.
+   * Authenticate a mount user using token-encrypted app credentials if needed.
    *
    * The caller must first check the user's filesystem permission.
    *
@@ -47,13 +46,13 @@ class MountAuthenticationService
    */
   public function authenticate(IUser $user): bool
   {
-    if (!preg_match('~(?:^|/)apps/richdocuments/wopi(?:/|$)~', $this->request->getRawPathInfo())) {
-      return $this->userSession->isLoggedIn();
+    if (!$this->wopiRequestService->isWopiRoute()) {
+      return $this->userSession->isLoggedIn()
+        && $this->userSession->getUser()?->getUID() === $user->getUID();
     }
 
     try {
-      $middleware = $this->appContainer->get(WOPIMiddleware::class);
-      if (!$middleware->isWOPIRequest()) {
+      if (!$this->wopiRequestService->isValidatedWopiRequest()) {
         $this->logger->debug('Cannot authenticate mounts before WOPI request validation.');
         return false;
       }
@@ -66,7 +65,8 @@ class MountAuthenticationService
       $userId = $user->getUID();
       if ($wopi->getTokenType() !== $wopi::TOKEN_TYPE_USER
           || $wopi->getEditorUid() !== $userId
-          || $wopi->getUserForFileAccess() !== $userId) {
+          || $wopi->getUserForFileAccess() !== $userId
+          || $wopi->getExpiry() <= time()) {
         return false;
       }
 
@@ -82,22 +82,18 @@ class MountAuthenticationService
         return true;
       }
 
-      $passphrase = $userId . '@' . $accessToken;
-      $token = $this->tokenProvider->getToken($passphrase);
-      if ($token->getUID() !== $accessToken || $token->getLoginName() !== $userId) {
+      $appKey = $this->credentialStore->recover($accessToken, $userId, $wopi->getExpiry());
+      if ($appKey === null) {
+        $this->logger->warning('No registered app credentials for WOPI mount.');
         return false;
       }
-      $password = $this->tokenProvider->getPassword($token, $passphrase);
-      if ($password === '' || !$this->userSession->login($userId, $password)
-          || $this->userSession->getUser()?->getUID() !== $userId) {
-        return false;
+      if (!$this->userSession->isLoggedIn()) {
+        $this->userSession->setUser($user);
       }
-      if ($this->encryptionService->getUserId() !== $userId) {
-        $this->encryptionService->bind($userId, $password);
-      }
+      $this->encryptionService->bindWithAppKey($userId, $appKey);
       return $this->encryptionService->getUserId() === $userId;
     } catch (Throwable $exception) {
-      // Exceptions from token providers may contain credential material.
+      // Exceptions from credential storage may contain credential material.
       $this->logger->warning('Unable to authenticate WOPI mounts: ' . $exception::class);
       return false;
     }

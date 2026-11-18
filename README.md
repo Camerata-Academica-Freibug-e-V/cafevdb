@@ -44,18 +44,14 @@ or README is created for the conflicting file.
 Database-backed files and Collabora
 ----------------------------------
 
-Database mounts require the user's password to unlock the app's encrypted
-database configuration. CafeVDB provisions and cleans up credentials for
-validated WOPI requests to authenticated database mounts. CafeVDB also
-authenticates mount access after richdocuments validates the WOPI request.
+Database mounts require the CafeVDB app key to unlock encrypted database
+configuration. On validated WOPI requests, CafeVDB can recover that key without
+logging in to Nextcloud or unlocking the user's private key.
 This currently supports local users whose editor and filesystem user are the
 same, not guest or remote-user tokens.
 
-This is a security tradeoff: mount authentication uses a Nextcloud token
-containing the login password, protected with a passphrase derived from the
-WOPI access token, which is also available to the browser. Restrict access to
-tokens and protect their storage and transport. CafeVDB's credential registry
-does not store passwords or derived passphrases.
+Protect WOPI tokens in storage and transport: someone who obtains both a token
+and its encrypted credential can recover the shared app key.
 
 Frontend builds
 ---------------
@@ -86,36 +82,32 @@ authoritative WOPI record, checks filesystem authorization and matching local
 user identities, and only stores credentials for mounts marked `authenticated`.
 Other responses and ordinary mounts are left unchanged.
 
-CafeVDB uses a recoverable-password authentication-token format for WOPI mount
-authentication: the lookup passphrase is `USER_ID@WOPI_TOKEN`, the stored token
-UID is the WOPI token, and the login name is the local user ID. Expiry follows
-the WOPI record. Provisioning failures return an error without exposing
-credentials or tokens in the response or log. It requires password credentials
-in the current Nextcloud login session.
+CafeVDB stores the token hash, the token-encrypted app key, and the WOPI expiry
+in the orchestra database's `WopiCredentials` table. The authenticated payload
+also binds the key to the local user and expiry. The Nextcloud database account
+reads the `SQL SECURITY DEFINER` connector view with `@WOPI_TOKEN_HASH` set for
+that lookup only. The view returns at most one unexpired credential. Issuing a
+new credential prunes expired rows. No Nextcloud authentication token is issued.
 
 This covers only those three document-opening endpoints, not every richdocuments
 token producer. The middleware provisions credentials; CafeVDB's mount
 authentication service uses them after richdocuments validates the WOPI request.
+`WopiRequestService` centralizes the richdocuments path compatibility check for
+early service construction, when route metadata may be unavailable. Route
+classification never replaces richdocuments' WOPI request validation.
 
-Provisioning records the authentication-token ID, synthetic UID and fixed WOPI
-expiry in CafeVDB's own `cafevdb_wopi_credentials` table in the Nextcloud database.
-The registry stores neither passwords nor derived login passphrases; the
-synthetic UID is the WOPI access token and must still be treated as sensitive.
-Run Nextcloud's app upgrade/migrations before enabling this code.
+The orchestra database migration installs the WOPI view and function on the
+shared MariaDB server when cloud-user or personalized views are already
+enabled. It grants the Nextcloud database account access to the view, not the
+credential table. If the migration was already applied without provisioning
+the view, regenerate the cloud-user or personalized views in CafeVDB's settings.
+Reopen Office documents that were open during the upgrade to get new credentials.
 
-`CleanupWopiCredentials` runs every ten minutes and invalidates up to 1,000
-registered expired temporary credentials per run, allowing a 60-second expiry
-grace period. It queries only the app-owned registry, then uses Nextcloud's
-`IProvider` to find and invalidate the exact credential, checking its UID, ID,
-type and name. Missing credentials are removed from the registry; operational
-failures retain the entry for retry. Ordinary app passwords are not enumerated.
-Cleanup works after WOPI-record deletion or richdocuments being disabled, without
-accessing Nextcloud's authentication tables, the orchestra database or a session.
-
-Previously created credentials are registered when successfully reused through
-the middleware. Credentials never reused are not imported: there is no core-table
-scan. They remain subject to Nextcloud's normal token retention cleanup. Deploy
-CafeVDB and its migration before enabling this code; leave richdocuments'
+The Nextcloud app upgrade revokes all registered legacy password-based WOPI
+credentials, including unexpired ones, before dropping `cafevdb_wopi_credentials`
+and removing its cleanup job. Failures abort the migration so it can safely
+retry. Unregistered legacy credentials remain subject to Nextcloud's token
+cleanup. The richdocuments WOPI tokens themselves are not deleted; leave its
 standard WOPI and template cleanup enabled.
 
 User database recryption

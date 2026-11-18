@@ -9,10 +9,15 @@
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
 use OCA\CAFEVDB\Crypto\AsymmetricKeyService;
+use OCA\CAFEVDB\Crypto\AsymmetricCryptorInterface;
 use OCA\CAFEVDB\Crypto\CryptoFactoryInterface;
 use OCA\CAFEVDB\Crypto\SymmetricCryptorInterface;
+use OCA\CAFEVDB\Events\EncryptionServiceBound;
+use OCA\CAFEVDB\Exceptions\EncryptionKeyException;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\EncryptionService;
+use OCA\CAFEVDB\Service\WopiRequestService;
+use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCP\Authentication\Exceptions\CredentialsUnavailableException;
 use OCP\Authentication\LoginCredentials\IStore as ICredentialsStore;
 use OCP\Config\IUserConfig;
@@ -23,12 +28,68 @@ use OCP\IUser;
 use OCP\IUserSession;
 use OCP\Security\IHasher;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
 #[CoversClass(EncryptionService::class)]
+#[UsesClass(EncryptionServiceBound::class)]
 class EncryptionServiceTest extends TestCase
 {
+  public function testWopiBindingUnlocksOnlyAppCredentials(): void
+  {
+    $credentials = $this->createMock(ICredentialsStore::class);
+    $credentials->expects($this->never())->method('getLoginCredentials');
+    $wopiRequest = $this->createStub(WopiRequestService::class);
+    $wopiRequest->method('isWopiRoute')->willReturn(true);
+    $config = $this->createStub(IConfig::class);
+    $config->method('getAppValue')->willReturnCallback(static fn($app, $key, $default = '') => match ($key) {
+      ConfigConstants::APP_ENCRYPTION_KEY_HASH_KEY => 'stored-hash',
+      ConfigConstants::USER_GROUP_KEY => 'orchestra',
+      default => $default,
+    });
+    $hasher = $this->createMock(IHasher::class);
+    $hasher->expects($this->once())->method('verify')->with('app-key', 'stored-hash')->willReturn(true);
+    $appCryptor = $this->createStub(AsymmetricCryptorInterface::class);
+    $appCryptor->method('canEncrypt')->willReturn(true);
+    $appCryptor->method('canDecrypt')->willReturn(true);
+    $asymmetric = $this->createMock(AsymmetricKeyService::class);
+    $asymmetric->expects($this->once())->method('getUnlockedCryptor')->with('@orchestra', 'app-key')->willReturn($appCryptor);
+    $asymmetric->expects($this->never())->method('initEncryptionKeyPair');
+    $asymmetric->expects($this->never())->method('getSharedPrivateValue');
+    $symmetric = $this->createMock(SymmetricCryptorInterface::class);
+    $symmetric->expects($this->once())->method('setEncryptionKey')->with('app-key');
+    $symmetric->method('getEncryptionKey')->willReturn('app-key');
+    $factory = $this->createStub(CryptoFactoryInterface::class);
+    $factory->method('getSymmetricCryptor')->willReturn($symmetric);
+    $events = $this->createMock(IEventDispatcher::class);
+    $events->expects($this->once())->method('dispatchTyped')->with(self::callback(
+      static fn($event) => $event instanceof EncryptionServiceBound && $event->getUserId() === 'alice',
+    ));
+    $encryption = new EncryptionService(
+      'cafevdb',
+      $asymmetric,
+      $config,
+      $events,
+      $hasher,
+      $this->createStub(LoggerInterface::class),
+      $this->createStub(IUserConfig::class),
+      $this->createStub(AuthorizationService::class),
+      $this->createStub(IUserSession::class),
+      $factory,
+      $credentials,
+      $wopiRequest,
+    );
+
+    $encryption->bindWithAppKey('alice', 'app-key');
+    self::assertTrue($encryption->appBound());
+    self::assertFalse($encryption->bound());
+    self::assertSame('alice', $encryption->getUserId());
+    self::assertSame($appCryptor, $encryption->getAppAsymmetricCryptor());
+    $this->expectException(EncryptionKeyException::class);
+    $encryption->getSharedPrivateValue('rowAccessToken');
+  }
+
   public function testUnavailableLoginCredentialsAreLoggedAtDebugLevel(): void
   {
     $user = $this->createStub(IUser::class);
@@ -67,6 +128,7 @@ class EncryptionServiceTest extends TestCase
       $userSession,
       $cryptoFactory,
       $credentialsStore,
+      $this->createStub(WopiRequestService::class),
     );
   }
 }

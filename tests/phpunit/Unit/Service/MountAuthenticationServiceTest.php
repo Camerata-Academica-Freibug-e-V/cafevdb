@@ -10,12 +10,11 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
-use OC\Authentication\Token\IProvider;
 use OCA\CAFEVDB\Service\EncryptionService;
 use OCA\CAFEVDB\Service\MountAuthenticationService;
+use OCA\CAFEVDB\Service\WopiCredentialStore;
+use OCA\CAFEVDB\Service\WopiRequestService;
 use OCA\Richdocuments\Db\WopiMapper;
-use OCA\Richdocuments\Middleware\WOPIMiddleware;
-use OCP\Authentication\Token\IToken;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserSession;
@@ -34,12 +33,14 @@ class MountTestWopi
     private int $type = self::TOKEN_TYPE_USER,
     private string $editor = 'alice',
     private string $fileUser = 'alice',
+    private int $expiry = 2000000000,
   ) {
   }
 
   public function getTokenType(): int { return $this->type; }
   public function getEditorUid(): string { return $this->editor; }
   public function getUserForFileAccess(): string { return $this->fileUser; }
+  public function getExpiry(): int { return $this->expiry; }
 }
 
 class MountTestWopiMapper
@@ -50,11 +51,6 @@ class MountTestWopiMapper
   }
 }
 
-class MountTestWopiMiddleware
-{
-  public function isWOPIRequest(): bool { return true; }
-}
-
 #[CoversClass(MountAuthenticationService::class)]
 #[AllowMockObjectsWithoutExpectations]
 class MountAuthenticationServiceTest extends TestCase
@@ -62,12 +58,12 @@ class MountAuthenticationServiceTest extends TestCase
   private IUserSession $session;
   private IRequest $request;
   private EncryptionService $encryption;
-  private IProvider $tokens;
+  private WopiCredentialStore $store;
   private ContainerInterface $container;
   private LoggerInterface $logger;
   private IUser $user;
   private MountTestWopiMapper $mapper;
-  private MountTestWopiMiddleware $middleware;
+  private WopiRequestService $wopiRequest;
   private MountAuthenticationService $service;
 
   protected function setUp(): void
@@ -75,53 +71,53 @@ class MountAuthenticationServiceTest extends TestCase
     $this->session = $this->createMock(IUserSession::class);
     $this->request = $this->createMock(IRequest::class);
     $this->encryption = $this->createMock(EncryptionService::class);
-    $this->tokens = $this->createMock(IProvider::class);
+    $this->store = $this->createMock(WopiCredentialStore::class);
     $this->container = $this->createMock(ContainerInterface::class);
     $this->logger = $this->createMock(LoggerInterface::class);
     $this->user = $this->createMock(IUser::class);
     $this->user->method('getUID')->willReturn('alice');
     $this->mapper = $this->createMock(MountTestWopiMapper::class);
-    $this->middleware = $this->createMock(MountTestWopiMiddleware::class);
+    $this->wopiRequest = $this->createMock(WopiRequestService::class);
     $this->container->method('get')->willReturnCallback(fn(string $id) => match ($id) {
-      WOPIMiddleware::class => $this->middleware,
       WopiMapper::class => $this->mapper,
     });
     $this->service = new MountAuthenticationService(
       $this->session,
       $this->request,
       $this->encryption,
-      $this->tokens,
+      $this->store,
       $this->container,
       $this->logger,
+      $this->wopiRequest,
     );
   }
 
   public function testOrdinaryRequestsRetainSessionCheck(): void
   {
-    $this->request->method('getRawPathInfo')->willReturn('/remote.php/dav/files/alice');
+    $this->wopiRequest->method('isWopiRoute')->willReturn(false);
+    $this->wopiRequest->expects($this->never())->method('isValidatedWopiRequest');
     $this->session->method('isLoggedIn')->willReturn(true, false);
+    $this->session->method('getUser')->willReturn($this->user);
     $this->container->expects($this->never())->method('get');
     self::assertTrue($this->service->authenticate($this->user));
     self::assertFalse($this->service->authenticate($this->user));
   }
 
-  public function testVolatileWopiUserIsLoggedInAndEncryptionBound(): void
+  public function testVolatileWopiUserGetsAppKeyWithoutPasswordLogin(): void
   {
     $this->wopiRequest();
     $this->session->method('getUser')->willReturn($this->user);
-    $this->session->method('isLoggedIn')->willReturn(true);
+    $this->session->method('isLoggedIn')->willReturn(false);
     $bound = false;
     $this->encryption->method('getUserId')->willReturnCallback(function() use (&$bound) {
       return $bound ? 'alice' : null;
     });
-    $this->encryption->expects($this->once())->method('bind')->with('alice', 'password')
+    $this->encryption->expects($this->once())->method('bindWithAppKey')->with('alice', 'app-key')
       ->willReturnCallback(function() use (&$bound): void { $bound = true; });
-    $token = $this->createMock(IToken::class);
-    $token->method('getUID')->willReturn('wopi-token');
-    $token->method('getLoginName')->willReturn('alice');
-    $this->tokens->expects($this->once())->method('getToken')->with('alice@wopi-token')->willReturn($token);
-    $this->tokens->expects($this->once())->method('getPassword')->with($token, 'alice@wopi-token')->willReturn('password');
-    $this->session->expects($this->once())->method('login')->with('alice', 'password')->willReturn(true);
+    $this->store->expects($this->once())->method('recover')->with('wopi-token', 'alice', 2000000000)->willReturn('app-key');
+    $this->session->expects($this->never())->method('login');
+    $this->session->expects($this->once())->method('setUser')->with($this->user);
+    $this->encryption->expects($this->never())->method('bind');
     self::assertTrue($this->service->authenticate($this->user));
   }
 
@@ -132,16 +128,16 @@ class MountAuthenticationServiceTest extends TestCase
     $this->session->method('isLoggedIn')->willReturn(true);
     $this->encryption->method('getUserId')->willReturn('alice');
     $this->session->expects($this->never())->method('login');
-    $this->tokens->expects($this->never())->method('getToken');
+    $this->store->expects($this->never())->method('recover');
     self::assertTrue($this->service->authenticate($this->user));
   }
 
   public function testUnvalidatedRequestCannotRecoverCredentials(): void
   {
-    $this->request->method('getRawPathInfo')->willReturn('/apps/richdocuments/wopi/files/1');
-    $this->middleware->method('isWOPIRequest')->willReturn(false);
+    $this->wopiRequest->method('isWopiRoute')->willReturn(true);
+    $this->wopiRequest->method('isValidatedWopiRequest')->willReturn(false);
     $this->mapper->expects($this->never())->method('getWopiForToken');
-    $this->tokens->expects($this->never())->method('getToken');
+    $this->store->expects($this->never())->method('recover');
     self::assertFalse($this->service->authenticate($this->user));
   }
 
@@ -152,20 +148,17 @@ class MountAuthenticationServiceTest extends TestCase
       new MountTestWopi(fileUser: 'bob'),
       new MountTestWopi(type: 1),
     );
-    $this->tokens->expects($this->never())->method('getToken');
+    $this->store->expects($this->never())->method('recover');
     self::assertFalse($this->service->authenticate($this->user));
     self::assertFalse($this->service->authenticate($this->user));
     self::assertFalse($this->service->authenticate($this->user));
   }
 
-  public function testMismatchedStoredTokenIsRejected(): void
+  public function testUnregisteredTokenCannotBindEncryption(): void
   {
     $this->wopiRequest();
-    $token = $this->createMock(IToken::class);
-    $token->method('getUID')->willReturn('wopi-token');
-    $token->method('getLoginName')->willReturn('bob');
-    $this->tokens->method('getToken')->willReturn($token);
-    $this->tokens->expects($this->never())->method('getPassword');
+    $this->store->method('recover')->willReturn(null);
+    $this->encryption->expects($this->never())->method('bindWithAppKey');
     $this->session->expects($this->never())->method('login');
     self::assertFalse($this->service->authenticate($this->user));
   }
@@ -176,7 +169,7 @@ class MountAuthenticationServiceTest extends TestCase
     $other = $this->createStub(IUser::class);
     $other->method('getUID')->willReturn('bob');
     $this->session->method('getUser')->willReturn($other);
-    $this->tokens->expects($this->never())->method('getToken');
+    $this->store->expects($this->never())->method('recover');
     $this->session->expects($this->never())->method('login');
     self::assertFalse($this->service->authenticate($this->user));
   }
@@ -185,31 +178,26 @@ class MountAuthenticationServiceTest extends TestCase
   {
     $this->wopiRequest();
     $this->encryption->method('getUserId')->willReturn('bob');
-    $this->tokens->expects($this->never())->method('getToken');
-    $this->encryption->expects($this->never())->method('bind');
+    $this->store->expects($this->never())->method('recover');
+    $this->encryption->expects($this->never())->method('bindWithAppKey');
     self::assertFalse($this->service->authenticate($this->user));
   }
 
-  public function testFailedPasswordLoginDoesNotBindEncryption(): void
+  public function testExpiredRecordCannotRecoverCredentials(): void
   {
-    $this->wopiRequest();
-    $token = $this->createStub(IToken::class);
-    $token->method('getUID')->willReturn('wopi-token');
-    $token->method('getLoginName')->willReturn('alice');
-    $this->tokens->method('getToken')->willReturn($token);
-    $this->tokens->method('getPassword')->willReturn('password');
-    $this->session->method('login')->willReturn(false);
-    $this->encryption->expects($this->never())->method('bind');
+    $this->wopiRequest(new MountTestWopi(expiry: time() - 1));
+    $this->store->expects($this->never())->method('recover');
+    $this->encryption->expects($this->never())->method('bindWithAppKey');
     self::assertFalse($this->service->authenticate($this->user));
   }
 
   public function testExpiredWopiTokenCannotRecoverCredentials(): void
   {
-    $this->request->method('getRawPathInfo')->willReturn('/apps/richdocuments/wopi/files/1');
+    $this->wopiRequest->method('isWopiRoute')->willReturn(true);
     $this->request->method('getParam')->willReturn('wopi-token');
-    $this->middleware->method('isWOPIRequest')->willReturn(true);
+    $this->wopiRequest->method('isValidatedWopiRequest')->willReturn(true);
     $this->mapper->method('getWopiForToken')->willThrowException(new RuntimeException());
-    $this->tokens->expects($this->never())->method('getToken');
+    $this->store->expects($this->never())->method('recover');
     $this->session->expects($this->never())->method('login');
     self::assertFalse($this->service->authenticate($this->user));
   }
@@ -217,7 +205,7 @@ class MountAuthenticationServiceTest extends TestCase
   public function testTokenErrorsDoNotLeakSecrets(): void
   {
     $this->wopiRequest();
-    $this->tokens->method('getToken')->willThrowException(new RuntimeException('wopi-token password'));
+    $this->store->method('recover')->willThrowException(new RuntimeException('wopi-token app-key'));
     $this->logger->expects($this->once())->method('warning')
       ->with('Unable to authenticate WOPI mounts: ' . RuntimeException::class);
     $this->session->expects($this->never())->method('login');
@@ -226,9 +214,9 @@ class MountAuthenticationServiceTest extends TestCase
 
   private function wopiRequest(MountTestWopi ...$wopis): void
   {
-    $this->request->method('getRawPathInfo')->willReturn('/apps/richdocuments/wopi/files/1');
+    $this->wopiRequest->method('isWopiRoute')->willReturn(true);
     $this->request->method('getParam')->willReturn('wopi-token');
-    $this->middleware->method('isWOPIRequest')->willReturn(true);
+    $this->wopiRequest->method('isValidatedWopiRequest')->willReturn(true);
     $this->mapper->method('getWopiForToken')->willReturn(...($wopis ?: [new MountTestWopi()]));
   }
 }

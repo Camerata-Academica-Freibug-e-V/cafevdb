@@ -9,17 +9,12 @@
 
 namespace OCA\CAFEVDB\Service;
 
-use OC\Authentication\Token\IProvider;
-use OC\Authentication\Token\PublicKeyToken;
 use OCA\Richdocuments\Db\WopiMapper;
-use OCP\Authentication\Exceptions\InvalidTokenException;
-use OCP\Authentication\LoginCredentials\IStore;
 use OCP\Files\IRootFolder;
 use OCP\IUserSession;
 use Psr\Container\ContainerInterface;
 use RuntimeException;
 use SensitiveParameter;
-use Throwable;
 
 /** Store credentials in the format consumed by WOPI mount authentication. */
 class WopiTokenService
@@ -28,11 +23,10 @@ class WopiTokenService
   public function __construct(
     private IUserSession $userSession,
     private AuthorizationService $authorizationService,
-    private IStore $credentialsStore,
-    private IProvider $tokenProvider,
+    private EncryptionService $encryptionService,
     private IRootFolder $rootFolder,
     private ContainerInterface $appContainer,
-    private WopiCredentialRegistry $credentialRegistry,
+    private WopiCredentialStore $credentialStore,
   ) {
   }
   // phpcs:enable
@@ -64,48 +58,10 @@ class WopiTokenService
     if (!$file->getMountPoint()->getOption('authenticated', false)) {
       return;
     }
-    $credentials = $this->credentialsStore->getLoginCredentials();
-    $password = $credentials->getPassword();
-    if ($credentials->getUID() !== $userId || $password === null || $password === '') {
-      throw new RuntimeException('Matching password credentials are unavailable.');
+    $appKey = $this->encryptionService->getAppEncryptionKey();
+    if ($this->encryptionService->getUserId() !== $userId || $appKey === null || $appKey === '') {
+      throw new RuntimeException('Matching app encryption credentials are unavailable.');
     }
-
-    $passphrase = $userId . '@' . $accessToken;
-    try {
-      $token = $this->tokenProvider->getToken($passphrase);
-    } catch (InvalidTokenException) {
-      $token = null;
-    }
-    $generated = $token === null;
-    if ($generated) {
-      $token = $this->tokenProvider->generateToken(
-        $passphrase,
-        $accessToken,
-        $userId,
-        $password,
-        'wopi_token_' . $accessToken,
-      );
-    }
-    if (!$token instanceof PublicKeyToken) {
-      throw new RuntimeException('Unsupported WOPI credential token implementation.');
-    }
-    if ($token->getUID() !== $accessToken || $token->getLoginName() !== $userId) {
-      throw new RuntimeException('Stored WOPI credential identity mismatch.');
-    }
-    if ($this->tokenProvider->getPassword($token, $passphrase) !== $password) {
-      throw new RuntimeException('Stored WOPI password mismatch.');
-    }
-    $token->setExpires($wopi->getExpiry());
-    // Keep temporary-token garbage collection from preceding the WOPI expiry.
-    $token->setLastActivity($wopi->getExpiry());
-    $this->tokenProvider->updateToken($token);
-    try {
-      $this->credentialRegistry->remember($token->getId(), $accessToken, $wopi->getExpiry());
-    } catch (Throwable $exception) {
-      if ($generated) {
-        $this->tokenProvider->invalidateTokenById($accessToken, $token->getId());
-      }
-      throw $exception;
-    }
+    $this->credentialStore->store($accessToken, $userId, $wopi->getExpiry(), $appKey);
   }
 }

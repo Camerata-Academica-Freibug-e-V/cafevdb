@@ -25,6 +25,7 @@
 namespace OCA\CAFEVDB\Database\Doctrine\ORM\Listeners;
 
 use OCA\CAFEVDB\Common\ConsoleLogger;
+use OCA\CAFEVDB\Database\Doctrine\Migrations\AbstractMigration;
 use OCA\CAFEVDB\Wrapped\Doctrine\Common\EventSubscriber;
 use OCA\CAFEVDB\Wrapped\Doctrine\Migrations\Event\MigrationsEventArgs;
 use OCA\CAFEVDB\Wrapped\Doctrine\Migrations\Event\MigrationsVersionEventArgs;
@@ -74,6 +75,10 @@ class DoctrineMigrationsListener implements EventSubscriber
   /** {@inheritdoc} */
   public function onMigrationsVersionExecuting(MigrationsVersionEventArgs $args): void
   {
+    $migration = $args->getPlan()->getMigration();
+    if ($migration instanceof AbstractMigration) {
+      $migration->setDryRun($args->getMigratorConfiguration()->isDryRun());
+    }
     $this->logInfo('');
   }
   /** {@inheritdoc} */

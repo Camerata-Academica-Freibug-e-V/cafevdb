@@ -40,6 +40,9 @@ use OCA\CAFEVDB\Wrapped\Doctrine\Migrations\AbstractMigration as DoctrineAbstrac
  */
 abstract class AbstractMigration extends DoctrineAbstractMigration
 {
+  // Hooks may also run during a dry run. Require the executor to opt in to writes.
+  protected bool $dryRun = true;
+
   /**
    * @param EntityManager $entityManager
    *
@@ -58,5 +61,15 @@ abstract class AbstractMigration extends DoctrineAbstractMigration
   public function isTransactional(): bool
   {
     return static::TRANSACTIONAL;
+  }
+
+  /**
+   * @param bool $dryRun Whether this execution only previews the migration.
+   *
+   * @return void
+   */
+  public function setDryRun(bool $dryRun): void
+  {
+    $this->dryRun = $dryRun;
   }
 }

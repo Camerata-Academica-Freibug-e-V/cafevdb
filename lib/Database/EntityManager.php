@@ -286,13 +286,13 @@ class EntityManager extends AbstractEntityManager
 
   /**
    * Initialize the wrapper if the EncryptionService has been bound to
-   * a user and password.
+   * a user with either password credentials or an app key.
    *
    * @return void
    */
   public function bind():void
   {
-    if (!$this->encryptionService->bound()) {
+    if (!$this->encryptionService->appBound()) {
       return;
     }
     if (!empty($this->wrapped)) {

@@ -11,7 +11,6 @@ namespace OCA\CAFEVDB\Migration;
 
 use Closure;
 use Doctrine\DBAL\Types\Types;
-use OCA\CAFEVDB\Service\WopiCredentialRegistry;
 use OCP\DB\ISchemaWrapper;
 use OCP\Migration\IOutput;
 use OCP\Migration\SimpleMigrationStep;
@@ -20,6 +19,8 @@ use Override;
 /** Create the app-owned expiry registry for WOPI password credentials. */
 class Version100201Date20261114001000 extends SimpleMigrationStep
 {
+  public const TABLE_NAME = 'cafevdb_wopi_credentials';
+
   /**
    * @param IOutput $output
    * @param Closure $schemaClosure
@@ -31,10 +32,10 @@ class Version100201Date20261114001000 extends SimpleMigrationStep
   public function changeSchema(IOutput $output, Closure $schemaClosure, array $options): ?ISchemaWrapper
   {
     $schema = $schemaClosure();
-    if ($schema->hasTable(WopiCredentialRegistry::TABLE_NAME)) {
+    if ($schema->hasTable(self::TABLE_NAME)) {
       return null;
     }
-    $table = $schema->createTable(WopiCredentialRegistry::TABLE_NAME);
+    $table = $schema->createTable(self::TABLE_NAME);
     $table->addColumn('token_id', Types::BIGINT, ['notnull' => true, 'unsigned' => true]);
     $table->addColumn('token_uid', Types::STRING, ['notnull' => true, 'length' => 64]);
     $table->addColumn('expires', Types::BIGINT, ['notnull' => true]);

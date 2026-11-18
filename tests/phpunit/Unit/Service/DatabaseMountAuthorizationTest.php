@@ -95,7 +95,6 @@ class DatabaseMountAuthorizationTest extends TestCase
     $user = $this->createStub(IUser::class);
     $user->method('getUID')->willReturn('alice');
     $session = $this->createStub(IUserSession::class);
-    $session->method('isLoggedIn')->willReturn(true);
     $session->method('getUser')->willReturn($user);
     $config = $this->createStub(ConfigService::class);
     $config->method('getL10n')->willReturn($this->createStub(IL10N::class));
