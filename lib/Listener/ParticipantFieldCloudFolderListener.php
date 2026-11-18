@@ -31,17 +31,15 @@ use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Exceptions\AbortedEventException;
 use OCP\Files;
-use OCP\Files\Events\Node\BeforeFolderCreatedEvent;
 use OCP\Files\Events\Node\BeforeNodeCopiedEvent;
 use OCP\Files\Events\Node\BeforeNodeCreatedEvent;
 use OCP\Files\Events\Node\BeforeNodeDeletedEvent;
 use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
-use OCP\Files\Events\Node\FolderCreatedEvent;
 use OCP\Files\Events\Node\NodeCopiedEvent;
 use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeDeletedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
-use OCP\Files\Events\Node\NodeTouchedEvent;
+use OCP\Files\File;
 use OCP\Files\FileInfo;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node as FileSystemNode;
@@ -67,6 +65,7 @@ use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\MusicianService;
+use OCA\CAFEVDB\Service\ParticipantFieldUploadConflictService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 
 /**
@@ -79,8 +78,6 @@ use OCA\CAFEVDB\Settings\ConfigConstants;
  *   field-value (file) is set for the respective musician
  * - update of fiels-values when a file with the correct name is added or removed
  * - disallow tweaking the README.md which is taken from the field's tooltip
- *
- * @todo To make this work BeforeFolderCreatedEvents are needed.
  */
 class ParticipantFieldCloudFolderListener implements IEventListener
 {
@@ -93,12 +90,10 @@ class ParticipantFieldCloudFolderListener implements IEventListener
     NodeCopiedEvent::class,
     NodeDeletedEvent::class,
     NodeCreatedEvent::class,
-    FolderCreatedEvent::class,
     BeforeNodeRenamedEvent::class,
     BeforeNodeCopiedEvent::class,
     BeforeNodeDeletedEvent::class,
     BeforeNodeCreatedEvent::class,
-    BeforeFolderCreatedEvent::class,
     BeforeNodeRestoredEvent::class,
     NodeRestoredEvent::class,
   ];
@@ -161,10 +156,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
   private $musicians = [];
 
   /**
-   * @var string
-   *
-   * To distinguish mkdir from file creation we listen on FolderCreated
-   * events, remember the path and ignore the subsequent Created event.
+   * @var array<string, int> Copy targets whose generic create event is redundant.
    */
   private $ignoreCreatedPaths = [];
 
@@ -181,6 +173,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
     $nodes = [];
     $eventClass = get_class($event);
     $checkOnly = false;
+    $createdNode = null;
     switch ($eventClass) {
       case BeforeNodeDeletedEvent::class:
         $checkOnly = true;
@@ -216,7 +209,6 @@ class ParticipantFieldCloudFolderListener implements IEventListener
           self::NODE_FULL_PATH => $target->getPath(),
           self::NODE_TYPE => $type,
         ];
-        $this->ignoreCreatedPaths[$target->getPath()] = true; // ignore the following Created Event
         break;
       case BeforeNodeRestoredEvent::class:
         $checkOnly = true;
@@ -242,34 +234,29 @@ class ParticipantFieldCloudFolderListener implements IEventListener
           self::NODE_FULL_PATH => $target->getPath(),
           self::NODE_TYPE => $source->getType(), // "source" to avoid NonExistingFile isssues
         ];
-        $this->ignoreCreatedPaths[$target->getPath()] = true; // ignore the following Created Event
-        break;
-      case BeforeFolderCreatedEvent::class:
-        $checkOnly = true;
-        // fallthrough
-      case FolderCreatedEvent::class:
-        /** @var NodeTouchedEvent $event */
-        $path = $event->getNode()->getPath();
-        $nodes[self::ADD_KEY] = [
-          self::NODE_FULL_PATH => $path,
-          self::NODE_TYPE => FileInfo::TYPE_FOLDER,
-        ];
-        $this->ignoreCreatedPaths[$path] = true; // ignore the following Created Event
+        if (!$checkOnly) {
+          $this->ignoreCreatedPaths[$target->getPath()] = $target->getId();
+        }
         break;
       case BeforeNodeCreatedEvent::class:
         $checkOnly = true;
         // fallthrough
       case NodeCreatedEvent::class:
-        /** @var NodeCreatedEvent $event */
-        $path = $event->getNode()->getPath();
-        $ignoredPath = $this->ignoreCreatedPaths[$path] ?? false;
-        unset($this->ignoreCreatedPaths[$path]);
-        if ($ignoredPath) {
-          return;
+        /** @var BeforeNodeCreatedEvent|NodeCreatedEvent $event */
+        $node = $event->getNode();
+        $path = $node->getPath();
+        if (!$checkOnly && isset($this->ignoreCreatedPaths[$path])) {
+          $copiedId = $this->ignoreCreatedPaths[$path];
+          unset($this->ignoreCreatedPaths[$path]);
+          if ($node->getId() === $copiedId) {
+            return;
+          }
         }
+        // Stock Nextcloud uses the same placeholder for files and mkdir before creation.
+        $createdNode = $checkOnly ? null : $node;
         $nodes[self::ADD_KEY] = [
           self::NODE_FULL_PATH => $path,
-          self::NODE_TYPE => FileInfo::TYPE_FILE,
+          self::NODE_TYPE => $createdNode?->getType(),
         ];
         break;
       default:
@@ -283,6 +270,9 @@ class ParticipantFieldCloudFolderListener implements IEventListener
     $userFolder = Constants::PATH_SEPARATOR . $this->getUserFolderPath($this->user->getUID());
     $sharedFolderPath = $this->getSharedFolderPath();
     $projectsPath = $this->getProjectsFolderPath();
+    if (empty($sharedFolderPath) || empty($projectsPath)) {
+      return;
+    }
 
     // strip the user-folder and match with the projects path
     foreach ($nodes as $key => &$nodeInfo) {
@@ -337,7 +327,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
       $baseName = $parts[self::BASE_NAME_PART] ?? null;
       $userIdSlug = $parts[self::USER_ID_PART];
       $fieldName = $parts[self::FIELD_NAME_PART] ?? null;
-      if (empty($baseName) && !empty($fieldName) && MusicianService::isSlugifiedFileName($fieldName, $userIdSlug)) {
+      if ($baseName === null && !empty($fieldName) && MusicianService::isSlugifiedFileName($fieldName, $userIdSlug)) {
         $baseName = $fieldName;
         $fieldName = MusicianService::unSlugifyFileName($fieldName, $userIdSlug, keepExtension: false);
       }
@@ -384,7 +374,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
           $fieldType = $field->getDataType();
           $fieldMultiplicity = $field->getMultiplicity();
           if ($checkOnly) {
-            if (empty($baseName)) {
+            if ($baseName === null) {
               if ($node[self::NODE_TYPE] == Files\FileInfo::TYPE_FILE) {
                 // disallow creating files with a conflicting name
                 $message = $this->l->t('"%1$s" belongs to the participant-field "%2$s" and must be a folder, your are trying to create a file (%3$s).', [
@@ -412,7 +402,11 @@ class ParticipantFieldCloudFolderListener implements IEventListener
             }
           }
 
-          if (!$checkOnly && empty($baseName)) {
+          if (!$checkOnly && $baseName === null && $createdNode instanceof File) {
+            $this->appContainer->get(ParticipantFieldUploadConflictService::class)->schedule($this->user->getUID(), $createdNode);
+          }
+
+          if (!$checkOnly && $baseName === null && $node[self::NODE_TYPE] === FileInfo::TYPE_FOLDER) {
             // created the README if the field has a tooltip
             $readMe = Common\Util::htmlToMarkDown($field->getTooltip());
             $path = $node[self::NODE_FULL_PATH] . Constants::PATH_SEP . Constants::README_NAME;
@@ -421,7 +415,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
             $readMeGenerator->do();
           }
 
-          if (!$checkOnly && !empty($baseName) && $baseName !== Constants::README_NAME) { // work only on the folder-contents, not the folder itself
+          if (!$checkOnly && $baseName !== null && $baseName !== Constants::README_NAME) { // work only on the folder-contents, not the folder itself
             if ($fieldType == FieldDataType::CLOUD_FOLDER) {
               /** @var Entities\ProjectParticipantFieldDatum $fieldDatum */
               $fieldDatum = $this->getFieldDatum($criterion);
@@ -513,7 +507,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
           $fieldType = $field->getDataType();
           $fieldMultiplicity = $field->getMultiplicity();
           if ($checkOnly) {
-            if (empty($baseName) && $node[self::NODE_TYPE] == Files\FileInfo::TYPE_FOLDER) {
+            if ($baseName === null && $node[self::NODE_TYPE] == Files\FileInfo::TYPE_FOLDER) {
               // the folder itself must not be deleted except if the field is
               // deleted. But then the folder is deleted from the pre-commit
               // hook and thus we are inside the current commit which already
@@ -543,7 +537,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
             }
           }
 
-          if (!$checkOnly && !empty($baseName) && $baseName !== Constants::README_NAME) {
+          if (!$checkOnly && $baseName !== null && $baseName !== Constants::README_NAME) {
             // work only on the relevant folder-contents, not the folder itself
             if ($fieldType == FieldDataType::CLOUD_FOLDER) {
               /** @var Entities\ProjectParticipantFieldDatum $fieldDatum */
@@ -614,7 +608,7 @@ class ParticipantFieldCloudFolderListener implements IEventListener
   private static function matchPrefixDirectory(?string $path, string $folderPrefix)
   {
     $path = ltrim((string)$path, Constants::PATH_SEP);
-    $folderPrefix = ltrim((string)$folderPrefix, Constants::PATH_SEP);
+    $folderPrefix = trim($folderPrefix, Constants::PATH_SEP) . Constants::PATH_SEP;
     $prefixLen = strlen($folderPrefix);
     if (substr($path, 0, $prefixLen) == $folderPrefix) {
       return substr($path, $prefixLen);

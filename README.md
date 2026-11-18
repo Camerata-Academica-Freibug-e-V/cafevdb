@@ -30,6 +30,17 @@ Features include
 The orchestra data-base is held separate from the cloud database and
 is based on Doctrine/ORM.
 
+Participant-field folders
+-------------------------
+
+Nextcloud rejects an upload that would replace an existing folder. If an
+upload instead takes a still-unused name reserved for a participant-field
+folder, CafeVDB attempts to rename the file in the same directory after the
+upload finishes. The uploader gets a Nextcloud notification with the new
+path. If the rename fails, the file is left in place and the notification
+asks the uploader to move or rename it manually. No participant-field value
+or README is created for the conflicting file.
+
 Database-backed files and Collabora
 ----------------------------------
 

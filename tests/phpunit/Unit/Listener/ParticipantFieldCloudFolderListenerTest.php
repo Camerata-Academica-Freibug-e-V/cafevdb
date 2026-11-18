@@ -7,7 +7,9 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Listener;
 
+use OCP\Files\Events\Node\BeforeNodeCreatedEvent;
 use OCP\Files\Events\Node\BeforeNodeRenamedEvent;
+use OCP\Files\Events\Node\NodeCreatedEvent;
 use OCP\Files\Events\Node\NodeRenamedEvent;
 use OCP\Files\FileInfo;
 use OCP\Files\Node;
@@ -77,7 +79,7 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
   /** Use only the trashbin event if a patched server also emits a rename event. */
   public function testRestoreRenameDoesNotRunTwice(): void
   {
-    $source = $this->createMock(Node::class);
+    $source = $this->createStub(Node::class);
     $source->method('getPath')->willReturn('/alice/files_trashbin/files/report.pdf.d123');
     $container = $this->createMock(ContainerInterface::class);
     $container->expects($this->never())->method('get');
@@ -85,6 +87,25 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
     (new ParticipantFieldCloudFolderListener($container))->handle(
       new NodeRenamedEvent($source, $this->createStub(Node::class))
     );
+  }
+
+  /** Files and folders are indistinguishable until the stock create event completes. */
+  public function testBeforeCreateDoesNotReadPlaceholderType(): void
+  {
+    $node = $this->createMock(Node::class);
+    $node->expects($this->never())->method('getType');
+
+    $this->listenerWithoutUser()->handle(new BeforeNodeCreatedEvent($node));
+  }
+
+  /** A completed mkdir must not be handled as a file upload. */
+  public function testAfterCreateReadsActualNodeType(): void
+  {
+    $node = $this->createMock(Node::class);
+    $node->method('getPath')->willReturn('/alice/files/new');
+    $node->expects($this->once())->method('getType')->willReturn(FileInfo::TYPE_FOLDER);
+
+    $this->listenerWithoutUser()->handle(new NodeCreatedEvent($node));
   }
 
   /** Stop handling after extracting the node information. */
