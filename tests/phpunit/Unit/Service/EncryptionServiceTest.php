@@ -18,6 +18,7 @@ use OCP\Authentication\LoginCredentials\IStore as ICredentialsStore;
 use OCP\Config\IUserConfig;
 use OCP\EventDispatcher\IEventDispatcher;
 use OCP\IConfig;
+use OCP\ILogger;
 use OCP\IUser;
 use OCP\IUserSession;
 use OCP\Security\IHasher;
@@ -43,9 +44,13 @@ class EncryptionServiceTest extends TestCase
       ->willThrowException(new CredentialsUnavailableException());
 
     $logger = $this->createMock(LoggerInterface::class);
-    $logger->expects($this->once())->method('debug')
-      ->with('Login credentials unavailable for "alice".');
-    $logger->expects($this->never())->method('error');
+    $logger->expects($this->once())->method('log')->with(
+      ILogger::DEBUG,
+      self::callback(fn(string $message): bool => str_ends_with(
+        $message,
+        'Login credentials unavailable for "alice".',
+      )),
+    );
 
     $cryptoFactory = $this->createStub(CryptoFactoryInterface::class);
     $cryptoFactory->method('getSymmetricCryptor')->willReturn($this->createStub(SymmetricCryptorInterface::class));
