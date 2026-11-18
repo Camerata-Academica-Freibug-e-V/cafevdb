@@ -26,6 +26,7 @@ namespace OCA\CAFEVDB\Service;
 
 use Throwable;
 
+use OCP\Authentication\Exceptions\CredentialsUnavailableException;
 use OCP\Authentication\LoginCredentials\IStore as ICredentialsStore;
 use OCP\Config\IUserConfig;
 use OCP\EventDispatcher\IEventDispatcher;
@@ -151,7 +152,11 @@ class EncryptionService
     try {
       $userPassword = $credentialsStore->getLoginCredentials()->getPassword();
     } catch (Throwable $t) {
-      $this->logException($t, 'Unable to obtain login-password for "' . $userId . '".');
+      if ($t instanceof CredentialsUnavailableException) {
+        $this->logDebug('Login credentials unavailable for "' . $userId . '".');
+      } else {
+        $this->logException($t, 'Unable to obtain login-password for "' . $userId . '".');
+      }
       $userPassword = null;
     }
     if (!empty($userId) && !empty($userPassword)) {
