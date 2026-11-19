@@ -21,12 +21,44 @@ use Override;
 /** Drop the legacy blog reply column after its data has been copied. */
 class Version100202Date20261119091520 extends SimpleMigrationStep
 {
+  private ?bool $canDropLegacyColumn = null;
+
   /**
    * @param IDBConnection $connection Connection used to check the copied blog replies.
    */
   public function __construct(
     private IDBConnection $connection,
   ) {
+  }
+
+  /** {@inheritdoc} */
+  #[Override]
+  public function preSchemaChange(IOutput $output, Closure $schemaClosure, array $options): void
+  {
+    $this->canDropLegacyColumn = false;
+
+    /** @var ISchemaWrapper $schema */
+    $schema = $schemaClosure();
+    if (!$schema->hasTable('cafevdb_blog')) {
+      return;
+    }
+
+    $table = $schema->getTable('cafevdb_blog');
+    if (!$table->hasColumn('inreplyto') || !$table->hasColumn('in_reply_to')) {
+      return;
+    }
+
+    $result = $this->connection->getQueryBuilder()
+      ->select('inreplyto')
+      ->from('cafevdb_blog')
+      ->where('COALESCE(in_reply_to, -1) <> inreplyto')
+      ->setMaxResults(1)
+      ->executeQuery();
+    try {
+      $this->canDropLegacyColumn = $result->fetchOne() === false;
+    } finally {
+      $result->closeCursor();
+    }
   }
 
   /** {@inheritdoc} */
@@ -44,25 +76,18 @@ class Version100202Date20261119091520 extends SimpleMigrationStep
       return null;
     }
 
-    // On fresh installs, Nextcloud builds the target schema before applying it.
-    $liveSchema = $this->connection->createSchema();
-    $liveTableName = $options['tablePrefix'] . 'cafevdb_blog';
-    if ($liveSchema->hasTable($liveTableName) && $liveSchema->getTable($liveTableName)->hasColumn('inreplyto')) {
-      if (!$liveSchema->getTable($liveTableName)->hasColumn('in_reply_to')) {
-        return null;
-      }
+    $canDropLegacyColumn = $this->canDropLegacyColumn;
+    if ($canDropLegacyColumn === null) {
+      // Schema-only mode skips preSchemaChange(). Only omit the column if it
+      // exists solely in the target schema, as it does on fresh installs.
+      $liveSchema = $this->connection->createSchema();
+      $liveTableName = $options['tablePrefix'] . 'cafevdb_blog';
+      $canDropLegacyColumn = !$liveSchema->hasTable($liveTableName)
+        || !$liveSchema->getTable($liveTableName)->hasColumn('inreplyto');
+    }
 
-      $queryBuilder = $this->connection->getQueryBuilder();
-      $result = $queryBuilder->select('1')
-        ->from('cafevdb_blog')
-        ->where('COALESCE(in_reply_to, -1) <> inreplyto')
-        ->setMaxResults(1)
-        ->executeQuery();
-      $hasUncopiedRows = $result->fetchOne() !== false;
-      $result->closeCursor();
-      if ($hasUncopiedRows) {
-        return null;
-      }
+    if (!$canDropLegacyColumn) {
+      return null;
     }
 
     $table->dropColumn('inreplyto');
