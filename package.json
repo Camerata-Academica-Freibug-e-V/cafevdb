@@ -29,7 +29,7 @@
     "@iframe-resizer/parent": "^5.5.9",
     "@jsdoc/salty": "^0.2.12",
     "@nabla/vite-plugin-eslint": "^3.0.1",
-    "@nextcloud/app-calendar": "github:rotdrop/nextcloud-app-calendar.git#production/cafevdb/stable6.6",
+    "@nextcloud/app-calendar": "github:rotdrop/nextcloud-app-calendar.git#production/cafevdb/stable6.7",
     "@nextcloud/app-logreader": "github:rotdrop/nextcloud-logreader.git#production/cafevdb/stable33",
     "@nextcloud/auth": "^2.6.0",
     "@nextcloud/axios": "^2.6.0",
