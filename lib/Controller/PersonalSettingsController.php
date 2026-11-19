@@ -30,6 +30,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use Exception;
 use PHP_IBAN;
+use RuntimeException;
 use Throwable;
 
 use OCA\RotDrop\DevScripts\PhpToTypeScript;
@@ -71,6 +72,8 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\EntitySerializer\Entity
 
 use OCA\CAFEVDB\Service\WikiRPC;
 use OCA\CAFEVDB\Service\WebPagesRPC;
+use OCA\CAFEVDB\Service\WopiCredentialStore;
+use OCA\CAFEVDB\Service\WopiCredentialsViewService;
 use OCA\RoundCube\Service\Config as RoundCubeConfig;
 
 /**
@@ -1572,7 +1575,6 @@ class PersonalSettingsController extends Controller
             /** @var CloudUserConnectorService $userConnectorService */
             $userConnectorService = $this->di(CloudUserConnectorService::class);
             list('hints' => $hints,) = $userConnectorService->checkRequirements($newValue);
-            $userConnectorService->removeWopiCredentialsView($oldValue);
             $userConnectorService->removeUserSqlViews($oldValue);
             $userConnectorService->updateUserSqlViews($newValue);
             $userConnectorService->writeUserSqlConfig($newValue);
@@ -1592,6 +1594,42 @@ class PersonalSettingsController extends Controller
           messages: $hints,
           hints: $hints,
         );
+
+      case EnumSimpleSettingsKey::WOPI_CREDENTIALS_VIEW_ENABLED->value:
+        $realValue = filter_var($value, FILTER_VALIDATE_BOOLEAN, ['flags' => FILTER_NULL_ON_FAILURE]);
+        if ($realValue === null) {
+          return self::grumble($this->l->t('Value "%s" for set "%s" is not convertible to boolean.', [$value, $parameter]));
+        }
+        try {
+          if ($realValue) {
+            $database = $this->wopiCredentialsViewDatabase();
+            $this->wopiCredentialsViewService()->updateWopiCredentialsView($database);
+          } elseif ($this->getAppValue(WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, '') !== '') {
+            $this->wopiCredentialsViewService()->removeWopiCredentialsView();
+          }
+        } catch (Throwable $t) {
+          throw new Exceptions\EnduserNotificationException(
+            message: $realValue
+            ? $this->l->t('Unable to enable WOPI access to database storage.')
+            : $this->l->t('Unable to disable WOPI access to database storage.'),
+            previous: $t,
+          );
+        }
+        return $this->setSimpleConfigValue($parameter, $realValue ? 'on' : 'off');
+
+      case EnumSimpleSettingsKey::WOPI_CREDENTIALS_VIEW_DATABASE->value:
+        $newValue = Util::normalizeSpaces($value);
+        try {
+          if ($this->wopiConnectorEnabled()) {
+            $this->wopiCredentialsViewService()->updateWopiCredentialsView($newValue ?: null);
+          }
+        } catch (Throwable $t) {
+          throw new Exceptions\EnduserNotificationException(
+            message: $this->l->t('Unable to reconfigure WOPI access to database storage.'),
+            previous: $t,
+          );
+        }
+        return $this->setSimpleConfigValue($parameter, $newValue);
 
       case EnumSimpleSettingsKey::MUSICIAN_PERSONALIZED_VIEWS->value:
         $realValue = filter_var($value, FILTER_VALIDATE_BOOLEAN, ['flags' => FILTER_NULL_ON_FAILURE]);
@@ -1647,6 +1685,23 @@ class PersonalSettingsController extends Controller
           messages: $messages,
           hints: $hints,
         ))->response();
+
+      case 'wopiCredentialsViewRecreateViews':
+        try {
+          if (!$this->wopiConnectorEnabled()) {
+            throw new RuntimeException('WOPI credential view is disabled.');
+          }
+          $database = $this->wopiCredentialsViewDatabase();
+          $this->wopiCredentialsViewService()->updateWopiCredentialsView($database);
+        } catch (Throwable $t) {
+          throw new Exceptions\EnduserNotificationException(
+            message: $this->l->t('Unable to regenerate the WOPI credential view.'),
+            previous: $t,
+          );
+        }
+        return (new DTO\MessagesResponse([
+          $this->l->t('WOPI credential view has been regenerated successfully.'),
+        ]))->response();
 
       case 'keydistribute':
         list('status' => $status, 'messages' => $messages) = $this->distributeEncryptionKey();
@@ -2351,6 +2406,34 @@ class PersonalSettingsController extends Controller
           return new Http\DataDownloadResponse($fileData, $fileName, $mimeType);
         }
     }
+  }
+
+  /** @return bool Whether WOPI access to database storage is enabled. */
+  private function wopiConnectorEnabled(): bool
+  {
+    return $this->getConfigValue(
+      EnumSimpleSettingsKey::WOPI_CREDENTIALS_VIEW_ENABLED->value,
+      $this->getAppValue(WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, '') !== '' ? 'on' : 'off',
+    ) === 'on';
+  }
+
+  /** @return ?string The configured WOPI connector database or the cloud views database. */
+  private function wopiCredentialsViewDatabase(): ?string
+  {
+    $database = $this->getConfigValue(EnumSimpleSettingsKey::WOPI_CREDENTIALS_VIEW_DATABASE->value, null);
+    if ($database === null || $database === '') {
+      $database = $this->getAppValue(WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, '');
+    }
+    if ($database === '') {
+      $database = $this->getConfigValue(EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value, null);
+    }
+    return empty($database) ? null : $database;
+  }
+
+  /** @return WopiCredentialsViewService */
+  private function wopiCredentialsViewService(): WopiCredentialsViewService
+  {
+    return $this->di(WopiCredentialsViewService::class);
   }
 
   /**

@@ -46,6 +46,7 @@ use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Storage\UserStorage;
 use OCA\CAFEVDB\Service\WikiRPC;
 use OCA\CAFEVDB\Service\WebPagesRPC;
+use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\CAFEVDB\Wrapped\Carbon\CarbonImmutable;
 
 /**
@@ -321,6 +322,15 @@ class PersonalForm
           'importClubMembersAsCloudUsers' => $this->getConfigValue('importClubMembersAsCloudUsers', 'off') === 'on',
           'cloudUserViewsDatabase' => $this->getConfigValue('cloudUserViewsDatabase'),
           'musicianPersonalizedViews' => $this->getConfigValue('musicianPersonalizedViews'),
+          'wopiCredentialsViewEnabled' => $this->getConfigValue(
+            'wopiCredentialsViewEnabled',
+            $this->getAppValue(WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, '') !== '' ? 'on' : 'off',
+          ) === 'on',
+          'wopiCredentialsViewDatabase' => $this->getConfigValue(
+            'wopiCredentialsViewDatabase',
+            $this->getAppValue(WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, '')
+              ?: $this->getConfigValue('cloudUserViewsDatabase', ''),
+          ),
 
           ConfigConstants::APP_DB_SERVER => $this->getConfigValue(ConfigConstants::APP_DB_SERVER),
           ConfigConstants::APP_DB_NAME => $this->getConfigValue(ConfigConstants::APP_DB_NAME),
