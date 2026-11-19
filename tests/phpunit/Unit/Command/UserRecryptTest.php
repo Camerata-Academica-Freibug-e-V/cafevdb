@@ -17,6 +17,7 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Psr\Log\NullLogger;
+use stdClass;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -143,7 +144,7 @@ class UserRecryptTest extends TestCase
       static function(string $userId, bool $dryRun, ?callable $onEntity) use (&$visited): bool {
         self::assertFalse($dryRun);
         $visited[] = $userId;
-        $onEntity(new \stdClass);
+        $onEntity(new stdClass);
         return false;
       },
     );

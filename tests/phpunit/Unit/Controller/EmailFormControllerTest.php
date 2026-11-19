@@ -29,6 +29,7 @@ use DateTimeImmutable;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use RuntimeException;
 
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -180,6 +181,7 @@ use OCA\CAFEVDB\Service\IProjectGroupService;
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\AppConfigTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\EntityManagerTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\UserPreferencesTrait::class)]
+/** @SuppressWarnings(PHPMD.CouplingBetweenObjects) */
 class EmailFormControllerTest extends TestCase
 {
   use TestRoutesAreDefinedTrait;
@@ -778,7 +780,7 @@ class EmailFormControllerTest extends TestCase
     $this->postData[EmailForm\Composer::POST_TAG][EmailForm\ComposerCgiKeys::MESSAGE_TEXT] = 'Invoice attached.';
     $financeService = $this->createMock(Service\Finance\FinanceService::class);
     $financeService->expects($this->once())->method('invoiceDocument')
-      ->willThrowException(new \RuntimeException('Invoice PDF generation failed'));
+      ->willThrowException(new RuntimeException('Invoice PDF generation failed'));
     $this->mockProvider->registerClassInstance(Service\Finance\FinanceService::class, $financeService, global: true);
 
     $composer = $this->appContainer->get(EmailForm\Composer::class);

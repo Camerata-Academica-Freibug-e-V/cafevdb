@@ -20,6 +20,7 @@ use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
+use ReflectionMethod;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -71,7 +72,7 @@ class OfflineEntityManagerTest extends TestCase
           ->getMock();
         $entityManager->expects($this->atLeastOnce())->method('getWrappedObject')->willReturn($wrapped);
         $entityManager->expects($this->atLeastOnce())->method('getConnection')->willReturn($connection);
-        $registerTypes = new \ReflectionMethod(EntityManager::class, 'registerTypes');
+        $registerTypes = new ReflectionMethod(EntityManager::class, 'registerTypes');
         $registerTypes->invoke($entityManager);
         $registerTypes->invoke($entityManager);
 

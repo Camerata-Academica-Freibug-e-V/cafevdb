@@ -78,7 +78,6 @@ class AbstractUndoableTest extends TestCase
   /** @return void */
   public function testGetSortOrder(): void
   {
-    $appContainer = $this->createStub(ContainerInterface::class);
     $this->assertEquals(self::SORT_ORDER, $this->instance->getSortOrder());
   }
 }

@@ -229,7 +229,7 @@ trait MockInstrumentsRepositoryTrait
                 ;
               $this->entities[Entities\Instrument::class][$id] = $instrument;
             }
-            if (($orderBy['name'] ?? null) == 'INDEX'){
+            if (($orderBy['name'] ?? null) == 'INDEX') {
               $result[$name] = $instrument;
             } else {
               $result[] = $instrument;

@@ -159,8 +159,6 @@ class InvoicesStorageTest extends TestCase
 
   private static int $musicianId;
 
-  private static int $invoiceId;
-
   private DateTimeImmutable $now;
 
   /** {@inheritdoc} */
@@ -184,13 +182,6 @@ class InvoicesStorageTest extends TestCase
       $this->generateProjectParticipant(persist: true, now: $this->now, delete: false);
       self::$projectId = $this->project->getId();
       self::$musicianId = $this->musician->getId();
-
-      $invoice = new Entities\Invoice()
-        ->setAmount(0)
-        ->setDebitor($this->musician)
-        ->setOriginator($this->musician)
-        ->setProject($this->project)
-        ;
 
       self::$migrationsApplied = true;
     }

@@ -70,7 +70,9 @@ class LegacyWopiCredentialMigrationTest extends TestCase
       });
     $this->jobs->expects($this->once())->method('remove')
       ->with('OCA\\CAFEVDB\\BackgroundJob\\CleanupWopiCredentials')
-      ->willReturnCallback(function() use (&$dropped) { self::assertTrue($dropped); });
+      ->willReturnCallback(function() use (&$dropped) {
+        self::assertTrue($dropped);
+      });
     $this->runMigration();
   }
 

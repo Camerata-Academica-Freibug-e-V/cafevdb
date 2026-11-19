@@ -57,8 +57,8 @@ trait MockEntityManagerTrait
       ->getMock();
     $this->entityManager->method('getWrappedObject')->willReturn($this->entityManager);
     $this->entityManager->method('pushTransactionException')->willReturnCallback(
-      function(Throwable $t) {
-        $this->transactionExceptions[] = $t;
+      function(Throwable $throwable) {
+        $this->transactionExceptions[] = $throwable;
       });
     $this->entityManager->method('getRepository')->willReturnCallback(
       function(string $className) {

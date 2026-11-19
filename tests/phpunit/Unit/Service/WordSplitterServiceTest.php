@@ -26,6 +26,9 @@ namespace OCA\CAFEVDB\Tests\Unit\Service;
 
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use ReflectionProperty;
+use RuntimeException;
 
 use OCP\Http\Client\IClient;
 use OCP\Http\Client\IClientService;
@@ -150,7 +153,7 @@ class WordSplitterServiceTest extends TestCase
       logger: $logger,
     );
 
-    $command = (new \ReflectionMethod($service, 'startupCommand'))->invoke($service);
+    $command = (new ReflectionMethod($service, 'startupCommand'))->invoke($service);
 
     $this->assertStringContainsString(
       "GERMAN_WORD_SPLITTER_TRANSLITERATION_LOCALES='C.UTF-8'",
@@ -189,8 +192,8 @@ class WordSplitterServiceTest extends TestCase
       ->willReturn($response);
 
     $service = $this->createService($client, true);
-    (new \ReflectionProperty($service, 'systemSocket'))->setValue($service, $this->systemSocket);
-    (new \ReflectionProperty($service, 'bin'))->setValue($service, '/nonexistent/german-word-splitter');
+    (new ReflectionProperty($service, 'systemSocket'))->setValue($service, $this->systemSocket);
+    (new ReflectionProperty($service, 'bin'))->setValue($service, '/nonexistent/german-word-splitter');
 
     $this->assertSame(['Haus', 'Tür'], $service->split('Haustür'));
   }
@@ -237,7 +240,7 @@ class WordSplitterServiceTest extends TestCase
       logger: $logger,
       notifications: $notifications,
     );
-    (new \ReflectionProperty($service, 'systemSocket'))->setValue($service, $this->systemSocket);
+    (new ReflectionProperty($service, 'systemSocket'))->setValue($service, $this->systemSocket);
     return $service;
   }
 
@@ -255,14 +258,14 @@ class WordSplitterServiceTest extends TestCase
     // system service is misconfigured for the app locale 'C.UTF-8'
     $service = $this->createServiceWithMisconfiguredSystemService('C.UTF-8', $notifications, $logger);
     // an already running local service stands in for the freshly started one
-    (new \ReflectionProperty($service, 'socket'))->setValue($service, $this->socket);
+    (new ReflectionProperty($service, 'socket'))->setValue($service, $this->socket);
 
-    $ensureStarted = new \ReflectionMethod($service, 'ensureStarted');
+    $ensureStarted = new ReflectionMethod($service, 'ensureStarted');
     $ensureStarted->invoke($service);
     $ensureStarted->invoke($service);
     $this->assertSame(
       $this->socket,
-      (new \ReflectionProperty($service, 'socket'))->getValue($service),
+      (new ReflectionProperty($service, 'socket'))->getValue($service),
     );
   }
 
@@ -278,9 +281,9 @@ class WordSplitterServiceTest extends TestCase
 
     $service = $this->createServiceWithMisconfiguredSystemService('yy_YY.UTF-8', $notifications);
 
-    $this->expectException(\RuntimeException::class);
+    $this->expectException(RuntimeException::class);
     $this->expectExceptionMessage('yy_YY.UTF-8 is not installed');
-    (new \ReflectionMethod($service, 'ensureStarted'))->invoke($service);
+    (new ReflectionMethod($service, 'ensureStarted'))->invoke($service);
   }
 
   public function testUninstalledAppLocaleWithoutRunningServiceNotifiesAboutLocalProblemOnly(): void
@@ -293,10 +296,10 @@ class WordSplitterServiceTest extends TestCase
     $client = $this->createStub(IClient::class);
     $service = $this->createService($client, appLocale: 'yy_YY.UTF-8', notifications: $notifications);
     // no running local service
-    (new \ReflectionProperty($service, 'socket'))->setValue($service, $this->socket . '.missing');
+    (new ReflectionProperty($service, 'socket'))->setValue($service, $this->socket . '.missing');
 
-    $this->expectException(\RuntimeException::class);
-    (new \ReflectionMethod($service, 'ensureStarted'))->invoke($service);
+    $this->expectException(RuntimeException::class);
+    (new ReflectionMethod($service, 'ensureStarted'))->invoke($service);
   }
 
   public function testSplitWrapsHttpClientFailures(): void
@@ -304,11 +307,11 @@ class WordSplitterServiceTest extends TestCase
     $client = $this->createMock(IClient::class);
     $client->expects($this->once())
       ->method('post')
-      ->willThrowException(new \RuntimeException('connection refused'));
+      ->willThrowException(new RuntimeException('connection refused'));
 
     $service = $this->createService($client);
 
-    $this->expectException(\RuntimeException::class);
+    $this->expectException(RuntimeException::class);
     $this->expectExceptionMessage('Splitter request failed: connection refused');
     $service->split('Handschuh');
   }
