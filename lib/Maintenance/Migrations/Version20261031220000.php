@@ -45,10 +45,9 @@ final class Version20261031220000 extends AbstractTransactionalMigration
   public function preUp(Schema $schema): void
   {
     $templates = $this->defaultTemplates();
-    $connection = $this->entityManager->getConnection();
 
     foreach ($templates as $tag => $templateData) {
-      $connection->executeStatement(
+      $this->addSql(
         'INSERT INTO EmailTemplates (tag, subject, contents)
          SELECT ?, ?, ?
          WHERE NOT EXISTS (SELECT 1 FROM EmailTemplates WHERE tag = ?)',
@@ -58,12 +57,12 @@ final class Version20261031220000 extends AbstractTransactionalMigration
   }
 
   /** {@inheritdoc} */
-  public function postDown(Schema $schema): void
+  public function preDown(Schema $schema): void
   {
     $templates = $this->defaultTemplates();
 
     foreach ($templates as $tag => $templateData) {
-      $this->entityManager->getConnection()->executeStatement(
+      $this->addSql(
         'DELETE FROM EmailTemplates WHERE tag = ? AND subject = ? AND contents = ?',
         [ $tag, $templateData['subject'], $templateData['contents'] ],
       );

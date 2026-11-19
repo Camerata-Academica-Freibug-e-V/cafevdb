@@ -47,9 +47,14 @@ final class Version20260207000624 extends AbstractTransactionalMigration
   /** {@inheritdoc} */
   public function postDown(Schema $schema): void
   {
+    if ($this->dryRun) {
+      return;
+    }
+
     if ((\ROT_DROP_PHPUNIT ?? null) !== true) {
       throw new RuntimeException('This migration cannot be undone in production mode.');
     }
+
     $qb = $this->entityManager->createQueryBuilder();
     $qb->delete(Entities\ProjectEvent::class, 'pe')->where($qb->expr()->gt('pe.recurrenceId', 0x7fffffff));
     $qb->getQuery()->execute();
