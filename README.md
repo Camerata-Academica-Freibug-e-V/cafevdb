@@ -142,6 +142,8 @@ The moved orchestra sections still require membership in the configured
 orchestra group, sub-admin rights for that group, and a valid encryption key.
 Nextcloud delegation or instance-administrator status alone does not unlock
 these sections. Existing delegated settings retain their previous permissions.
+Personal preferences and orchestra configuration use separate controllers;
+their existing HTTP endpoint URLs and stored configuration keys are unchanged.
 
 Testing problem reports
 -----------------------

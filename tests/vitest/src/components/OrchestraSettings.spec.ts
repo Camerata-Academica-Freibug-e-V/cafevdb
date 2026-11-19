@@ -127,7 +127,7 @@ vi.mock('../../../../src/components/settings/AdminSettingsTab.vue', async () => 
 });
 
 const render = () => mount(OrchestraSettings, {
-  props: { entry: { id: 'orchestra', key: 'orchestra', name: 'Orchestra', adminOnly: true, children: [] } },
+  props: { entry: { id: 'orchestra', key: 'orchestra', name: 'Orchestra', children: [] } },
   global: { directives: { tooltip: {} } },
 });
 const cloudButton = (wrapper: ReturnType<typeof render>, template = 'standardLetter') =>
@@ -154,7 +154,7 @@ describe('Orchestra and sharing settings fields', () => {
     );
     const wrapper = mount(ActualAdminSettingsTab, {
       props: {
-        entry: { id: 'orchestra', key: 'orchestra', name: 'Orchestra', adminOnly: true, children: [] },
+        entry: { id: 'orchestra', key: 'orchestra', name: 'Orchestra', children: [] },
         groups,
       },
     });
@@ -171,7 +171,7 @@ describe('Orchestra and sharing settings fields', () => {
 
   it('places the numeric default duration immediately after all calendar inputs', () => {
     const wrapper = mount(SharingSettings, {
-      props: { entry: { id: 'sharing', key: 'sharing', name: 'Sharing', adminOnly: true, children: [] } },
+      props: { entry: { id: 'sharing', key: 'sharing', name: 'Sharing', children: [] } },
     });
     const groups = wrapper.getComponent(AdminSettingsTab).props('groups');
     expect(groups[1].fields.map(({ key }) => key)).toEqual([
@@ -406,7 +406,7 @@ it('updates the shared field value and link together, including after deletion',
   );
   const wrapper = mount(AdminSettingsTab, {
     props: {
-      entry: { id: 'orchestra', key: 'orchestra', name: 'Orchestra', adminOnly: true, children: [] },
+      entry: { id: 'orchestra', key: 'orchestra', name: 'Orchestra', children: [] },
       groups: [{
         id: 'templates',
         name: 'Templates',
