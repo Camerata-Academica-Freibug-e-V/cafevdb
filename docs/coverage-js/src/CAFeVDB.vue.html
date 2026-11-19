@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">44.1% </span>
+                <span class="strong">44.25% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>131/297</span>
+                <span class='fraction'>131/296</span>
             </div>
         
             
@@ -905,7 +905,9 @@
 <a name='L840'></a><a href='#L840'>840</a>
 <a name='L841'></a><a href='#L841'>841</a>
 <a name='L842'></a><a href='#L842'>842</a>
-<a name='L843'></a><a href='#L843'>843</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L843'></a><a href='#L843'>843</a>
+<a name='L844'></a><a href='#L844'>844</a>
+<a name='L845'></a><a href='#L845'>845</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1353,7 +1355,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1529,6 +1531,8 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -1981,6 +1985,7 @@ import type {
   ConfigCheckResponse,
   SidebarNavigationItem as NavigationItem,
 } from '../build/ts-types/php-modules/Controller/DTO.ts'
+import type { PersonalSettingKey } from './services/personal-settings.ts'
 &nbsp;
 import axios from '@nextcloud/axios'
 import { formatFileSize } from '@nextcloud/files'
@@ -2042,13 +2047,11 @@ import allDebugOptions, { DEBUG_QUERY } from './debug-modes.ts'
 import * as BusEvents from './event-bus-events.ts'
 import { globalState, synchronizeGlobalState } from './services/legacy-global-state.ts'
 import { closeNavigation } from './services/navigation.ts'
-import type { PersonalSettingKey } from './services/personal-settings.ts'
 import { setPersonalSetting } from './services/personal-settings.ts'
 import useAppDataStore from './stores/app-data.ts'
 import useErrorHandlerStore from './stores/error-handler.ts'
 import useHistoryStore, { HistoryActionPush } from './stores/history.ts'
 import useTooltipsStore from './stores/tooltips.ts'
-import { showInfo } from './toolkit/util/toasts.ts'
 // import ProjectInfoIcon from 'vue-material-design-icons/InformationOutline.vue'
 // import ProjectPartici&lt;pantsIcon from 'vue-material-design-icons/AccountMultiple.vue'
 // import InstrumentationNumbersIcon from 'vue-material-design-icons/CircleSlice5.vue'
@@ -2056,6 +2059,7 @@ import { showInfo } from './toolkit/util/toasts.ts'
 import { AppError } from './toolkit/types/errors.ts'
 import generateAppUrl from './toolkit/util/generate-url.ts'
 import getInitialState from './toolkit/util/initial-state.ts'
+import { showInfo } from './toolkit/util/toasts.ts'
 import Console from './util/console.ts'
 &nbsp;
 type DebugOption = {
@@ -2195,13 +2199,13 @@ const openProjectOverview = () =&gt; {
 &nbsp;
 const legacyReloadKeys: PersonalSettingKey[] = <span class="cstat-no" title="statement not covered" >['financeMode', 'expertMode', 'showDisabled']</span>
 &nbsp;
-const updatePersonalSettings = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >async &lt;T&gt;(</span></span>
+async function <span class="fstat-no" title="function not covered" >updatePersonalSettings&lt;T&gt;(</span>
   key: PersonalSettingKey,
   value: T,
   oldValue: T|undefined,
   revert: (oldValue: T) =&gt; void,
   payload: unknown = <span class="branch-0 cbranch-no" title="branch not covered" >value,</span>
-) =&gt; {
+) {
 <span class="cstat-no" title="statement not covered" >  logger.debug('UPDATE PERSONAL SETTING', {</span>
     key,
     value,
@@ -2370,7 +2374,9 @@ synchronizeGlobalState().then((globalState) =&gt; {
       })
 <span class="cstat-no" title="statement not covered" >      tooltipOptions.themes.tooltip.disabled = !value</span>
 <span class="cstat-no" title="statement not covered" >      toolTipsEnabled.value = value</span>
-<span class="cstat-no" title="statement not covered" >      updatePersonalSettings('toolTipsEnabled', value, <span class="fstat-no" title="function not covered" >oldValue, (o</span>ld) =&gt; { <span class="cstat-no" title="statement not covered" >globalState.toolTipsEnabled = old }</span>)</span>
+<span class="cstat-no" title="statement not covered" >      updatePersonalSettings('toolTipsEnabled', value, <span class="fstat-no" title="function not covered" >oldValue, (o</span>ld) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >        globalState.toolTipsEnabled = old</span>
+      })
     },
   )
 <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >  watch(</span></span>
@@ -2596,7 +2602,7 @@ onMounted(() =&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-11-19T13:11:19.769Z
+                at 2026-11-19T14:39:14.400Z
             </div>
         <script src="../prettify.js"></script>
         <script>
