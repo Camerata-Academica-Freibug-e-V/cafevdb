@@ -27,7 +27,6 @@ declare(strict_types=1);
 namespace OCA\CAFEVDB\Migration;
 
 use Closure;
-use Throwable;
 
 use OCP\DB\ISchemaWrapper;
 use OCP\IDBConnection;
@@ -58,21 +57,33 @@ class Version060000Date20201022230000 extends SimpleMigrationStep
     $schema = $schemaClosure();
 
     $table = $schema->getTable('cafevdb_blog');
-    $table->addColumn('in_reply_to', 'integer', [
-      'notnull' => true,
-      'length' => 4,
-      'default' => -1,
-    ]);
-    try {
-      $qb = $this->connection->getQueryBuilder();
-      $qb->update('cafevdb_blog')
-         ->set('in_reply_to', 'inreplyto')
-         ->executeStatement();
-    } catch (Throwable) {
-      // ignore
+    if (!$table->hasColumn('in_reply_to')) {
+      $table->addColumn('in_reply_to', 'integer', [
+        'notnull' => true,
+        'length' => 4,
+        'default' => -1,
+      ]);
     }
-    $table->dropColumn('inreplyto');
 
     return $schema;
+  }
+
+  /** {@inheritdoc} */
+  public function postSchemaChange(IOutput $output, Closure $schemaClosure, array $options)
+  {
+    /** @var ISchemaWrapper $schema */
+    $schema = $schemaClosure();
+    if (!$schema->hasTable('cafevdb_blog')) {
+      return;
+    }
+    $table = $schema->getTable('cafevdb_blog');
+    if (!$table->hasColumn('inreplyto') || !$table->hasColumn('in_reply_to')) {
+      return;
+    }
+
+    $this->connection->getQueryBuilder()
+      ->update('cafevdb_blog')
+      ->set('in_reply_to', 'inreplyto')
+      ->executeStatement();
   }
 }

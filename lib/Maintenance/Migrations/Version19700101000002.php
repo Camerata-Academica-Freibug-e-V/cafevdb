@@ -179,6 +179,10 @@ final class Version19700101000002 extends AbstractTransactionalMigration
   /** {@inheritdoc} */
   public function preUp(Schema $schema): void
   {
+    if ($this->dryRun) {
+      return;
+    }
+
     // Otherwise the English names will be recorded as translations.
     $oldL10n = $this->entityManager->setTranslatableL10n(null);
 

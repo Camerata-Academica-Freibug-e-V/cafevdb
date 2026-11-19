@@ -47,6 +47,10 @@ final class Version20260131090857 extends AbstractTransactionalMigration
   /** {@inheritdoc} */
   public function preUp(Schema $schema): void
   {
+    if ($this->dryRun) {
+      return;
+    }
+
     /** @var EventsService $eventsService */
     $eventsService = $this->appContainer->get(EventsService::class);
     $oldSoftDeleteable = $this->entityManager->setFilterEnabled(EntityManager::SOFT_DELETEABLE_FILTER, state: false);
