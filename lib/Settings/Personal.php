@@ -32,9 +32,6 @@ use OCA\CAFEVDB\Service\AuthorizationService;
 
 /**
  * Personal settings.
- *
- * @todo These contain tons of group-sub-admin settings. Perhaps rework with
- * admin settings delegation.
  */
 class Personal implements ISettings
 {
