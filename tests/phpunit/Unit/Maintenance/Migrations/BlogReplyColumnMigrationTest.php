@@ -24,11 +24,15 @@ use PHPUnit\Framework\TestCase;
 class BlogReplyColumnMigrationTest extends TestCase
 {
   #[DataProvider('pendingSchemas')]
-  public function testDoesNotQueryColumnsThatOnlyExistInTheTargetSchema(bool $liveTableExists): void
+  public function testSchemaOnlyModeDoesNotQueryOrDropLiveLegacyData(bool $liveTableExists, bool $liveCopyColumnExists): void
   {
     $liveSchema = new Schema();
     if ($liveTableExists) {
-      $liveSchema->createTable('test_cafevdb_blog')->addColumn('inreplyto', 'integer');
+      $liveTable = $liveSchema->createTable('test_cafevdb_blog');
+      $liveTable->addColumn('inreplyto', 'integer');
+      if ($liveCopyColumnExists) {
+        $liveTable->addColumn('in_reply_to', 'bigint');
+      }
     }
 
     $targetTable = (new Schema())->createTable('test_cafevdb_blog');
@@ -43,7 +47,6 @@ class BlogReplyColumnMigrationTest extends TestCase
     $connection->expects($this->never())->method('getQueryBuilder');
     $migration = new Version100202Date20261119091520($connection);
 
-    $migration->preSchemaChange($this->createStub(IOutput::class), fn() => $targetSchema, ['tablePrefix' => 'test_']);
     self::assertSame(
       $liveTableExists ? null : $targetSchema,
       $migration->changeSchema($this->createStub(IOutput::class), fn() => $targetSchema, ['tablePrefix' => 'test_']),
@@ -55,13 +58,6 @@ class BlogReplyColumnMigrationTest extends TestCase
   #[DataProvider('copyStatus')]
   public function testChecksCopiedRowsBeforeChangingTheSchema(bool $hasUncopiedRows): void
   {
-    $liveTable = (new Schema())->createTable('test_cafevdb_blog');
-    $liveTable->addColumn('inreplyto', 'integer');
-    $liveTable->addColumn('in_reply_to', 'integer');
-    $liveSchema = $this->createStub(ISchemaWrapper::class);
-    $liveSchema->method('hasTable')->willReturn(true);
-    $liveSchema->method('getTable')->willReturn(new Table($liveTable));
-
     $targetTable = (new Schema())->createTable('test_cafevdb_blog');
     $targetTable->addColumn('inreplyto', 'integer');
     $targetTable->addColumn('in_reply_to', 'integer');
@@ -74,14 +70,14 @@ class BlogReplyColumnMigrationTest extends TestCase
     $result->expects($this->once())->method('closeCursor');
 
     $query = $this->createMock(IQueryBuilder::class);
-    $query->expects($this->once())->method('select')->with('1')->willReturnSelf();
+    $query->expects($this->once())->method('select')->with('inreplyto')->willReturnSelf();
     $query->expects($this->once())->method('from')->with('cafevdb_blog')->willReturnSelf();
     $query->expects($this->once())->method('where')->with('COALESCE(in_reply_to, -1) <> inreplyto')->willReturnSelf();
     $query->expects($this->once())->method('setMaxResults')->with(1)->willReturnSelf();
     $query->expects($this->once())->method('executeQuery')->willReturn($result);
 
     $connection = $this->createMock(IDBConnection::class);
-    $connection->method('createSchema')->willReturn($liveSchema);
+    $connection->expects($this->never())->method('createSchema');
     $queryWasBuilt = false;
     $connection->expects($this->once())->method('getQueryBuilder')->willReturnCallback(function () use (&$queryWasBuilt, $query) {
       $queryWasBuilt = true;
@@ -96,14 +92,15 @@ class BlogReplyColumnMigrationTest extends TestCase
       $hasUncopiedRows ? null : $targetSchema,
       $migration->changeSchema($output, fn() => $targetSchema, ['tablePrefix' => 'test_']),
     );
-    self::assertSame(!$hasUncopiedRows, $targetTable->hasColumn('inreplyto'));
+    self::assertSame($hasUncopiedRows, $targetTable->hasColumn('inreplyto'));
   }
 
   public static function pendingSchemas(): array
   {
     return [
-      'fresh install with no live blog table' => [false],
-      'existing blog table with only the legacy column' => [true],
+      'fresh install with no live blog table' => [false, false],
+      'existing blog table with only the legacy column' => [true, false],
+      'existing blog table with both columns' => [true, true],
     ];
   }
 
