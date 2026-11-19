@@ -38,7 +38,6 @@ use OCA\CAFEVDB\Service\GeoCodingService;
 use Composer\Spdx\SpdxLicenses;
 use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Storage\UserStorage;
-use OCA\CAFEVDB\Service\WikiRPC;
 use OCA\CAFEVDB\Service\WebPagesRPC;
 use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\CAFEVDB\Wrapped\Carbon\CarbonImmutable;
@@ -51,18 +50,18 @@ class OrchestraSettingsInitialState
 
   public const CSP_FAILURE_REPORTING_KEY = 'cspfailurereporting';
 
+  private ProjectService $projectService;
+  private WebPagesRPC $webPagesRPC;
+  private AddressBookProvider $addressBookProvider;
+  private UserStorage $userStorage;
+  private CloudUserConnectorService $cloudUserService;
+  private GeoCodingService $geoCodingService;
+
   /** {@inheritdoc} */
   public function __construct(
     protected ConfigService $configService,
-    private ProjectService $projectService,
     private IInitialStateService $initialStateService,
     private IAppManager $appManager,
-    private WikiRPC $wikiRPC,
-    private WebPagesRPC $webPagesRPC,
-    private AddressBookProvider $addressBookProvider,
-    private UserStorage $userStorage,
-    private CloudUserConnectorService $cloudUserService,
-    private GeoCodingService $geoCodingService,
   ) {
     $this->l = $this->l10N();
   }
@@ -109,6 +108,14 @@ class OrchestraSettingsInitialState
     if (!$isGroupAdmin) {
       return;
     }
+
+    // Keep database-backed services out of instance-admin setup and locked-key requests.
+    $this->projectService = $this->di(ProjectService::class);
+    $this->webPagesRPC = $this->di(WebPagesRPC::class);
+    $this->addressBookProvider = $this->di(AddressBookProvider::class);
+    $this->userStorage = $this->di(UserStorage::class);
+    $this->cloudUserService = $this->di(CloudUserConnectorService::class);
+    $this->geoCodingService = $this->di(GeoCodingService::class);
 
     try {
       $webPageCategories = array_values($this->webPagesRPC->getCategories() ?? []);

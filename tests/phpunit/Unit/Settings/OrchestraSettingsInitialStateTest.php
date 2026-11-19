@@ -111,8 +111,9 @@ class OrchestraSettingsInitialStateTest extends TestCase
     $form->method('isSubAdminOfGroup')->willReturn($subAdmin);
     $form->method('encryptionKeyValid')->willReturn($validKey);
 
-    $config = $this->createStub(ConfigService::class);
+    $config = $this->createMock(ConfigService::class);
     $config->method('getAppName')->willReturn('cafevdb');
+    $config->expects($this->never())->method('getAppContainer');
     (new ReflectionProperty(OrchestraSettingsInitialState::class, 'configService'))->setValue($form, $config);
     $apps = $this->createStub(IAppManager::class);
     $apps->method('getAppInfo')->willReturn(['licence' => 'AGPL-3.0']);
