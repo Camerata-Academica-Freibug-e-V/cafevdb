@@ -160,6 +160,15 @@ jobs:
         working-directory: server/apps/${{ env.APP_NAME }}
         run: make node_modules
 
+      # DTO fixtures use the PHPUnit bootstrap and the app's registered services.
+      - name: Install app PHP dependencies
+        working-directory: server/apps/${{ env.APP_NAME }}
+        run: make dev-setup
+
+      - name: Enable app
+        working-directory: server
+        run: php occ app:enable ${{ env.APP_NAME }}
+
       - name: Run Vitest suite
         working-directory: server/apps/${{ env.APP_NAME }}
         run: make jstest
