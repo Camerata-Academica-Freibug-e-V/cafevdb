@@ -104,6 +104,32 @@ vi.mock(import('@nextcloud/initial-state'), async (originalImport) => {
 });
 
 describe('AdminSettings component', () => {
+  it('keeps recovery controls and About visible when orchestra configuration fails', () => {
+    const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
+    const error = 'Unable to load orchestra settings. The remaining administration settings are still available.';
+    vi.mocked(loadState).mockReturnValueOnce({ ...initialState, isSubAdmin: true })
+      .mockReturnValueOnce({ enabled: false, error });
+    const pinia = createTestingPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(AdminSettings, {
+      global: {
+        plugins: [pinia],
+        directives: { tooltip: Tooltip },
+        stubs: { SettingsNavigation: true, AboutSettings: { props: ['entry'], template: '<section :id="entry.id" />' } },
+      },
+    });
+    expect(wrapper.get('.orchestra-settings-error').text()).toBe(error);
+    expect(wrapper.find('#admin-settings-backend').exists()).toBe(true);
+    expect(wrapper.find('#admin-settings-access-control').exists()).toBe(true);
+    expect(wrapper.find('#admin-settings-finance').exists()).toBe(true);
+    expect(wrapper.find('#admin-settings-about').exists()).toBe(true);
+    expect(wrapper.find('#admin-settings-orchestra').exists()).toBe(false);
+    const tree = wrapper.getComponent(SettingsNavigation).props('tree');
+    expect(tree.map(({ id }) => id)).not.toContain('admin-settings-orchestra');
+    expect(tree.map(({ id }) => id)).toContain('admin-settings-access-control');
+    wrapper.unmount();
+  });
+
   it('renders the moved sections after Access Control and matches the sidebar order', () => {
     const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
     vi.mocked(loadState).mockReturnValueOnce({ ...initialState, isSubAdmin: true })

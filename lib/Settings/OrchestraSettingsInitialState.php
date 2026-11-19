@@ -24,6 +24,9 @@
 
 namespace OCA\CAFEVDB\Settings;
 
+use RuntimeException;
+use Throwable;
+
 use OCP\App\IAppManager;
 use OCP\IInitialStateService;
 
@@ -73,10 +76,24 @@ class OrchestraSettingsInitialState
    */
   public function publish():void
   {
-    $isGroupAdmin = $this->inGroup() && $this->isSubAdminOfGroup() && $this->encryptionKeyValid();
-    $this->initialStateService->provideInitialState($this->appName(), 'orchestraSettings', [
-      'enabled' => $isGroupAdmin,
-    ]);
+    $state = ['enabled' => false];
+    try {
+      $this->publishAbout();
+      if ($this->inGroup() && $this->isSubAdminOfGroup() && $this->encryptionKeyValid()) {
+        $settings = $this->buildSettings();
+        $this->initialStateService->provideInitialState($this->appName(), 'adminSettings', $settings);
+        $state['enabled'] = true;
+      }
+    } catch (Throwable $t) {
+      $this->logException($t);
+      $state['error'] = $this->l->t('Unable to load orchestra settings. The remaining administration settings are still available. See the server log for details.');
+    }
+    $this->initialStateService->provideInitialState($this->appName(), 'orchestraSettings', $state);
+  }
+
+  /** @return void */
+  private function publishAbout():void
+  {
     $aboutInfo = $this->appManager->getAppInfo($this->appName());
     $licence = trim($aboutInfo['licence'] ?? '');
     $longLicence = (new SpdxLicenses)->getLicenseByIdentifier($licence);
@@ -104,10 +121,19 @@ class OrchestraSettingsInitialState
         )),
       ],
     );
+  }
 
-    if (!$isGroupAdmin) {
-      return;
+  /** @return array Sanitized orchestra configuration, published only after loading succeeds. */
+  protected function buildSettings():array
+  {
+    $group = $this->group();
+    if ($group === null) {
+      throw new RuntimeException('The configured orchestra group is unavailable.');
     }
+    $userGroupMembers = array_values(array_map(fn($user) => $user->getUID(), $group->getUsers()));
+    $userGroups = array_values(array_map(function($group) {
+      return ['value' => $group->getGID(), 'name' => $group->getDisplayName()];
+    }, $this->groupManager()->search('')));
 
     // Keep database-backed services out of instance-admin setup and locked-key requests.
     $this->projectService = $this->di(ProjectService::class);
@@ -176,30 +202,19 @@ class OrchestraSettingsInitialState
     $this->logDebug('MEMBER PROJECTS '.$executiveBoardProjectId.' / '.$memberProjectId);
 
     if ($this->databaseConfigured() && $executiveBoardProjectId > 0) {
-      // this can throw if there is no datadase configured yet.
-      try {
-        $executiveBoardMembers = $this->projectService->participantOptions(
-          $executiveBoardProjectId,
-          excludeStatus: ParticipationStatus::ASSOCIATED,
-        );
-      } catch (\Throwable $t) {
-        $this->logException($t);
-        $executiveBoardMembers = [];
-      }
+      $executiveBoardMembers = $this->projectService->participantOptions(
+        $executiveBoardProjectId,
+        excludeStatus: ParticipationStatus::ASSOCIATED,
+      );
     } else {
       $executiveBoardMembers = [];
     }
 
     if ($this->databaseConfigured() && $memberProjectId > 0) {
-      // this can throw if there is no datadase configured yet.
-      try {
-        $clubMembers = $this->projectService->participantOptions(
-          projectId: $memberProjectId,
-          excludeStatus: ParticipationStatus::ASSOCIATED,
-        );
-      } catch (\Exception $e) {
-        $clubMembers = [];
-      }
+      $clubMembers = $this->projectService->participantOptions(
+        projectId: $memberProjectId,
+        excludeStatus: ParticipationStatus::ASSOCIATED,
+      );
     } else {
       $clubMembers = [];
     }
@@ -245,10 +260,8 @@ class OrchestraSettingsInitialState
         'executiveBoardProject' => $executiveBoardProject,
         'executiveBoardProjectId' => $executiveBoardProjectId,
         'executiveBoardMembers' => $executiveBoardMembers,
-        'userGroupMembers' => array_values(array_map(fn($user) => $user->getUID(), $this->group()->getUsers())),
-        'userGroups' => array_values(array_map(function($group) {
-          return [ 'value' => $group->getGID(), 'name' => $group->getDisplayName(), ];
-        }, $this->groupManager()->search(''))),
+        'userGroupMembers' => $userGroupMembers,
+        'userGroups' => $userGroups,
         ConfigConstants::ORCHESTRA_NAME_KEY => $this->getConfigValue(ConfigConstants::ORCHESTRA_NAME_KEY),
 
         'cloudUserRequirements' => $this->cloudUserService->checkRequirements(
@@ -458,11 +471,7 @@ class OrchestraSettingsInitialState
     $adminSettings['orchestraCurrencyCode'] = $this->currencyCode($this->appLocale());
     $adminSettings['orchestraCurrencySymbol'] = $this->currencySymbol($this->appLocale());
     $adminSettings['dateTimeZone'] = $this->getDateTimeZone()->getName();
-    $this->initialStateService->provideInitialState(
-      $this->appName(),
-      'adminSettings',
-      $adminSettings,
-    );
+    return $adminSettings;
   }
 
   /**

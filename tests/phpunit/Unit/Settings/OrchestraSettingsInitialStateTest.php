@@ -24,24 +24,37 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Settings;
 
+use DateTimeZone;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionProperty;
+use RuntimeException;
+use Throwable;
+use TypeError;
 
+use OCP\IGroup;
+use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IInitialStateService;
 use OCP\App\IAppManager;
 
+use OCA\CAFEVDB\AddressBook\AddressBookProvider;
+use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\GeoCodingService;
+use OCA\CAFEVDB\Service\ProjectService;
+use OCA\CAFEVDB\Service\WebPagesRPC;
 use OCA\CAFEVDB\Settings\OrchestraSettingsInitialState;
+use OCA\CAFEVDB\Storage\UserStorage;
 
 #[Attributes\CoversClass(OrchestraSettingsInitialState::class)]
 class OrchestraSettingsInitialStateTest extends TestCase
 {
   private OrchestraSettingsInitialState $form;
+
+  private array $published = [];
 
   protected function setUp():void
   {
@@ -105,12 +118,189 @@ class OrchestraSettingsInitialStateTest extends TestCase
   ):void {
     $form = $this->getMockBuilder(OrchestraSettingsInitialState::class)
       ->disableOriginalConstructor()
-      ->onlyMethods(['inGroup', 'isSubAdminOfGroup', 'encryptionKeyValid'])
+      ->onlyMethods(['inGroup', 'isSubAdminOfGroup', 'encryptionKeyValid', 'buildSettings'])
       ->getMock();
     $form->method('inGroup')->willReturn($member);
     $form->method('isSubAdminOfGroup')->willReturn($subAdmin);
     $form->method('encryptionKeyValid')->willReturn($validKey);
+    $form->expects($this->never())->method('buildSettings');
 
+    $this->preparePublishing($form);
+    $form->publish();
+    $this->assertSame(['enabled' => false], $this->published['orchestraSettings']);
+    $this->assertArrayHasKey('about', $this->published);
+    $this->assertArrayNotHasKey('adminSettings', $this->published);
+  }
+
+  /** @return array<string, array{string, Throwable}> */
+  public static function configurationFailures():array
+  {
+    return [
+      'unbound encryption credentials' => ['encryptionKeyValid', new RuntimeException('Credentials are not bound')],
+      'configuration exception' => ['buildSettings', new RuntimeException('Database unavailable')],
+      'configuration error' => ['buildSettings', new TypeError('Invalid configuration data')],
+    ];
+  }
+
+  #[Attributes\DataProvider('configurationFailures')]
+  public function testConfigurationFailuresAreLoggedWithoutLosingAboutOrPublishingPartialSettings(
+    string $method,
+    Throwable $failure,
+  ):void {
+    $form = $this->getMockBuilder(OrchestraSettingsInitialState::class)
+      ->disableOriginalConstructor()
+      ->onlyMethods(['inGroup', 'isSubAdminOfGroup', 'encryptionKeyValid', 'buildSettings', 'logException'])
+      ->getMock();
+    $form->method('inGroup')->willReturn(true);
+    $form->method('isSubAdminOfGroup')->willReturn(true);
+    if ($method === 'encryptionKeyValid') {
+      $form->expects($this->once())->method('encryptionKeyValid')->willThrowException($failure);
+      $form->expects($this->never())->method('buildSettings');
+    } else {
+      $form->method('encryptionKeyValid')->willReturn(true);
+      $form->expects($this->once())->method('buildSettings')->willThrowException($failure);
+    }
+    $form->expects($this->once())->method('logException')->with($failure);
+
+    $this->preparePublishing($form);
+    $form->publish();
+    $this->assertFailedConfiguration();
+  }
+
+  /** @return array<string, array{string}> */
+  public static function unavailableGroups():array
+  {
+    return [
+      'deleted orchestra group' => ['missing'],
+      'member backend unavailable' => ['members'],
+      'group search unavailable' => ['search'],
+    ];
+  }
+
+  #[Attributes\DataProvider('unavailableGroups')]
+  public function testGroupFailuresDisableOrchestraSettingsRatherThanPublishingEmptyOptions(string $operation):void
+  {
+    $failure = new RuntimeException('Group backend unavailable');
+    $form = $this->getMockBuilder(OrchestraSettingsInitialState::class)
+      ->disableOriginalConstructor()
+      ->onlyMethods(['inGroup', 'isSubAdminOfGroup', 'encryptionKeyValid', 'group', 'groupManager', 'logException'])
+      ->getMock();
+    $form->method('inGroup')->willReturn(true);
+    $form->method('isSubAdminOfGroup')->willReturn(true);
+    $form->method('encryptionKeyValid')->willReturn(true);
+    $group = $this->createStub(IGroup::class);
+    $form->method('group')->willReturn($operation === 'missing' ? null : $group);
+    if ($operation === 'members') {
+      $group->method('getUsers')->willThrowException($failure);
+    } else {
+      $group->method('getUsers')->willReturn([]);
+    }
+    $manager = $this->createStub(IGroupManager::class);
+    $manager->method('search')->willThrowException($failure);
+    $form->method('groupManager')->willReturn($manager);
+    $form->expects($this->once())->method('logException')->with(
+      $operation === 'missing' ? $this->isInstanceOf(RuntimeException::class) : $failure,
+    );
+
+    $this->preparePublishing($form);
+    $form->publish();
+    $this->assertFailedConfiguration();
+  }
+
+  /** @return array<string, array{string, Throwable}> */
+  public static function participantFailures():array
+  {
+    return [
+      'club members exception' => ['memberProjectId', new RuntimeException('Participant lookup failed')],
+      'club members error' => ['memberProjectId', new TypeError('Participant lookup failed')],
+      'executive board exception' => ['executiveBoardProjectId', new RuntimeException('Participant lookup failed')],
+      'executive board error' => ['executiveBoardProjectId', new TypeError('Participant lookup failed')],
+    ];
+  }
+
+  #[Attributes\DataProvider('participantFailures')]
+  public function testParticipantFailuresAreReportedRatherThanPublishedAsEmptyOptions(string $projectKey, Throwable $failure):void
+  {
+    $form = $this->getMockBuilder(OrchestraSettingsInitialState::class)
+      ->disableOriginalConstructor()
+      ->onlyMethods([
+        'inGroup', 'isSubAdminOfGroup', 'encryptionKeyValid', 'group', 'groupManager',
+        'di', 'databaseConfigured', 'getConfigValue', 'getDateTimeZone', 'logDebug', 'logException',
+      ])
+      ->getMock();
+    $form->method('inGroup')->willReturn(true);
+    $form->method('isSubAdminOfGroup')->willReturn(true);
+    $form->method('encryptionKeyValid')->willReturn(true);
+    $group = $this->createStub(IGroup::class);
+    $group->method('getUsers')->willReturn([]);
+    $form->method('group')->willReturn($group);
+    $manager = $this->createStub(IGroupManager::class);
+    $manager->method('search')->willReturn([]);
+    $form->method('groupManager')->willReturn($manager);
+    $form->method('databaseConfigured')->willReturn(true);
+    $form->method('getDateTimeZone')->willReturn(new DateTimeZone('UTC'));
+    $form->method('getConfigValue')->willReturnCallback(
+      fn(string $key, mixed $default = null) => $key === $projectKey ? 42 : $default,
+    );
+    $projects = $this->createMock(ProjectService::class);
+    $projects->method('projectOptions')->willReturn([]);
+    $projects->expects($this->once())->method('participantOptions')->willThrowException($failure);
+    $services = [
+      ProjectService::class => $projects,
+      WebPagesRPC::class => $this->createStub(WebPagesRPC::class),
+      AddressBookProvider::class => $this->createStub(AddressBookProvider::class),
+      UserStorage::class => $this->createStub(UserStorage::class),
+      CloudUserConnectorService::class => $this->createStub(CloudUserConnectorService::class),
+      GeoCodingService::class => $this->createStub(GeoCodingService::class),
+    ];
+    $form->method('di')->willReturnCallback(fn(string $class) => $services[$class]);
+    $form->expects($this->once())->method('logException')->with($failure);
+
+    $this->preparePublishing($form);
+    $form->publish();
+    $this->assertFailedConfiguration();
+  }
+
+  /** @return void */
+  public function testOrchestraSectionsAreEnabledOnlyAfterTheirConfigurationIsPublished():void
+  {
+    $form = $this->getMockBuilder(OrchestraSettingsInitialState::class)
+      ->disableOriginalConstructor()
+      ->onlyMethods(['inGroup', 'isSubAdminOfGroup', 'encryptionKeyValid', 'buildSettings', 'logException'])
+      ->getMock();
+    $form->method('inGroup')->willReturn(true);
+    $form->method('isSubAdminOfGroup')->willReturn(true);
+    $form->method('encryptionKeyValid')->willReturn(true);
+    $form->method('buildSettings')->willReturn(['orchestraName' => 'Test orchestra']);
+    $form->expects($this->never())->method('logException');
+    $this->preparePublishing($form, 3);
+
+    $form->publish();
+    $this->assertSame(['about', 'adminSettings', 'orchestraSettings'], array_keys($this->published));
+    $this->assertSame(['orchestraName' => 'Test orchestra'], $this->published['adminSettings']);
+    $this->assertSame(['enabled' => true], $this->published['orchestraSettings']);
+  }
+
+  /** @return void */
+  private function assertFailedConfiguration():void
+  {
+    $this->assertArrayHasKey('about', $this->published);
+    $this->assertArrayNotHasKey('adminSettings', $this->published);
+    $this->assertSame([
+      'enabled' => false,
+      'error' => 'Unable to load orchestra settings. The remaining administration settings are still available. See the server log for details.',
+    ], $this->published['orchestraSettings']);
+  }
+
+  /**
+   * @param OrchestraSettingsInitialState $form Publisher under test.
+   *
+   * @param int $publications Expected initial-state publications.
+   *
+   * @return void
+   */
+  private function preparePublishing(OrchestraSettingsInitialState $form, int $publications = 2):void
+  {
     $config = $this->createMock(ConfigService::class);
     $config->method('getAppName')->willReturn('cafevdb');
     $config->expects($this->never())->method('getAppContainer');
@@ -118,17 +308,14 @@ class OrchestraSettingsInitialStateTest extends TestCase
     $apps = $this->createStub(IAppManager::class);
     $apps->method('getAppInfo')->willReturn(['licence' => 'AGPL-3.0']);
     (new ReflectionProperty(OrchestraSettingsInitialState::class, 'appManager'))->setValue($form, $apps);
-    $published = [];
+    $l10n = $this->createStub(IL10N::class);
+    $l10n->method('t')->willReturnArgument(0);
+    (new ReflectionProperty(OrchestraSettingsInitialState::class, 'l'))->setValue($form, $l10n);
     $state = $this->createMock(IInitialStateService::class);
-    $state->expects($this->exactly(2))->method('provideInitialState')
-      ->willReturnCallback(function(string $app, string $key, mixed $value) use (&$published) {
-        $published[$key] = $value;
+    $state->expects($this->exactly($publications))->method('provideInitialState')
+      ->willReturnCallback(function(string $app, string $key, mixed $value) {
+        $this->published[$key] = $value;
       });
     (new ReflectionProperty(OrchestraSettingsInitialState::class, 'initialStateService'))->setValue($form, $state);
-
-    $form->publish();
-    $this->assertSame(['enabled' => false], $published['orchestraSettings']);
-    $this->assertArrayHasKey('about', $published);
-    $this->assertArrayNotHasKey('adminSettings', $published);
   }
 }

@@ -273,6 +273,9 @@
           </NcActions>
         </span>
       </NcSettingsSection>
+      <NcNoteCard v-if="orchestraState?.error" type="error" class="orchestra-settings-error">
+        {{ orchestraState.error }}
+      </NcNoteCard>
       <component :is="orchestraComponents[tab.key]"
                  v-for="tab in orchestraTabs"
                  :key="tab.key"
@@ -513,6 +516,7 @@ import {
   NcActions,
   NcButton,
   NcListItem,
+  NcNoteCard,
   NcProgressBar,
   NcSettingsSection,
 } from '@nextcloud/vue'
@@ -743,7 +747,7 @@ const generateTestError = () => {
 const settingsBackup = reactive<AppAdminSettings>(settings)
 const orchestraGroups = reactive({} as Record<string, GroupType>)
 const config = reactive(initialState)
-const orchestraState = getInitialState<{ enabled: boolean }>({ section: 'orchestraSettings', defaults: { enabled: false } })
+const orchestraState = getInitialState<{ enabled: boolean, error?: string }>({ section: 'orchestraSettings', defaults: { enabled: false } })
 const tree = getAdminSettingsTree({
   isSubAdmin: config.isSubAdmin,
   orchestraSettingsEnabled: !!orchestraState?.enabled,

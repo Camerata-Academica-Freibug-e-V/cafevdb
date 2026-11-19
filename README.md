@@ -144,6 +144,9 @@ Nextcloud delegation or instance-administrator status alone does not unlock
 these sections. Existing delegated settings retain their previous permissions.
 Personal preferences and orchestra configuration use separate controllers;
 their existing HTTP endpoint URLs and stored configuration keys are unchanged.
+If orchestra configuration cannot be loaded, those sections are hidden and an
+error notice is shown. About and the existing administration controls remain
+available; the server log contains the failure details.
 
 Testing problem reports
 -----------------------
