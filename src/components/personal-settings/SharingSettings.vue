@@ -34,6 +34,16 @@
         {{ actionMessage }}
       </NcNoteCard>
     </template>
+    <template #wopi-credentials-view>
+      <div class="admin-actions">
+        <NcButton v-if="wopiViewEnabled" :disabled="runningWopiAction" @click="recreateWopiView">
+          {{ t(appId, 'Regenerate WOPI access views') }}
+        </NcButton>
+      </div>
+      <NcNoteCard v-if="wopiActionMessage" :type="wopiActionError ? 'error' : 'success'">
+        {{ wopiActionMessage }}
+      </NcNoteCard>
+    </template>
   </AdminSettingsTab>
 </template>
 
@@ -76,11 +86,16 @@ const emit = defineEmits<{ error: [error: Error] }>()
 const state = getInitialState<{
   cloudUserRequirements?: { hints?: string[] }|string[]
   cloudUserViewsDatabase?: string
+  wopiCredentialsViewEnabled?: boolean|string
+  wopiCredentialsViewDatabase?: string
 }>({ section: 'adminSettings', defaults: {} })
 const viewsDatabase = ref(String(state?.cloudUserViewsDatabase ?? '').trim())
+const wopiViewEnabled = ref(state?.wopiCredentialsViewEnabled === true || state?.wopiCredentialsViewEnabled === 'on')
 const onSaved = (key: string, value: unknown) => {
   if (key === 'cloudUserViewsDatabase') {
     viewsDatabase.value = String(value ?? '').trim()
+  } else if (key === 'wopiCredentialsViewEnabled') {
+    wopiViewEnabled.value = value === true || value === 'on'
   }
 }
 const cloudUserRequirements = computed(() => {
@@ -176,11 +191,18 @@ const groups: AdminSettingGroup[] = [
     field('cloudUserViewsDatabase', t(appId, 'Dedicated views database')),
     field('musicianPersonalizedViews', t(appId, 'Musician personalized views'), 'checkbox'),
   ], 'members-as-cloud-users'),
+  group(5, t(appId, 'WOPI access to DB-Storage'), [
+    field('wopiCredentialsViewEnabled', t(appId, 'Enable WOPI access to database storage'), 'checkbox'),
+    field('wopiCredentialsViewDatabase', t(appId, 'WOPI views database')),
+  ], 'wopi-credentials-view'),
 ]
 
 const runningAction = ref(false)
 const actionMessage = ref('')
 const actionError = ref(false)
+const runningWopiAction = ref(false)
+const wopiActionMessage = ref('')
+const wopiActionError = ref(false)
 const shareOwnerPassword = ref('')
 const runningPasswordAction = ref(false)
 const passwordMessage = ref('')
@@ -239,6 +261,25 @@ const runAction = async (endpoint: string) => {
     handleSettingError(error, (forwarded) => emit('error', forwarded))
   } finally {
     runningAction.value = false
+  }
+}
+
+const recreateWopiView = async () => {
+  runningWopiAction.value = true
+  wopiActionMessage.value = ''
+  wopiActionError.value = false
+  try {
+    const response = await setAdminSetting('wopiCredentialsViewRecreateViews')
+    wopiActionMessage.value = (response.data.messages ?? []).join(' ')
+    if (wopiActionMessage.value) {
+      showSuccess(wopiActionMessage.value)
+    }
+  } catch (error) {
+    wopiActionError.value = true
+    wopiActionMessage.value = t(appId, 'Unable to regenerate the WOPI credential view.')
+    handleSettingError(error, (forwarded) => emit('error', forwarded))
+  } finally {
+    runningWopiAction.value = false
   }
 }
 </script>
