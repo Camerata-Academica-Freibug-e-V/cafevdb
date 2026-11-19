@@ -115,7 +115,7 @@ $.fn.avatar = function(user, size, _ie8fix, _hidedefault, callback, displayname)
       {
         user,
         size: Math.ceil(size * window.devicePixelRatio),
-        version: oc_userconfig.avatar.version,
+        version: window.oc_userconfig.avatar.version,
       },
     );
   } else {

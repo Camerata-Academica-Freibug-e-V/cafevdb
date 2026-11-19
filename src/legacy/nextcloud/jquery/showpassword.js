@@ -22,18 +22,18 @@
 import $ from 'jquery';
 
 /*
-*	@name							Show Password
-*	@description
-*	@version						1.3
-*	@requires						Jquery 1.5
+* @name              Show Password
+* @description
+* @version           1.3
+* @requires          Jquery 1.5
 *
-*	@author							Jan Jarfalk
-*	@author-email					jan.jarfalk@unwrongest.com
-*	@author-website					http://www.unwrongest.com
+* @author            Jan Jarfalk
+* @author-email      jan.jarfalk@unwrongest.com
+* @author-website    http://www.unwrongest.com
 *
-*	@special-thanks					Michel Gratton
+* @special-thanks    Michel Gratton
 *
-*	@licens							MIT License - http://www.opensource.org/licenses/mit-license.php
+* @licens            MIT License - http://www.opensource.org/licenses/mit-license.php
 */
 $.fn.extend({
   showPassword(c) {
@@ -133,7 +133,7 @@ $.fn.extend({
 
       // set type of password field clone (type=text) to password right on submit
       // to prevent browser save the value of this field
-      $clone.closest('form').submit(function(e) {
+      $clone.closest('form').submit(function() {
         // .prop has to be used, because .attr throws
         // an error while changing a type of an input
         // element

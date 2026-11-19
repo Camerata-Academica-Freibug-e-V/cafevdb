@@ -127,6 +127,7 @@ and navigate to the last active view of the saved history.`)"
             >{{ '' + position }}</span>
           </template>
           <template #subname>
+            <!-- eslint-disable @nextcloud/l10n-enforce-ellipsis -- Preserve the existing translation key. -->
             <NcEllipsisedOption v-tooltip="{
                                   content: () => makePostDataTooltip(mtime, position),
                                   loadingContent: t(appName, 'Loading form data, please wait ...'),
@@ -136,6 +137,7 @@ and navigate to the last active view of the saved history.`)"
                                 }"
                                 :name="pathDisplayName(entry)"
             />
+            <!-- eslint-enable @nextcloud/l10n-enforce-ellipsis -->
           </template>
           <template #actions>
             <!-- .stop in order to prevent floating-vue to close the tooltip -->

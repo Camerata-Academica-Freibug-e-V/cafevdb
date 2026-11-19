@@ -25,7 +25,9 @@
  * @module
  */
 
-export default interface Keyable {
+interface Keyable {
 
   [key: string]: unknown;
 }
+
+export default Keyable;

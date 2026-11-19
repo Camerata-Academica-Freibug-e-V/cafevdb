@@ -232,6 +232,7 @@ import type {
   ConfigCheckResponse,
   SidebarNavigationItem as NavigationItem,
 } from '../build/ts-types/php-modules/Controller/DTO.ts'
+import type { PersonalSettingKey } from './services/personal-settings.ts'
 
 import axios from '@nextcloud/axios'
 import { formatFileSize } from '@nextcloud/files'
@@ -293,13 +294,11 @@ import allDebugOptions, { DEBUG_QUERY } from './debug-modes.ts'
 import * as BusEvents from './event-bus-events.ts'
 import { globalState, synchronizeGlobalState } from './services/legacy-global-state.ts'
 import { closeNavigation } from './services/navigation.ts'
-import type { PersonalSettingKey } from './services/personal-settings.ts'
 import { setPersonalSetting } from './services/personal-settings.ts'
 import useAppDataStore from './stores/app-data.ts'
 import useErrorHandlerStore from './stores/error-handler.ts'
 import useHistoryStore, { HistoryActionPush } from './stores/history.ts'
 import useTooltipsStore from './stores/tooltips.ts'
-import { showInfo } from './toolkit/util/toasts.ts'
 // import ProjectInfoIcon from 'vue-material-design-icons/InformationOutline.vue'
 // import ProjectPartici<pantsIcon from 'vue-material-design-icons/AccountMultiple.vue'
 // import InstrumentationNumbersIcon from 'vue-material-design-icons/CircleSlice5.vue'
@@ -307,6 +306,7 @@ import { showInfo } from './toolkit/util/toasts.ts'
 import { AppError } from './toolkit/types/errors.ts'
 import generateAppUrl from './toolkit/util/generate-url.ts'
 import getInitialState from './toolkit/util/initial-state.ts'
+import { showInfo } from './toolkit/util/toasts.ts'
 import Console from './util/console.ts'
 
 type DebugOption = {
@@ -446,13 +446,13 @@ const openProjectOverview = () => {
 
 const legacyReloadKeys: PersonalSettingKey[] = ['financeMode', 'expertMode', 'showDisabled']
 
-const updatePersonalSettings = async <T>(
+async function updatePersonalSettings<T>(
   key: PersonalSettingKey,
   value: T,
   oldValue: T|undefined,
   revert: (oldValue: T) => void,
   payload: unknown = value,
-) => {
+) {
   logger.debug('UPDATE PERSONAL SETTING', {
     key,
     value,
@@ -621,7 +621,9 @@ synchronizeGlobalState().then((globalState) => {
       })
       tooltipOptions.themes.tooltip.disabled = !value
       toolTipsEnabled.value = value
-      updatePersonalSettings('toolTipsEnabled', value, oldValue, (old) => { globalState.toolTipsEnabled = old })
+      updatePersonalSettings('toolTipsEnabled', value, oldValue, (old) => {
+        globalState.toolTipsEnabled = old
+      })
     },
   )
   watch(

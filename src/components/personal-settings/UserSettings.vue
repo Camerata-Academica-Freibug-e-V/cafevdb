@@ -27,49 +27,49 @@
       <h3>{{ entry.children[0]?.name }}</h3>
       <NcCheckboxRadioSwitch id="tooltips"
                              v-tooltip="hints['show-tool-tips']"
-                             :model-value="settings.toolTipsEnabled"
+                             :modelValue="settings.toolTipsEnabled"
                              :disabled="saving.toolTipsEnabled"
-                             @update:model-value="saveSetting('toolTipsEnabled', $event)"
+                             @update:modelValue="saveSetting('toolTipsEnabled', $event)"
       >
         {{ t(appId, 'Tool-Tips') }}
       </NcCheckboxRadioSwitch>
       <NcCheckboxRadioSwitch id="restorehistory"
                              v-tooltip="hints['restore-history']"
-                             :model-value="settings.restoreHistory"
+                             :modelValue="settings.restoreHistory"
                              :disabled="saving.restoreHistory"
-                             @update:model-value="saveSetting('restoreHistory', $event)"
+                             @update:modelValue="saveSetting('restoreHistory', $event)"
       >
         {{ t(appId, 'Restore Last View') }}
       </NcCheckboxRadioSwitch>
       <NcCheckboxRadioSwitch id="filtervisibility"
                              v-tooltip="hints['filter-visibility']"
-                             :model-value="settings.initialFilterVisibility"
+                             :modelValue="settings.initialFilterVisibility"
                              :disabled="saving.initialFilterVisibility"
-                             @update:model-value="saveSetting('initialFilterVisibility', $event)"
+                             @update:modelValue="saveSetting('initialFilterVisibility', $event)"
       >
         {{ t(appId, 'Filter-Controls') }}
       </NcCheckboxRadioSwitch>
       <NcCheckboxRadioSwitch id="directchange"
                              v-tooltip="hints['direct-change']"
-                             :model-value="settings.directChange"
+                             :modelValue="settings.directChange"
                              :disabled="saving.directChange"
-                             @update:model-value="saveSetting('directChange', $event)"
+                             @update:modelValue="saveSetting('directChange', $event)"
       >
         {{ t(appId, 'Quick Change-Dialog') }}
       </NcCheckboxRadioSwitch>
       <NcCheckboxRadioSwitch id="deselect-invisible-misc-recs"
                              v-tooltip="hints['deselect-invisible-misc-recs']"
-                             :model-value="settings.deselectInvisibleMiscRecs"
+                             :modelValue="settings.deselectInvisibleMiscRecs"
                              :disabled="saving.deselectInvisibleMiscRecs"
-                             @update:model-value="saveSetting('deselectInvisibleMiscRecs', $event)"
+                             @update:modelValue="saveSetting('deselectInvisibleMiscRecs', $event)"
       >
         {{ t(appId, 'Deselect Invisible') }}
       </NcCheckboxRadioSwitch>
       <div class="settings-control">
         <NcSelect v-model="pageRows"
                   v-tooltip="hints['table-rows-per-page']"
-                  input-id="table-pagerows"
-                  :input-label="t(appId, '#Rows/Page in Tables')"
+                  inputId="table-pagerows"
+                  :inputLabel="t(appId, '#Rows/Page in Tables')"
                   :options="pageRowsOptions"
                   :clearable="false"
                   :disabled="saving.pageRowsDefault"
@@ -78,8 +78,8 @@
       <div class="settings-control">
         <NcSelect v-model="wysiwygEditor"
                   v-tooltip="hints['wysiwyg-editor']"
-                  input-id="wysiwyg-editor"
-                  :input-label="t(appId, 'WYSIWYG Text-Editor')"
+                  inputId="wysiwyg-editor"
+                  :inputLabel="t(appId, 'WYSIWYG Text-Editor')"
                   :options="wysiwygOptions"
                   :clearable="false"
                   :disabled="saving.wysiwygEditor"
@@ -88,34 +88,34 @@
       <NcCheckboxRadioSwitch v-if="financeModeAllowed"
                              id="finance-mode"
                              v-tooltip="hints['finance-mode']"
-                             :model-value="settings.financeMode"
+                             :modelValue="settings.financeMode"
                              :disabled="saving.financeMode"
-                             @update:model-value="saveSetting('financeMode', $event)"
+                             @update:modelValue="saveSetting('financeMode', $event)"
       >
         {{ t(appId, 'Finance-Mode') }}
       </NcCheckboxRadioSwitch>
       <NcCheckboxRadioSwitch id="expert-mode"
                              v-tooltip="hints['expert-mode']"
-                             :model-value="settings.expertMode"
+                             :modelValue="settings.expertMode"
                              :disabled="saving.expertMode"
-                             @update:model-value="saveSetting('expertMode', $event)"
+                             @update:modelValue="saveSetting('expertMode', $event)"
       >
         {{ t(appId, 'Expert-Mode') }}
       </NcCheckboxRadioSwitch>
       <NcCheckboxRadioSwitch v-if="settings.expertMode"
                              id="showdisabled"
                              v-tooltip="hints['show-disabled']"
-                             :model-value="settings.showDisabled"
+                             :modelValue="settings.showDisabled"
                              :disabled="saving.showDisabled"
-                             @update:model-value="saveSetting('showDisabled', $event)"
+                             @update:modelValue="saveSetting('showDisabled', $event)"
       >
         {{ t(appId, 'Show Disabled Data-Sets') }}
       </NcCheckboxRadioSwitch>
       <div v-if="settings.expertMode" class="settings-control">
         <NcSelect v-model="debugModes"
                   v-tooltip="hints['debug-mode']"
-                  input-id="debug-modes-select"
-                  :input-label="t(appId, 'Debug')"
+                  inputId="debug-modes-select"
+                  :inputLabel="t(appId, 'Debug')"
                   :options="debugOptions"
                   :multiple="true"
                   :disabled="saving.debugMode"
@@ -125,7 +125,7 @@
                    v-model="sqlFilter"
                    :label="t(appId, 'SQL Filter')"
                    :placeholder="t(appId, 'SQL filter regexp')"
-                   :helper-text="t(appId, 'A regular expression which selects matching SQL queries for logging.')"
+                   :helperText="t(appId, 'A regular expression which selects matching SQL queries for logging.')"
                    :disabled="saving.debugQuerySqlFilter"
                    @blur="saveSqlFilter"
                    @keydown.enter="saveSqlFilter"
@@ -134,7 +134,11 @@
     <div :id="entry.children[1]?.id" class="settings-subsection">
       <h3>{{ entry.children[1]?.name }}</h3>
       <form class="encryption-key-form" @submit.prevent="submitEncryptionKey">
-        <input type="hidden" name="userId" :value="userId" autocomplete="username" />
+        <input type="hidden"
+               name="userId"
+               :value="userId"
+               autocomplete="username"
+        />
         <NcPasswordField v-model="loginPassword"
                          v-tooltip="hints['settings:personal:encryptionKey:own-password']"
                          :label="t(appId, 'Own Password')"
@@ -164,34 +168,40 @@
 </template>
 
 <script setup lang="ts">
+import type { PersonalSettingKey } from '../../services/personal-settings.ts'
+import type { TabEntry } from './settings-tree.ts'
+
 import { translate as t } from '@nextcloud/l10n'
 import { NcButton, NcCheckboxRadioSwitch, NcNoteCard, NcPasswordField, NcSelect, NcSettingsSection, NcTextField } from '@nextcloud/vue'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
+import LocaleInfo from './LocaleInfo.vue'
 import { WYSIWYG_EDITORS } from '../../../build/ts-types/php-modules/Settings/ConfigConstants.ts'
 import { appName as appId } from '../../config.ts'
 import allDebugOptions, { DEBUG_QUERY } from '../../debug-modes.ts'
-import type { PersonalSettingKey } from '../../services/personal-settings.ts'
 import { setEncryptionKey, setPersonalSetting } from '../../services/personal-settings.ts'
 import { handleSettingError, showSettingFeedback } from '../../services/setting-feedback.ts'
 import useTooltipsStore from '../../stores/tooltips.ts'
-import { showInfo, showSuccess } from '../../toolkit/util/toasts.ts'
-
 import getInitialState from '../../toolkit/util/initial-state.ts'
-import LocaleInfo from './LocaleInfo.vue'
-import type { TabEntry } from './settings-tree.ts'
+import { showInfo, showSuccess } from '../../toolkit/util/toasts.ts'
 
 type CheckboxKey = 'toolTipsEnabled' | 'restoreHistory' | 'initialFilterVisibility' | 'directChange'
   | 'deselectInvisibleMiscRecs' | 'financeMode' | 'expertMode' | 'showDisabled'
 
 type SelectOption<T = number> = { value: T, label: string }
 
+defineProps<{ entry: TabEntry }>()
+
+const emit = defineEmits<{
+  error: [error: Error]
+}>()
+
 const initialState = getInitialState<Partial<Record<CheckboxKey, boolean|string>> & {
-  financeModeAllowed?: boolean,
-  pageRowsDefault?: number|string,
-  debugMode?: number|string,
-  debugQuerySqlFilter?: string,
-  wysiwygEditor?: string,
-  userId?: string,
+  financeModeAllowed?: boolean
+  pageRowsDefault?: number|string
+  debugMode?: number|string
+  debugQuerySqlFilter?: string
+  wysiwygEditor?: string
+  userId?: string
 }>({ section: 'CAFEVDB', defaults: {} })
 
 const financeModeAllowed = !!initialState?.financeModeAllowed
@@ -217,8 +227,14 @@ const hints = tooltipsProvider.tooltipsData
 const isEnabled = (value: boolean|string|undefined) => value === true || value === 'on'
 
 const checkboxKeys: CheckboxKey[] = [
-  'toolTipsEnabled', 'restoreHistory', 'initialFilterVisibility', 'directChange',
-  'deselectInvisibleMiscRecs', 'financeMode', 'expertMode', 'showDisabled',
+  'toolTipsEnabled',
+  'restoreHistory',
+  'initialFilterVisibility',
+  'directChange',
+  'deselectInvisibleMiscRecs',
+  'financeMode',
+  'expertMode',
+  'showDisabled',
 ]
 const settings = reactive(Object.fromEntries(
   checkboxKeys.map((key) => [key, isEnabled(initialState?.[key])]),
@@ -231,10 +247,6 @@ const saving = reactive({
   debugMode: false,
   debugQuerySqlFilter: false,
 } as Record<CheckboxKey|'pageRowsDefault'|'wysiwygEditor'|'debugMode'|'debugQuerySqlFilter', boolean>)
-
-const emit = defineEmits<{
-  error: [error: Error],
-}>()
 
 const emitError = (error: unknown) => handleSettingError(error, (forwarded) => emit('error', forwarded))
 
@@ -275,25 +287,27 @@ let savedSqlFilter = sqlFilter.value
 
 // Persist a select value; on failure restore the previous one and report the error.
 // The saving flag is cleared after the next tick so that the revert does not trigger another save.
-const persistWatcher = <T,>(
+function persistWatcher<T>(
   target: { value: T },
   key: 'pageRowsDefault' | 'wysiwygEditor' | 'debugMode',
   payload: (value: T) => unknown,
-) => watch(target, async (value, oldValue) => {
-  if (saving[key] || value === undefined || oldValue === undefined) {
-    return
-  }
-  saving[key] = true
-  try {
-    showSettingFeedback((await setPersonalSetting(key, payload(value))).data, key)
-  } catch (error) {
-    target.value = oldValue
-    emitError(error)
-  } finally {
-    await nextTick()
-    saving[key] = false
-  }
-})
+) {
+  return watch(target, async (value, oldValue) => {
+    if (saving[key] || value === undefined || oldValue === undefined) {
+      return
+    }
+    saving[key] = true
+    try {
+      showSettingFeedback((await setPersonalSetting(key, payload(value))).data, key)
+    } catch (error) {
+      target.value = oldValue
+      emitError(error)
+    } finally {
+      await nextTick()
+      saving[key] = false
+    }
+  })
+}
 
 persistWatcher(pageRows, 'pageRowsDefault', (option) => option.value)
 persistWatcher(wysiwygEditor, 'wysiwygEditor', (option) => option?.value)
@@ -356,7 +370,6 @@ const submitEncryptionKey = async () => {
   }
 }
 
-defineProps<{ entry: TabEntry }>()
 </script>
 
 <style lang="scss" scoped>
