@@ -22,18 +22,18 @@
 
  */
 
-import { translate as t } from '@nextcloud/l10n'
-import { appName as appId } from '../../config.ts'
+import { translate as t } from '@nextcloud/l10n';
+import { appName as appId } from '../../config.ts';
 
 export interface NavigationEntry {
-  id: string,
-  name: string,
+  id: string;
+  name: string;
 }
 
 export interface TabEntry extends NavigationEntry {
-  key: string,
-  adminOnly: boolean,
-  children: NavigationEntry[],
+  key: string;
+  adminOnly: boolean;
+  children: NavigationEntry[];
 }
 
 /**
@@ -51,8 +51,8 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
       name: t(appId, 'Personal'),
       adminOnly: false,
       children: [
-      { id: 'personal-settings', name: t(appId, 'Personal settings') },
-      { id: 'encryption-key', name: t(appId, 'Encryption key') },
+        { id: 'personal-settings', name: t(appId, 'Personal settings') },
+        { id: 'encryption-key', name: t(appId, 'Encryption key') },
       ],
     },
     {
@@ -61,9 +61,9 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
       name: t(appId, 'General'),
       adminOnly: true,
       children: [
-      { id: 'general-settings', name: t(appId, 'General settings') },
-      { id: 'encryption-settings', name: t(appId, 'Encryption settings') },
-      { id: 'database-settings', name: t(appId, 'Database settings') },
+        { id: 'general-settings', name: t(appId, 'General settings') },
+        { id: 'encryption-settings', name: t(appId, 'Encryption settings') },
+        { id: 'database-settings', name: t(appId, 'Database settings') },
       ],
     },
     {
@@ -72,10 +72,10 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
       name: t(appId, 'Orchestra'),
       adminOnly: true,
       children: [
-      { id: 'street-address', name: t(appId, 'Street Address') },
-      { id: 'bank-account', name: t(appId, 'Bank Account') },
-      { id: 'document-templates', name: t(appId, 'Document templates') },
-      { id: 'executive-board-and-club-members', name: t(appId, 'Executive board and club members') },
+        { id: 'street-address', name: t(appId, 'Street Address') },
+        { id: 'bank-account', name: t(appId, 'Bank Account') },
+        { id: 'document-templates', name: t(appId, 'Document templates') },
+        { id: 'executive-board-and-club-members', name: t(appId, 'Executive board and club members') },
       ],
     },
     {
@@ -84,11 +84,11 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
       name: t(appId, 'Sharing'),
       adminOnly: true,
       children: [
-      { id: 'share-owner', name: t(appId, 'Share owner') },
-      { id: 'calendars', name: t(appId, 'Calendars') },
-      { id: 'contacts', name: t(appId, 'Contacts') },
-      { id: 'shared-folder', name: t(appId, 'Shared folder') },
-      { id: 'members-as-cloud-users', name: t(appId, 'Members as Cloud-Users') },
+        { id: 'share-owner', name: t(appId, 'Share owner') },
+        { id: 'calendars', name: t(appId, 'Calendars') },
+        { id: 'contacts', name: t(appId, 'Contacts') },
+        { id: 'shared-folder', name: t(appId, 'Shared folder') },
+        { id: 'members-as-cloud-users', name: t(appId, 'Members as Cloud-Users') },
       ],
     },
     {
@@ -97,11 +97,11 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
       name: t(appId, 'Email'),
       adminOnly: true,
       children: [
-      { id: 'server-settings', name: t(appId, 'Email Server and Account') },
-      { id: 'bulk-email-composition', name: t(appId, 'Bulk Email Composition') },
-      { id: 'bulk-email-privacy-notice', name: t(appId, 'Bulk Email Privacy Notice') },
-      { id: 'mailing-list-service', name: t(appId, 'Mailing List Service') },
-      { id: 'test-settings', name: t(appId, 'Test Settings') },
+        { id: 'server-settings', name: t(appId, 'Email Server and Account') },
+        { id: 'bulk-email-composition', name: t(appId, 'Bulk Email Composition') },
+        { id: 'bulk-email-privacy-notice', name: t(appId, 'Bulk Email Privacy Notice') },
+        { id: 'mailing-list-service', name: t(appId, 'Mailing List Service') },
+        { id: 'test-settings', name: t(appId, 'Test Settings') },
       ],
     },
     {
@@ -110,9 +110,9 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
       name: t(appId, 'CMS'),
       adminOnly: true,
       children: [
-      { id: 'redaxo-categories', name: t(appId, 'Redaxo Categories') },
-      { id: 'redaxo-templates', name: t(appId, 'Redaxo Templates') },
-      { id: 'redaxo-modules', name: t(appId, 'Redaxo Modules') },
+        { id: 'redaxo-categories', name: t(appId, 'Redaxo Categories') },
+        { id: 'redaxo-templates', name: t(appId, 'Redaxo Templates') },
+        { id: 'redaxo-modules', name: t(appId, 'Redaxo Modules') },
       ],
     },
     {
@@ -121,7 +121,7 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
       name: t(appId, 'Development'),
       adminOnly: true,
       children: [
-      { id: 'links', name: t(appId, 'Links') },
+        { id: 'links', name: t(appId, 'Links') },
       ],
     },
     {
@@ -132,11 +132,11 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
       children: [
       ],
     },
-  ]
+  ];
   return tabs
     .filter((tab) => isGroupAdmin || !tab.adminOnly)
     .map((tab) => ({
       ...tab,
       children: tab.children.map((child) => ({ ...child, id: tab.id + '-' + child.id })),
-    }))
-}
+    }));
+};

@@ -41,9 +41,10 @@
 </template>
 
 <script setup lang="ts">
+import type { Component } from 'vue'
+
 import { translate as t } from '@nextcloud/l10n'
 import { onUnmounted, ref } from 'vue'
-import type { Component } from 'vue'
 import ErrorPageModal from './ErrorPageModal.vue'
 import AboutSettings from './personal-settings/AboutSettings.vue'
 import CmsSettings from './personal-settings/CmsSettings.vue'
@@ -51,15 +52,15 @@ import DevelopmentSettings from './personal-settings/DevelopmentSettings.vue'
 import EmailSettings from './personal-settings/EmailSettings.vue'
 import GeneralSettings from './personal-settings/GeneralSettings.vue'
 import OrchestraSettings from './personal-settings/OrchestraSettings.vue'
-import SharingSettings from './personal-settings/SharingSettings.vue'
 import SettingsNavigation from './personal-settings/SettingsNavigation.vue'
+import SharingSettings from './personal-settings/SharingSettings.vue'
 import UserSettings from './personal-settings/UserSettings.vue'
-import { getSettingsTree } from './personal-settings/settings-tree.ts'
 import { appName as appId } from '../config.ts'
 import useErrorHandlerStore from '../stores/error-handler.ts'
 import { AppError } from '../toolkit/types/errors.ts'
 import getInitialState from '../toolkit/util/initial-state.ts'
 import Console from '../util/console.ts'
+import { getSettingsTree } from './personal-settings/settings-tree.ts'
 
 const COMPONENT_NAME = 'PersonalSettings'
 const logger = new Console(COMPONENT_NAME)

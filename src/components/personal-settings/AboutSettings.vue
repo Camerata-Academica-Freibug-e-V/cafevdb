@@ -61,30 +61,32 @@
 </template>
 
 <script setup lang="ts">
+import type { TabEntry } from './settings-tree.ts'
+
 import { translate as t } from '@nextcloud/l10n'
 import { NcSettingsSection } from '@nextcloud/vue'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { appName as appId } from '../../config.ts'
 import getInitialState from '../../toolkit/util/initial-state.ts'
-import type { TabEntry } from './settings-tree.ts'
 
 type CreditItem = { title: string, link: string }
 
+defineProps<{ entry: TabEntry }>()
 const NUM_VISIBLE_CREDITS = 5
 const refreshSeconds = 30
 
 const about = getInitialState<{
-  name: string,
-  version: string,
-  codeName: string,
-  description: string,
-  lifetime: string,
-  licence: string,
-  licenceName: string,
-  author: string,
-  authorEmail: string,
-  homePage: string,
-  credits: CreditItem[],
+  name: string
+  version: string
+  codeName: string
+  description: string
+  lifetime: string
+  licence: string
+  licenceName: string
+  author: string
+  authorEmail: string
+  homePage: string
+  credits: CreditItem[]
 }>({
   section: 'about',
   defaults: {
@@ -118,10 +120,11 @@ const pickCredits = () => {
   return items.slice(0, NUM_VISIBLE_CREDITS)
 }
 const visibleCredits = ref<CreditItem[]>(pickCredits())
-const timer = setInterval(() => { visibleCredits.value = pickCredits() }, refreshSeconds * 1000)
+const timer = setInterval(() => {
+  visibleCredits.value = pickCredits()
+}, refreshSeconds * 1000)
 onBeforeUnmount(() => clearInterval(timer))
 
-defineProps<{ entry: TabEntry }>()
 </script>
 
 <style lang="scss" scoped>
