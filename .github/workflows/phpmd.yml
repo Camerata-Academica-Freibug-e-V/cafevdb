@@ -36,3 +36,9 @@ jobs:
           --suffixes php --exclude '*/lib/Service/IMAP/*'
           --exclude '*/lib/Legacy/PhpMyEdit/*'
           --exclude '*/lib/Database/Doctrine/ORM/Proxies/*' --threads 1 --no-cache
+
+      - name: Check tests/phpunit/
+        # The patched single-command entry point cannot dispatch worker subcommands.
+        run: >-
+          vendor-bin/phpmd/vendor/bin/phpmd tests/phpunit/ --format text --ruleset .phpmd.xml
+          --suffixes php --threads 1 --no-cache

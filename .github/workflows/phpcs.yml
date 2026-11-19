@@ -31,3 +31,6 @@ jobs:
 
       - name: Check lib/
         run: vendor-bin/phpcs/vendor/bin/phpcs --standard=.phpcs.xml --extensions=php --runtime-set ignore_warnings_on_exit 1 --ignore='lib/Service/IMAP/*,lib/Legacy/PhpMyEdit/*,lib/Database/Doctrine/ORM/Proxies/*' lib/
+
+      - name: Check tests/phpunit/
+        run: vendor-bin/phpcs/vendor/bin/phpcs --standard=.phpcs.xml --extensions=php --runtime-set ignore_warnings_on_exit 1 tests/phpunit/
