@@ -13,9 +13,9 @@ namespace OCA\CAFEVDB\Maintenance\Migrations;
 
 use OCA\CAFEVDB\Controller\EnumSimpleSettingsKey;
 use OCA\CAFEVDB\Database\Doctrine\Migrations\AbstractStructuralMigration;
-use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\EncryptionService;
 use OCA\CAFEVDB\Service\WopiCredentialStore;
+use OCA\CAFEVDB\Service\WopiCredentialsViewService;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Schema\Schema;
 use OCP\IConfig;
 
@@ -57,7 +57,7 @@ final class Version20261118191044 extends AbstractStructuralMigration
     }
 
     $database = $config->getConfigValue(EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value);
-    $this->appContainer->get(CloudUserConnectorService::class)->updateWopiCredentialsView($database);
+    $this->appContainer->get(WopiCredentialsViewService::class)->updateWopiCredentialsView($database);
   }
 
   /** {@inheritdoc} */
@@ -79,7 +79,7 @@ final class Version20261118191044 extends AbstractStructuralMigration
       '',
     );
     if ($database !== '') {
-      $this->appContainer->get(CloudUserConnectorService::class)->removeWopiCredentialsView($database);
+      $this->appContainer->get(WopiCredentialsViewService::class)->removeWopiCredentialsView();
     }
   }
 }

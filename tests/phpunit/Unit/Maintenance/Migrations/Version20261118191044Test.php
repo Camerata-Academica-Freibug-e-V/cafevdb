@@ -13,8 +13,8 @@ use OCA\CAFEVDB\Database\Doctrine\Migrations\AbstractMigration;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\DoctrineMigrationsListener;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Maintenance\Migrations\Version20261118191044;
-use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\EncryptionService;
+use OCA\CAFEVDB\Service\WopiCredentialsViewService;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Schema\Schema;
 use OCA\CAFEVDB\Wrapped\Doctrine\Migrations\Event\MigrationsVersionEventArgs;
@@ -56,7 +56,7 @@ class Version20261118191044Test extends TestCase
       ['cloudUserViewsDatabase', null, false, $database],
     ]);
 
-    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector = $this->createMock(WopiCredentialsViewService::class);
     if ($cloudUsers === 'on' || $personalized === 'on') {
       $connector->expects($this->once())->method('updateWopiCredentialsView')->with($database);
     } else {
@@ -66,7 +66,7 @@ class Version20261118191044Test extends TestCase
     $container = $this->createStub(ContainerInterface::class);
     $container->method('get')->willReturnMap([
       [EncryptionService::class, $config],
-      [CloudUserConnectorService::class, $connector],
+      [WopiCredentialsViewService::class, $connector],
     ]);
     $migration = $this->migration($container);
 
@@ -83,24 +83,36 @@ class Version20261118191044Test extends TestCase
     ];
   }
 
-  public function testRollbackRemovesViewFromTheRecordedDatabase(): void
+  #[DataProvider('rollbackDatabases')]
+  public function testRollbackDelegatesConnectorCleanupOnlyWhenConfigured(string $database): void
   {
-    $config = $this->createStub(IConfig::class);
-    $config->method('getAppValue')->willReturnMap([
-      ['cafevdb', 'wopiConnectorDatabase', '', 'previous_connector'],
-    ]);
-    $connector = $this->createMock(CloudUserConnectorService::class);
-    $connector->expects($this->once())->method('removeWopiCredentialsView')->with('previous_connector');
+    $connector = $this->createMock(WopiCredentialsViewService::class);
+    $connector->expects($database === '' ? $this->never() : $this->once())->method('removeWopiCredentialsView');
+    $config = $this->createMock(IConfig::class);
+    $config->expects($this->once())->method('getAppValue')
+      ->with('cafevdb', 'wopiConnectorDatabase', '')
+      ->willReturn($database);
     $container = $this->createStub(ContainerInterface::class);
-    $container->method('get')->willReturnMap([
-      [IConfig::class, $config],
-      ['AppName', 'cafevdb'],
-      [CloudUserConnectorService::class, $connector],
-    ]);
+    $container->method('get')->willReturnCallback(static function(string $id) use ($config, $connector, $database): mixed {
+      return match ($id) {
+        IConfig::class => $config,
+        'AppName' => 'cafevdb',
+        WopiCredentialsViewService::class => $database !== '' ? $connector : throw new \LogicException('Unexpected connection'),
+        default => throw new \LogicException('Unexpected service: ' . $id),
+      };
+    });
     $migration = $this->migration($container);
 
     $this->startMigration($migration, 'down', dryRun: false);
     $migration->preDown(new Schema());
+  }
+
+  public static function rollbackDatabases(): array
+  {
+    return [
+      'configured' => ['connector'],
+      'not configured' => [''],
+    ];
   }
 
   private function migration(ContainerInterface $container): Version20261118191044

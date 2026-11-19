@@ -99,8 +99,10 @@ classification never replaces richdocuments' WOPI request validation.
 The orchestra database migration installs the WOPI view and function on the
 shared MariaDB server when cloud-user or personalized views are already
 enabled. It grants the Nextcloud database account access to the view, not the
-credential table. If the migration was already applied without provisioning
-the view, regenerate the cloud-user or personalized views in CafeVDB's settings.
+credential table. WOPI access to database storage has its own setting and
+connector database in CafeVDB's settings; disabling cloud-user or personalized
+views does not affect it. If the WOPI view is missing, enable or regenerate it
+in the "WOPI access to DB-Storage" settings section.
 Reopen Office documents that were open during the upgrade to get new credentials.
 
 The Nextcloud app upgrade revokes all registered legacy password-based WOPI

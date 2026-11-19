@@ -41,7 +41,6 @@ use OCA\CAFEVDB\Database\Connection;
 use OCA\CAFEVDB\Database\Constants as DBConstants;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumProjectTemporalType as ProjectType;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities\Musician as MusicianEntity;
-use OCA\CAFEVDB\Database\Doctrine\ORM\Entities\WopiCredential;
 use OCA\CAFEVDB\Exceptions;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
 use OCA\CAFEVDB\Settings\ConfigConstants;
@@ -352,7 +351,6 @@ WHERE m.email IS NOT NULL AND m.email <> ""
   */
   public function updateUserSqlViews(?string $dataBaseName):void
   {
-    $this->updateWopiCredentialsView($dataBaseName);
     $cloudDbUser = $this->checkAndGetCloudDbUser();
     $currentStatement = null;
     try {
@@ -405,7 +403,6 @@ WHERE m.email IS NOT NULL AND m.email <> ""
    */
   public function removeUserSqlViews(?string $dataBaseName):void
   {
-    $this->removeWopiCredentialsView($dataBaseName);
     $currentStatement = null;
     try {
       foreach (array_keys(self::USER_SQL_VIEWS) as $name) {
@@ -1069,7 +1066,6 @@ SELECT t.* FROM " . $table . " t";
    */
   public function updateMusicianPersonalizedViews(?string $dataBaseName):void
   {
-    $this->updateWopiCredentialsView($dataBaseName);
     $statements = $this->generateMusicianPersonalizedViewsStatements($dataBaseName);
 
     $cloudDbUser = $this->checkAndGetCloudDbUser();
@@ -1102,67 +1098,6 @@ SELECT t.* FROM " . $table . " t";
         $t->getCode(),
         $t
       );
-    }
-  }
-
-  /**
-   * Expose a single unexpired WOPI credential to the Nextcloud database user.
-   *
-   * @param null|string $dataBaseName Connector database; defaults to the app database.
-   *
-   * @return void
-   */
-  public function updateWopiCredentialsView(?string $dataBaseName): void
-  {
-    $cloudDbUser = $this->checkAndGetCloudDbUser();
-    $database = $dataBaseName ?: $this->appDbName;
-    $function = WopiCredentialStore::qualify($database, WopiCredentialStore::TOKEN_HASH_FUNCTION);
-    $view = WopiCredentialStore::qualify($database, WopiCredentialStore::VIEW_NAME);
-    $table = WopiCredentialStore::qualify($this->appDbName, WopiCredential::TABLE_NAME);
-    $grantee = $this->connection->quote($cloudDbUser) . "@'localhost'";
-    try {
-      $this->connection->executeStatement(
-        'CREATE OR REPLACE FUNCTION ' . $function . '()
-         RETURNS VARBINARY(64)
-         NOT DETERMINISTIC NO SQL SQL SECURITY INVOKER
-         RETURN IF(OCTET_LENGTH(@' . Constants::SQL_WOPI_TOKEN_HASH . ') = 64, @' . Constants::SQL_WOPI_TOKEN_HASH . ', NULL)',
-      );
-      $this->connection->executeStatement(
-        'CREATE OR REPLACE ALGORITHM=TEMPTABLE SQL SECURITY DEFINER VIEW ' . $view . ' AS
-         SELECT encrypted_key, expires FROM ' . $table . '
-         WHERE token_hash = ' . $function . '() AND expires > UNIX_TIMESTAMP()',
-      );
-      $this->connection->executeStatement('GRANT EXECUTE ON FUNCTION ' . $function . ' TO ' . $grantee);
-      $this->connection->executeStatement('GRANT SELECT ON ' . $view . ' TO ' . $grantee);
-      // This locator must be readable before the app encryption key is available.
-      $this->cloudConfig->setAppValue($this->appName, WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, $database);
-    } catch (Throwable $exception) {
-      throw new Exceptions\DatabaseCloudConnectorViewException(
-        $this->l->t('Unable to configure the WOPI credential view.'),
-        $exception->getCode(),
-        $exception,
-      );
-    }
-  }
-
-  /**
-   * Remove restricted WOPI connector access without touching stored credentials.
-   *
-   * @param null|string $dataBaseName
-   *
-   * @return void
-   */
-  public function removeWopiCredentialsView(?string $dataBaseName): void
-  {
-    $database = $dataBaseName ?: $this->appDbName;
-    $this->connection->executeStatement(
-      'DROP VIEW IF EXISTS ' . WopiCredentialStore::qualify($database, WopiCredentialStore::VIEW_NAME),
-    );
-    $this->connection->executeStatement(
-      'DROP FUNCTION IF EXISTS ' . WopiCredentialStore::qualify($database, WopiCredentialStore::TOKEN_HASH_FUNCTION),
-    );
-    if ($this->cloudConfig->getAppValue($this->appName, WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, '') === $database) {
-      $this->cloudConfig->deleteAppValue($this->appName, WopiCredentialStore::CONNECTOR_DATABASE_CONFIG);
     }
   }
 

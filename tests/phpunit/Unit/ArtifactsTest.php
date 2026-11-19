@@ -37,6 +37,7 @@ use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\EventsService;
+use OCA\CAFEVDB\Service\WopiCredentialsViewService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Storage\UserStorage;
 use OCA\CAFEVDB\Tests\MockProvider;
@@ -139,6 +140,7 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EmailAddressService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EncryptionService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialStore::class)]
+#[Attributes\UsesClass(WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EventsService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\InstrumentationService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\L10N\AppL10N::class)]
@@ -251,6 +253,7 @@ class ArtifactsTest extends TestCase
     $cloudConnectorDatabase = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
     $cloudUserConnectorService->updateUserSqlViews($cloudConnectorDatabase);
     $cloudUserConnectorService->updateMusicianPersonalizedViews($cloudConnectorDatabase);
+    $this->appContainer->get(WopiCredentialsViewService::class)->updateWopiCredentialsView($cloudConnectorDatabase);
 
     $this->databaseProvider->dumpDatabase(
       EnumDatabasePurpose::APP,

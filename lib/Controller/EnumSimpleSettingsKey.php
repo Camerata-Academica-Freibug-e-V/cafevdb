@@ -36,6 +36,8 @@ enum EnumSimpleSettingsKey: string
   case IMPORT_CLUB_MEMBERS_AS_CLOUD_USERS = 'importClubMembersAsCloudUsers';
   case CLOUD_USER_VIEWS_DATABASE = 'cloudUserViewsDatabase';
   case MUSICIAN_PERSONALIZED_VIEWS = 'musicianPersonalizedViews';
+  case WOPI_CREDENTIALS_VIEW_ENABLED = 'wopiCredentialsViewEnabled';
+  case WOPI_CREDENTIALS_VIEW_DATABASE = 'wopiCredentialsViewDatabase';
   //
   case SMTP_SERVER = ConfigConstants::SMTP_SERVER;
   case IMAP_SERVER = ConfigConstants::IMAP_SERVER;
