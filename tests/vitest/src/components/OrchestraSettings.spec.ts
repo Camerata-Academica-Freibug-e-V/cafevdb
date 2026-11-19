@@ -1,10 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { h } from 'vue';
-import AdminSettingsTab from '../../../../src/components/personal-settings/AdminSettingsTab.vue';
-import DocumentTemplateFile from '../../../../src/components/personal-settings/DocumentTemplateFile.vue';
-import OrchestraSettings from '../../../../src/components/personal-settings/OrchestraSettings.vue';
-import SharingSettings from '../../../../src/components/personal-settings/SharingSettings.vue';
+import AdminSettingsTab from '../../../../src/components/settings/AdminSettingsTab.vue';
+import DocumentTemplateFile from '../../../../src/components/settings/DocumentTemplateFile.vue';
+import OrchestraSettings from '../../../../src/components/settings/OrchestraSettings.vue';
+import SharingSettings from '../../../../src/components/settings/SharingSettings.vue';
 import { CALENDAR_KEY_POSTFIX, CALENDARS, EVENT_DURATION_KEY } from '../../../../build/ts-types/php-modules/Settings/ConfigConstants.ts';
 
 const mocks = vi.hoisted(() => ({
@@ -88,7 +88,7 @@ vi.mock('@nextcloud/vue', () => ({
   NcTextArea: {},
   NcNoteCard: {},
 }));
-vi.mock('../../../../src/components/personal-settings/WysiwygField.vue', () => ({ default: {} }));
+vi.mock('../../../../src/components/settings/WysiwygField.vue', () => ({ default: {} }));
 vi.mock('../../../../src/config.ts', () => ({ appName: 'cafevdb' }));
 vi.mock('../../../../src/app/settings-urls.ts', () => ({ getAppUrl: vi.fn() }));
 vi.mock('../../../../src/services/admin-settings.ts', () => ({ getAdminSetting: vi.fn(), setAdminSetting: mocks.setAdminSetting }));
@@ -102,7 +102,7 @@ vi.mock('../../../../src/stores/tooltips.ts', () => ({
 }));
 vi.mock('../../../../src/toolkit/util/axios-file-download.ts', () => ({ default: vi.fn() }));
 vi.mock('../../../../src/toolkit/util/initial-state.ts', () => ({ default: () => mocks.settings }));
-vi.mock('../../../../src/components/personal-settings/AdminSettingsTab.vue', async () => {
+vi.mock('../../../../src/components/settings/AdminSettingsTab.vue', async () => {
   const { defineComponent, h } = await import('vue');
   return {
     default: defineComponent({
@@ -150,7 +150,7 @@ describe('Orchestra and sharing settings fields', () => {
   it('renders the configured bank holiday region as a select and saves region codes', async () => {
     const groups = render().getComponent(AdminSettingsTab).props('groups');
     const { default: ActualAdminSettingsTab } = await vi.importActual<typeof AdminSettingsTabModule>(
-      '../../../../src/components/personal-settings/AdminSettingsTab.vue',
+      '../../../../src/components/settings/AdminSettingsTab.vue',
     );
     const wrapper = mount(ActualAdminSettingsTab, {
       props: {
@@ -402,7 +402,7 @@ describe('Document-template file controls', () => {
 
 it('updates the shared field value and link together, including after deletion', async () => {
   const { default: AdminSettingsTab } = await vi.importActual<typeof AdminSettingsTabModule>(
-    '../../../../src/components/personal-settings/AdminSettingsTab.vue',
+    '../../../../src/components/settings/AdminSettingsTab.vue',
   );
   const wrapper = mount(AdminSettingsTab, {
     props: {
@@ -428,4 +428,4 @@ it('updates the shared field value and link together, including after deletion',
   expect(wrapper.find('a').exists()).toBe(false);
   expect(wrapper.find('input').exists()).toBe(true);
 });
-import type * as AdminSettingsTabModule from '../../../../src/components/personal-settings/AdminSettingsTab.vue';
+import type * as AdminSettingsTabModule from '../../../../src/components/settings/AdminSettingsTab.vue';

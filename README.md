@@ -129,6 +129,20 @@ Add `-v` or `--verbose` to list each encrypted entity's class and identifier as
 it is processed (or would be processed in a dry run); decrypted contents are
 not printed. Failures stop the command with a non-zero exit status.
 
+Settings pages
+---------------
+
+The personal settings page contains user preferences and the user's encryption
+key. Orchestra configuration is in the app's administration settings, together
+with its existing delegated settings and app information. The right-hand
+navigation follows the visible sections; administration through **Access
+Control** remains at the top. On narrow screens, use the navigation toggle.
+
+The moved orchestra sections still require membership in the configured
+orchestra group, sub-admin rights for that group, and a valid encryption key.
+Nextcloud delegation or instance-administrator status alone does not unlock
+these sections. Existing delegated settings retain their previous permissions.
+
 Testing problem reports
 -----------------------
 

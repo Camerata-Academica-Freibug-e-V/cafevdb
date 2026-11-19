@@ -20,7 +20,6 @@
  - You should have received a copy of the GNU Affero General Public License
  - along with this program. If not, see <http://www.gnu.org/licenses/>.
  -->
-<!-- Ported from templates/settings/about.php. Sub-sections replace the legacy accordion/fieldsets. -->
 <template>
   <NcSettingsSection :id="entry.id" class="about-settings" :name="entry.name">
     <div class="product name">

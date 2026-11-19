@@ -21,7 +21,7 @@
  - along with this program. If not, see <http://www.gnu.org/licenses/>.
  -->
 <template>
-  <NcButton class="personal-settings-navigation-toggle"
+  <NcButton class="settings-navigation-toggle"
             :class="{ 'navigation-open': navigationShown && !narrowScreen }"
             variant="primary"
             :aria-label="navigationShown ? t(appId, 'Hide settings navigation') : t(appId, 'Show settings navigation')"
@@ -33,9 +33,9 @@
       <ListIcon v-else :size="20" />
     </template>
   </NcButton>
-  <div v-if="navigationShown && !narrowScreen" class="personal-settings-navigation-spacer" />
+  <div v-if="navigationShown && !narrowScreen" class="settings-navigation-spacer" />
   <nav v-show="navigationShown"
-       class="personal-settings-navigation"
+       class="settings-navigation"
        :class="{ 'narrow-screen': narrowScreen }"
        :aria-label="t(appId, 'Settings navigation')"
   >
@@ -72,7 +72,7 @@ import { appName as appId } from '../../config.ts'
 // opens it as an overlay.
 const props = defineProps<{ tree: TabEntry[] }>()
 
-const STORAGE_KEY = `${appId}:personal-settings-navigation-hidden`
+const STORAGE_KEY = `${appId}:admin-settings-navigation-hidden`
 // Wide screens: visible unless the user hid it (remembered). Narrow screens:
 // hidden unless opened.
 const hiddenOnWideScreen = ref(window.localStorage.getItem(STORAGE_KEY) === '1')
@@ -145,24 +145,24 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-.personal-settings-navigation,
-.personal-settings-navigation-spacer,
-.personal-settings-navigation-toggle {
-  --personal-settings-navigation-width: 14rem;
+.settings-navigation,
+.settings-navigation-spacer,
+.settings-navigation-toggle {
+  --settings-navigation-width: 14rem;
 }
 
 // Fixed instead of sticky: sticky jitters while scrolling. The spacer keeps
 // the room in the flex layout which the fixed navigation no longer occupies.
-.personal-settings-navigation-spacer {
-  flex: 0 0 var(--personal-settings-navigation-width);
+.settings-navigation-spacer {
+  flex: 0 0 var(--settings-navigation-width);
 }
 
-.personal-settings-navigation {
+.settings-navigation {
   position: fixed;
   top: 1rem;
   inset-inline-end: 0;
   box-sizing: border-box;
-  width: var(--personal-settings-navigation-width);
+  width: var(--settings-navigation-width);
   max-height: calc(100vh - 6rem);
   overflow-y: auto;
   padding: 0 1rem;
@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
   }
 }
 
-.personal-settings-navigation-toggle.button-vue {
+.settings-navigation-toggle.button-vue {
   // Mirror the toggle of Nextcloud's left navigation. The containing block is
   // #content-vue (it has a transform/transition), which already starts below
   // the header, so the header height must not be added here.
@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
   // Wide screens: the navigation sits at the right edge, move the toggle
   // to its left. On narrow screens the overlay starts below the toggle.
   &.navigation-open {
-    inset-inline-end: calc(var(--personal-settings-navigation-width) + var(--default-grid-baseline, 4px) * 2);
+    inset-inline-end: calc(var(--settings-navigation-width) + var(--default-grid-baseline, 4px) * 2);
   }
 }
 </style>
