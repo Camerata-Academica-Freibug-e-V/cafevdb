@@ -89,6 +89,7 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
         { id: 'contacts', name: t(appId, 'Contacts') },
         { id: 'shared-folder', name: t(appId, 'Shared folder') },
         { id: 'members-as-cloud-users', name: t(appId, 'Members as Cloud-Users') },
+        { id: 'wopi-credentials-view', name: t(appId, 'WOPI access to DB-Storage') },
       ],
     },
     {
