@@ -178,7 +178,7 @@ class OfflineEntityManagerTest extends TestCase
     $configService->method('getL10n')->willReturn($l);
 
     $encryptionService = $this->createMock(EncryptionService::class);
-    $encryptionService->method('bound')->willReturn($encryptionBound);
+    $encryptionService->method('appBound')->willReturn($encryptionBound);
     $encryptionService->expects($this->never())->method('bind');
     $encryptionService->method('getConfigValue')->willReturnMap([
       [ConfigConstants::APP_DB_NAME, null, false, 'offline_metadata'],

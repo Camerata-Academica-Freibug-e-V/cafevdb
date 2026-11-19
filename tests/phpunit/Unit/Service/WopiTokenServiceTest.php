@@ -8,15 +8,11 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
-use OC\Authentication\Token\IProvider;
-use OC\Authentication\Token\PublicKeyToken;
 use OCA\CAFEVDB\Service\AuthorizationService;
+use OCA\CAFEVDB\Service\EncryptionService;
 use OCA\CAFEVDB\Service\WopiTokenService;
-use OCA\CAFEVDB\Service\WopiCredentialRegistry;
+use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\Richdocuments\Db\WopiMapper;
-use OCP\Authentication\Exceptions\InvalidTokenException;
-use OCP\Authentication\LoginCredentials\ICredentials;
-use OCP\Authentication\LoginCredentials\IStore;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -51,15 +47,14 @@ class IssuedWopiMapper
 #[AllowMockObjectsWithoutExpectations]
 class WopiTokenServiceTest extends TestCase
 {
-  private IProvider $tokens;
-  private IStore $store;
+  private EncryptionService $encryption;
+  private WopiCredentialStore $store;
   private AuthorizationService $authorization;
   private File $file;
   private IMountPoint $mount;
   private IssuedWopiToken $wopi;
   private WopiTokenService $service;
   private ContainerInterface $container;
-  private WopiCredentialRegistry $registry;
 
   protected function setUp(): void
   {
@@ -69,8 +64,8 @@ class WopiTokenServiceTest extends TestCase
     $session->method('getUser')->willReturn($user);
     $session->method('isLoggedIn')->willReturn(true);
     $this->authorization = $this->createMock(AuthorizationService::class);
-    $this->tokens = $this->createMock(IProvider::class);
-    $this->store = $this->createMock(IStore::class);
+    $this->encryption = $this->createMock(EncryptionService::class);
+    $this->store = $this->createMock(WopiCredentialStore::class);
     $this->mount = $this->createStub(IMountPoint::class);
     $this->file = $this->createStub(File::class);
     $this->file->method('getMountPoint')->willReturn($this->mount);
@@ -85,9 +80,8 @@ class WopiTokenServiceTest extends TestCase
     $this->container->method('get')->willReturnCallback(fn(string $id) => match ($id) {
       WopiMapper::class => $mapper,
     });
-    $this->registry = $this->createMock(WopiCredentialRegistry::class);
     $this->service = new WopiTokenService(
-      $session, $this->authorization, $this->store, $this->tokens, $root, $this->container, $this->registry,
+      $session, $this->authorization, $this->encryption, $root, $this->container, $this->store,
     );
   }
 
@@ -96,24 +90,22 @@ class WopiTokenServiceTest extends TestCase
     $this->authorization->expects($this->once())->method('authorized')
       ->with('alice', AuthorizationService::PERMISSION_FILESYSTEM)->willReturn(false);
     $this->container->expects($this->never())->method('get');
-    $this->store->expects($this->never())->method('getLoginCredentials');
-    $this->registry->expects($this->never())->method('remember');
+    $this->store->expects($this->never())->method('store');
     $this->service->provideCredentials('issued-token');
   }
 
-  public function testOrdinaryMountDoesNotStorePasswords(): void
+  public function testOrdinaryMountDoesNotStoreCredentials(): void
   {
     $this->authorization->method('authorized')->willReturn(true);
     $this->mount->method('getOption')->willReturn(false);
-    $this->store->expects($this->never())->method('getLoginCredentials');
-    $this->tokens->expects($this->never())->method('generateToken');
+    $this->store->expects($this->never())->method('store');
     $this->service->provideCredentials('issued-token');
   }
 
   public function testGuestAndMismatchedIdentitiesAreIgnored(): void
   {
     $this->authorization->method('authorized')->willReturn(true);
-    $this->store->expects($this->never())->method('getLoginCredentials');
+    $this->store->expects($this->never())->method('store');
     $this->wopi->type = 1;
     $this->service->provideCredentials('issued-token');
     $this->wopi->type = 0;
@@ -124,113 +116,43 @@ class WopiTokenServiceTest extends TestCase
     $this->service->provideCredentials('issued-token');
   }
 
-  public function testCreatesCompatibleExpiringCredential(): void
+  public function testStoresAppKeyWithAuthoritativeExpiry(): void
   {
     $this->eligible();
-    $this->tokens->method('getToken')->willThrowException(new InvalidTokenException());
-    $token = new PublicKeyToken();
-    $token->setId(17);
-    $token->setUid('issued-token');
-    $token->setLoginName('alice');
-    $this->tokens->expects($this->once())->method('generateToken')
-      ->with('alice@issued-token', 'issued-token', 'alice', 'password', 'wopi_token_issued-token')->willReturn($token);
-    $this->tokens->expects($this->once())->method('getPassword')->with($token, 'alice@issued-token')->willReturn('password');
-    $this->tokens->expects($this->never())->method('setPassword');
-    $this->tokens->expects($this->once())->method('updateToken')->with($token);
-    $this->registry->expects($this->once())->method('remember')->with(17, 'issued-token', 2000000000);
-    $this->service->provideCredentials('issued-token');
-    self::assertSame(2000000000, $token->getExpires());
-    self::assertSame(2000000000, $token->getLastActivity());
-  }
-
-  public function testReusesExistingCredential(): void
-  {
-    $this->eligible();
-    $token = new PublicKeyToken();
-    $token->setId(18);
-    $token->setUid('issued-token');
-    $token->setLoginName('alice');
-    $this->tokens->method('getToken')->willReturn($token);
-    $this->tokens->expects($this->once())->method('getPassword')->with($token, 'alice@issued-token')->willReturn('password');
-    $this->tokens->expects($this->never())->method('setPassword');
-    $this->tokens->expects($this->never())->method('generateToken');
-    $this->registry->expects($this->once())->method('remember')->with(18, 'issued-token', 2000000000);
+    $this->store->expects($this->once())->method('store')->with('issued-token', 'alice', 2000000000, 'app-key');
     $this->service->provideCredentials('issued-token');
   }
 
-  public function testPasswordReadFailureDoesNotGenerateAnotherToken(): void
+  public function testMissingAppKeyFailsExplicitly(): void
   {
-    $this->eligible();
-    $token = new PublicKeyToken();
-    $token->setUid('issued-token');
-    $token->setLoginName('alice');
-    $this->tokens->method('getToken')->willReturn($token);
-    $this->tokens->method('getPassword')->willThrowException(new InvalidTokenException());
-    $this->tokens->expects($this->never())->method('generateToken');
-    $this->expectException(InvalidTokenException::class);
-    $this->service->provideCredentials('issued-token');
-  }
-
-  public function testExistingCredentialIdentityMismatchFailsExplicitly(): void
-  {
-    $this->eligible();
-    $token = new PublicKeyToken();
-    $token->setUid('another-token');
-    $token->setLoginName('alice');
-    $this->tokens->method('getToken')->willReturn($token);
-    $this->tokens->expects($this->never())->method('getPassword');
-    $this->tokens->expects($this->never())->method('setPassword');
-    $this->tokens->expects($this->never())->method('generateToken');
+    $this->eligible(key: '');
+    $this->store->expects($this->never())->method('store');
     $this->expectException(RuntimeException::class);
     $this->service->provideCredentials('issued-token');
   }
 
-  public function testExistingCredentialPasswordMismatchFailsExplicitly(): void
+  public function testMismatchedBoundIdentityFailsExplicitly(): void
+  {
+    $this->eligible(userId: 'bob');
+    $this->store->expects($this->never())->method('store');
+    $this->expectException(RuntimeException::class);
+    $this->service->provideCredentials('issued-token');
+  }
+
+  public function testStorageFailurePropagatesToResponseMiddleware(): void
   {
     $this->eligible();
-    $token = new PublicKeyToken();
-    $token->setUid('issued-token');
-    $token->setLoginName('alice');
-    $this->tokens->method('getToken')->willReturn($token);
-    $this->tokens->method('getPassword')->willReturn('different-password');
-    $this->tokens->expects($this->never())->method('setPassword');
-    $this->tokens->expects($this->never())->method('updateToken');
+    $this->store->method('store')->willThrowException(new RuntimeException('Storage unavailable.'));
     $this->expectException(RuntimeException::class);
+    $this->expectExceptionMessage('Storage unavailable.');
     $this->service->provideCredentials('issued-token');
   }
 
-  public function testMissingPasswordFailsExplicitly(): void
-  {
-    $this->eligible(password: '');
-    $this->tokens->expects($this->never())->method('generateToken');
-    $this->expectException(RuntimeException::class);
-    $this->service->provideCredentials('issued-token');
-  }
-
-  public function testRegistryFailureRevokesNewCredential(): void
-  {
-    $this->eligible();
-    $this->tokens->method('getToken')->willThrowException(new InvalidTokenException());
-    $token = new PublicKeyToken();
-    $token->setId(17);
-    $token->setUid('issued-token');
-    $token->setLoginName('alice');
-    $this->tokens->method('generateToken')->willReturn($token);
-    $this->tokens->method('getPassword')->willReturn('password');
-    $this->registry->method('remember')->willThrowException(new RuntimeException('Registry unavailable.'));
-    $this->tokens->expects($this->once())->method('invalidateTokenById')->with('issued-token', 17);
-    $this->expectException(RuntimeException::class);
-    $this->expectExceptionMessage('Registry unavailable.');
-    $this->service->provideCredentials('issued-token');
-  }
-
-  private function eligible(string $password = 'password'): void
+  private function eligible(string $key = 'app-key', string $userId = 'alice'): void
   {
     $this->authorization->method('authorized')->willReturn(true);
     $this->mount->method('getOption')->willReturn(true);
-    $credentials = $this->createStub(ICredentials::class);
-    $credentials->method('getUID')->willReturn('alice');
-    $credentials->method('getPassword')->willReturn($password);
-    $this->store->method('getLoginCredentials')->willReturn($credentials);
+    $this->encryption->method('getUserId')->willReturn($userId);
+    $this->encryption->method('getAppEncryptionKey')->willReturn($key);
   }
 }

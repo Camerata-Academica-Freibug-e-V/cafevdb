@@ -122,13 +122,9 @@ class MountProvider implements IMountProvider
       return [];
     }
 
-    if (!$this->mountAuthenticationService->authenticate($user)) {
-      $this->logDebug('No authenticated credentials for user ' . $userId);
-      return $this->getUnavailableMounts($user);
-    }
-
-    if (!$this->userSession->isLoggedIn()
+    if (!$this->mountAuthenticationService->authenticate($user)
         || $this->userSession->getUser()?->getUID() !== $userId) {
+      $this->logDebug('No authenticated credentials for user ' . $userId);
       return $this->getUnavailableMounts($user);
     }
 

@@ -25,6 +25,7 @@
 namespace OCA\CAFEVDB\Crypto;
 
 use DateTime;
+use SensitiveParameter;
 use Throwable;
 
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -272,6 +273,27 @@ class AsymmetricKeyService
       $cryptor->setPrivateKey($privKey);
       $cryptor->setPublicKey($pubKey);
       self::$cryptors[$ownerId] = $cryptor;
+    }
+    return $cryptor;
+  }
+
+  /**
+   * Unlock an existing key pair without generating keys or modifying user state.
+   *
+   * @param string $ownerId
+   *
+   * @param string $keyPassphrase
+   *
+   * @return AsymmetricCryptorInterface
+   */
+  public function getUnlockedCryptor(string $ownerId, #[SensitiveParameter] string $keyPassphrase): AsymmetricCryptorInterface
+  {
+    $keyPair = $this->keyStorage->getKeyPair($ownerId, $keyPassphrase);
+    $cryptor = clone $this->cryptorPrototype;
+    $cryptor->setPrivateKey($keyPair[self::PRIVATE_ENCRYPTION_KEY_CONFIG] ?? null);
+    $cryptor->setPublicKey($keyPair[self::PUBLIC_ENCRYPTION_KEY_CONFIG] ?? null);
+    if (!$cryptor->canDecrypt() || !$cryptor->canEncrypt()) {
+      throw new Exceptions\EncryptionKeyException('Existing encryption key pair is unavailable.');
     }
     return $cryptor;
   }

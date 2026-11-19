@@ -24,6 +24,7 @@
 
 namespace OCA\CAFEVDB\Service;
 
+use SensitiveParameter;
 use Throwable;
 
 use OCP\Authentication\Exceptions\CredentialsUnavailableException;
@@ -51,8 +52,8 @@ use OCA\CAFEVDB\Settings\OldSettingsKeys;
  * - encrypted per-user config values where needed
  * - asymmetric encryption for per-user encryption key
  *
- * We only support the case where the password is available through
- * the credential store of the emedding cloud instance.
+ * User-private operations require password credentials. WOPI mounts can bind
+ * only the app key, without unlocking the user's private key.
  *
  * @todo One could cache the decrypted configuration values given that
  * encryption may be costly.
@@ -102,6 +103,8 @@ class EncryptionService
   /** @var Crypto\AsymmetricCryptorInterface */
   private $userAsymmetricCryptor;
 
+  private bool $appKeyBound = false;
+
   private $l;
 
   /** {@inheritdoc} */
@@ -117,6 +120,7 @@ class EncryptionService
     IUserSession $userSession,
     Crypto\CryptoFactoryInterface $cryptoFactory,
     ICredentialsStore $credentialsStore,
+    WopiRequestService $wopiRequestService,
     // private IL10N $l,
   ) {
     $this->appCryptor = $cryptoFactory->getSymmetricCryptor();
@@ -139,6 +143,10 @@ class EncryptionService
         return vsprintf($text, $parameters);
       }
     };
+
+    if ($wopiRequestService->isWopiRoute()) {
+      return;
+    }
 
     try {
       $userId = $userSession->getUser()->getUID();
@@ -180,6 +188,7 @@ class EncryptionService
    */
   public function bind(string $userId, string $password):void
   {
+    $this->appKeyBound = false;
     // $this->logDebug('BINDING TO ' . $userId . ' PW LEN ' . strlen($password));
     $this->userId = $userId;
     $this->userPassword = $password;
@@ -187,6 +196,43 @@ class EncryptionService
     $this->initAppEncryptionKey();
     $this->initAppKeyPair();
     $this->eventDispatcher->dispatchTyped(new EncryptionServiceBoundEvent($userId));
+  }
+
+  /**
+   * Bind app services only, without unlocking user-private keys or logging in.
+   *
+   * @param string $userId Validated local WOPI identity.
+   *
+   * @param string $key Token-decrypted app key.
+   *
+   * @return void
+   */
+  public function bindWithAppKey(string $userId, #[SensitiveParameter] string $key): void
+  {
+    if ($this->getUserId() !== null && $this->getUserId() !== $userId) {
+      throw new Exceptions\EncryptionKeyException('Encryption services are already bound to another user.');
+    }
+    $hash = $this->getAppValue(ConfigConstants::APP_ENCRYPTION_KEY_HASH_KEY);
+    $group = $this->getAppValue(ConfigConstants::USER_GROUP_KEY);
+    if ($key === '' || empty($hash) || empty($group) || !$this->hasher->verify($key, $hash)) {
+      throw new Exceptions\EncryptionKeyException('Invalid app encryption credentials.');
+    }
+    $cryptor = $this->asymKeyService->getUnlockedCryptor('@' . $group, $key);
+    $this->setAppEncryptionKey($key);
+    $this->appAsymmetricCryptor = $cryptor;
+    $this->userId = $userId;
+    $this->appKeyBound = true;
+    $this->eventDispatcher->dispatchTyped(new EncryptionServiceBoundEvent($userId));
+  }
+
+  /** @return bool Whether app services can access their database and keys. */
+  public function appBound(): bool
+  {
+    return $this->bound() || ($this->appKeyBound
+      && $this->getAppEncryptionKey() !== null
+      && $this->getAppEncryptionKey() !== ''
+      && $this->appAsymmetricCryptor?->canDecrypt()
+      && $this->appAsymmetricCryptor?->canEncrypt());
   }
 
   /**
@@ -206,7 +252,7 @@ class EncryptionService
   /** @return null|string Bound user id if any. */
   public function getUserId():?string
   {
-    return $this->bound() ? $this->userId : null;
+    return $this->appBound() ? $this->userId : null;
   }
 
   /** @return string App encryption key */
@@ -438,6 +484,9 @@ class EncryptionService
    */
   public function getSharedPrivateValue(string $key, mixed $default = null)
   {
+    if (!$this->bound()) {
+      throw new Exceptions\EncryptionKeyException('User-private credentials are unavailable.');
+    }
     return $this->asymKeyService->getSharedPrivateValue($this->userId, $key, $default);
   }
 
@@ -482,7 +531,7 @@ class EncryptionService
    */
   public function encryptionKeyValid(?string $encryptionKey = null):bool
   {
-    if (!$this->bound()) {
+    if (!$this->appBound()) {
       throw new Exceptions\EncryptionKeyException($this->l->t('Cannot validate app encryption key without bound user credentials'));
     }
 

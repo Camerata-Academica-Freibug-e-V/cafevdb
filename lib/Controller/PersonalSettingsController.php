@@ -1572,6 +1572,7 @@ class PersonalSettingsController extends Controller
             /** @var CloudUserConnectorService $userConnectorService */
             $userConnectorService = $this->di(CloudUserConnectorService::class);
             list('hints' => $hints,) = $userConnectorService->checkRequirements($newValue);
+            $userConnectorService->removeWopiCredentialsView($oldValue);
             $userConnectorService->removeUserSqlViews($oldValue);
             $userConnectorService->updateUserSqlViews($newValue);
             $userConnectorService->writeUserSqlConfig($newValue);

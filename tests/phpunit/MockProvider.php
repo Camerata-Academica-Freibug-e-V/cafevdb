@@ -56,6 +56,7 @@ use Psr\Log\LoggerInterface;
 
 use OCA\CAFEVDB\Service\Finance\BankAccountValidator;
 use OCA\CAFEVDB\Service\Finance\BankAgency;
+use OCA\CAFEVDB\Service\WopiRequestService;
 
 use OCA\RotDrop\Tests\AbstractMockProvider;
 use OCA\RotDrop\Tests\Logger;
@@ -257,6 +258,7 @@ class MockProvider extends AbstractMockProvider
       userSession: $this->getUserSession(),
       cryptoFactory: $this->getCryptoFactory(),
       credentialsStore: $this->getCredentialsStore(),
+      wopiRequestService: $this->createStub(WopiRequestService::class),
     );
 
     $this->instances[$className] = $instance;
