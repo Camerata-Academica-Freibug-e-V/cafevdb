@@ -27,7 +27,6 @@ namespace OCA\CAFEVDB\Settings;
 use OCA\RotDrop\DevScripts\PhpToTypeScript;
 
 use Throwable;
-use Psr\Container\ContainerInterface;
 
 use OCP\AppFramework\Services\IInitialState;
 use OCP\App\IAppManager;
@@ -101,7 +100,6 @@ class Admin implements IDelegatedSettings
     private IAppManager $appManager,
     private CloudUserConnectorService $cloudUserConnector,
     private FontService $fontService,
-    private ContainerInterface $appContainer,
   ) {
     $this->l = $this->l10n();
   }
@@ -163,7 +161,7 @@ class Admin implements IDelegatedSettings
     ]);
 
     $this->initialState->provideInitialState(self::INITIAL_STATE_SECTION, $configData);
-    $this->appContainer->get(OrchestraSettingsInitialState::class)->publish();
+    $this->di(OrchestraSettingsInitialState::class)->publish();
 
     Util::addScript($this->appName(), $this->assetService->getJSAsset(self::TEMPLATE));
     Util::addStyle($this->appName(), $this->assetService->getCSSAsset(self::TEMPLATE));
