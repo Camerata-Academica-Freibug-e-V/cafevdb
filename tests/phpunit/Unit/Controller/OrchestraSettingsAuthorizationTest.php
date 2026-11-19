@@ -11,6 +11,7 @@ namespace OCA\CAFEVDB\Tests\Unit\Controller;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use ReflectionClass;
 use ReflectionMethod;
 
 use OC\AppFramework\Middleware\Security\Exceptions\NotAdminException;
@@ -59,7 +60,7 @@ class OrchestraSettingsAuthorizationTest extends TestCase
       $l10n,
       $this->createStub(LoggerInterface::class),
     );
-    $controller = (new \ReflectionClass(OrchestraSettingsController::class))->newInstanceWithoutConstructor();
+    $controller = (new ReflectionClass(OrchestraSettingsController::class))->newInstanceWithoutConstructor();
     if (!$allowed) {
       $this->expectException(NotAdminException::class);
     }

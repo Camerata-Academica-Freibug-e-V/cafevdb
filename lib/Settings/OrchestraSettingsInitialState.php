@@ -463,7 +463,6 @@ class OrchestraSettingsInitialState
       'adminSettings',
       $adminSettings,
     );
-
   }
 
   /**

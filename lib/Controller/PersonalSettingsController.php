@@ -281,5 +281,4 @@ class PersonalSettingsController extends Controller
     }
     return self::grumble($this->l->t('Unknown Request: "%s"', $parameter));
   }
-
 }
