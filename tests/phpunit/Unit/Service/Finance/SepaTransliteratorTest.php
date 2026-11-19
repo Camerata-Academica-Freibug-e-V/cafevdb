@@ -112,5 +112,4 @@ class SepaTransliteratorTest extends TestCase
     $bad = $this->transliterator->validate(implode('', array_keys(SepaTransliterator::TRANSLIT_EXTRA)));
     $this->assertEquals(false, $bad);
   }
-
 }

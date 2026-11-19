@@ -37,10 +37,22 @@ class MountTestWopi
   ) {
   }
 
-  public function getTokenType(): int { return $this->type; }
-  public function getEditorUid(): string { return $this->editor; }
-  public function getUserForFileAccess(): string { return $this->fileUser; }
-  public function getExpiry(): int { return $this->expiry; }
+  public function getTokenType(): int
+  {
+    return $this->type;
+  }
+  public function getEditorUid(): string
+  {
+    return $this->editor;
+  }
+  public function getUserForFileAccess(): string
+  {
+    return $this->fileUser;
+  }
+  public function getExpiry(): int
+  {
+    return $this->expiry;
+  }
 }
 
 class MountTestWopiMapper
@@ -113,7 +125,9 @@ class MountAuthenticationServiceTest extends TestCase
       return $bound ? 'alice' : null;
     });
     $this->encryption->expects($this->once())->method('bindWithAppKey')->with('alice', 'app-key')
-      ->willReturnCallback(function() use (&$bound): void { $bound = true; });
+      ->willReturnCallback(function() use (&$bound): void {
+        $bound = true;
+      });
     $this->store->expects($this->once())->method('recover')->with('wopi-token', 'alice', 2000000000)->willReturn('app-key');
     $this->session->expects($this->never())->method('login');
     $this->session->expects($this->once())->method('setUser')->with($this->user);

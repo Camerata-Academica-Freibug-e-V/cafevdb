@@ -23,6 +23,7 @@ use OCA\CAFEVDB\Wrapped\Doctrine\Migrations\MigratorConfiguration;
 use OCA\CAFEVDB\Wrapped\Doctrine\Migrations\Version\Version;
 use OCP\IConfig;
 use OCP\IL10N;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -97,8 +98,8 @@ class Version20261118191044Test extends TestCase
       return match ($id) {
         IConfig::class => $config,
         'AppName' => 'cafevdb',
-        WopiCredentialsViewService::class => $database !== '' ? $connector : throw new \LogicException('Unexpected connection'),
-        default => throw new \LogicException('Unexpected service: ' . $id),
+        WopiCredentialsViewService::class => $database !== '' ? $connector : throw new LogicException('Unexpected connection'),
+        default => throw new LogicException('Unexpected service: ' . $id),
       };
     });
     $migration = $this->migration($container);

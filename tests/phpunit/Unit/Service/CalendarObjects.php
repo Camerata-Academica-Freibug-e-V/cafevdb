@@ -24,6 +24,7 @@
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
 use OCP\IL10N;
+use RuntimeException;
 
 /**
  * Some database rows in order to have some data to for testing. This is from the oc_calendarobjects table.
@@ -830,8 +831,7 @@ END:VCALENDAR',
           }
         }
         if (!$found) {
-          print_r($row);
-          exit(1);
+          throw new RuntimeException('No calendar matched the calendar data: ' . var_export($row, true));
         }
         $row['calendardata'] = $calendarData;
         return $row;

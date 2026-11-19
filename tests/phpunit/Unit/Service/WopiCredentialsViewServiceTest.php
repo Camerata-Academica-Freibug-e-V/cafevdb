@@ -16,8 +16,10 @@ use OCP\IL10N;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 use OCA\CAFEVDB\Database\Connection;
+use OCA\CAFEVDB\Exceptions\DatabaseCloudConnectorViewException;
 use OCA\CAFEVDB\Service\EncryptionService;
 use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\CAFEVDB\Service\WopiCredentialsViewService;
@@ -57,7 +59,7 @@ class WopiCredentialsViewServiceTest extends TestCase
     try {
       $service->updateWopiCredentialsView('next');
       self::fail('Expected view provisioning to fail.');
-    } catch (\OCA\CAFEVDB\Exceptions\DatabaseCloudConnectorViewException) {
+    } catch (DatabaseCloudConnectorViewException) {
       self::assertCount(4, $events);
       self::assertStringStartsWith('GRANT SELECT ON', $events[3]);
     }
@@ -88,7 +90,7 @@ class WopiCredentialsViewServiceTest extends TestCase
       static function(string $sql) use (&$events, $failOnSelectGrant): int {
         $events[] = $sql;
         if ($failOnSelectGrant && str_starts_with($sql, 'GRANT SELECT')) {
-          throw new \RuntimeException('Grant denied.');
+          throw new RuntimeException('Grant denied.');
         }
         return 0;
       },

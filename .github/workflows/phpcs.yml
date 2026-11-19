@@ -31,3 +31,10 @@ jobs:
 
       - name: Check lib/
         run: vendor-bin/phpcs/vendor/bin/phpcs --standard=.phpcs.xml --extensions=php --runtime-set ignore_warnings_on_exit 1 --ignore='lib/Service/IMAP/*,lib/Legacy/PhpMyEdit/*,lib/Database/Doctrine/ORM/Proxies/*' lib/
+
+      - name: Check tests/phpunit/
+        run: >-
+          vendor-bin/phpcs/vendor/bin/phpcs --standard=.phpcs.xml --extensions=php
+          --runtime-set ignore_warnings_on_exit 1
+          --exclude=Generic.Commenting.DocComment,PEAR.Commenting.ClassComment,PEAR.Commenting.FileComment,PEAR.Commenting.FunctionComment,PEAR.Commenting.InlineComment,Squiz.Commenting.FunctionComment,PSR1.Classes.ClassDeclaration,PSR1.Files.SideEffects
+          tests/phpunit/

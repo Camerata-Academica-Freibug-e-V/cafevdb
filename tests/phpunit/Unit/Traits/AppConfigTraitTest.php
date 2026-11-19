@@ -242,7 +242,6 @@ class AppConfigTraitTest extends TestCase
         $default,
       ),
     );
-
   }
 
   /** @return void */

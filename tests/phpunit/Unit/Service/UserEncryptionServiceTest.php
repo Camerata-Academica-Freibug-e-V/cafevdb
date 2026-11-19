@@ -13,6 +13,7 @@ use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use RuntimeException;
 
 use OCA\CAFEVDB\Crypto\AsymmetricKeyService;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
@@ -129,7 +130,8 @@ class UserEncryptionServiceTest extends TestCase
     $this->entityManager->expects(self::once())->method('beginTransaction');
     $this->entityManager->expects(self::once())->method('flush');
     $this->entityManager->expects(self::once())->method('commit');
-    $onEntity = static function(object $entity): void {};
+    $onEntity = static function(object $entity): void {
+    };
     $this->entityManager->expects(self::once())->method('recryptEntityList')->with($entities, null, null, $onEntity);
     self::assertFalse($this->service->recrypt('member', onEntity: $onEntity));
     self::assertSame([false, true], $this->filterStates);
@@ -141,13 +143,13 @@ class UserEncryptionServiceTest extends TestCase
     $this->musician();
     $this->authorization->method('getUserPermissions')->willReturn(AuthorizationService::PERMISSION_NONE);
     $this->expectNoWrites();
-    $error = new \RuntimeException('Preview failed');
+    $error = new RuntimeException('Preview failed');
     try {
       $this->service->recrypt('member', true, static function(object $entity) use ($error): void {
         throw $error;
       });
       self::fail('The callback failure must propagate.');
-    } catch (\RuntimeException $exception) {
+    } catch (RuntimeException $exception) {
       self::assertSame($error, $exception);
     }
     self::assertSame([false, true], $this->filterStates);

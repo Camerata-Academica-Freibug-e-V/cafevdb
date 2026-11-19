@@ -10,6 +10,7 @@ use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'scoped_doctrine_smoke')]
 class ScopedDoctrineEntity
 {
+  /** @SuppressWarnings(PHPMD.UnusedPrivateField) */
   #[ORM\Id]
   #[ORM\GeneratedValue]
   #[ORM\Column(type: 'integer')]

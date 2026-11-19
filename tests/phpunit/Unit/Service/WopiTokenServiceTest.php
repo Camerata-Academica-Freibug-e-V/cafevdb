@@ -31,16 +31,34 @@ class IssuedWopiToken
   public int $type = self::TOKEN_TYPE_USER;
   public string $editor = 'alice';
   public string $fileUser = 'alice';
-  public function getTokenType(): int { return $this->type; }
-  public function getEditorUid(): string { return $this->editor; }
-  public function getUserForFileAccess(): string { return $this->fileUser; }
-  public function getFileid(): int { return 42; }
-  public function getExpiry(): int { return 2000000000; }
+  public function getTokenType(): int
+  {
+    return $this->type;
+  }
+  public function getEditorUid(): string
+  {
+    return $this->editor;
+  }
+  public function getUserForFileAccess(): string
+  {
+    return $this->fileUser;
+  }
+  public function getFileid(): int
+  {
+    return 42;
+  }
+  public function getExpiry(): int
+  {
+    return 2000000000;
+  }
 }
 
 class IssuedWopiMapper
 {
-  public function getWopiForToken(string $token): IssuedWopiToken { return new IssuedWopiToken(); }
+  public function getWopiForToken(string $token): IssuedWopiToken
+  {
+    return new IssuedWopiToken();
+  }
 }
 
 #[CoversClass(WopiTokenService::class)]
