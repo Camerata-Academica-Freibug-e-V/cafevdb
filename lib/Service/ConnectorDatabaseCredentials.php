@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */

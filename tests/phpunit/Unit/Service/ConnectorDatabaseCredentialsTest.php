@@ -114,5 +114,4 @@ class ConnectorDatabaseCredentialsTest extends TestCase
 
     $service->checkViews($credentials, 'view`db', ['RestrictedView']);
   }
-
 }

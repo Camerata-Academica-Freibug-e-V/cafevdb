@@ -24,6 +24,7 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
+use ArrayObject;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -372,7 +373,7 @@ class CloudUserConnectorServiceTest extends TestCase
       'db.ssl_ca' => 'ca.pem',
       'opt.safe_store' => '1',
     ];
-    $properties = new \ArrayObject($connectionSettings);
+    $properties = new ArrayObject($connectionSettings);
     $container = $this->mockProvider->getAppContainer();
     $service = $this->getMockBuilder(CloudUserConnectorService::class)
       ->setConstructorArgs([

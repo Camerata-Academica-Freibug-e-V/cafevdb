@@ -30,6 +30,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use PHP_IBAN;
 use RuntimeException;
+use SensitiveParameter;
 use Throwable;
 
 use OCA\RotDrop\DevScripts\PhpToTypeScript;
@@ -148,7 +149,7 @@ class OrchestraSettingsController extends Controller
     url: '/' . self::BASE_PATH . '/' . self::END_POINT_APP_SET . '/{parameter}',
   )]
   #[CoreAttributes\NoAdminRequired]
-  public function setApp(string $parameter, #[\SensitiveParameter] mixed $value = null): Http\Response
+  public function setApp(string $parameter, #[SensitiveParameter] mixed $value = null): Http\Response
   {
     switch ($parameter) {
       case ConfigConstants::ORCHESTRA_LOCALE_KEY: // could check for valid locale ...
@@ -2300,7 +2301,7 @@ class OrchestraSettingsController extends Controller
    *
    * @return Http\Response
    */
-  private function setWopiConnectorCredentials(#[\SensitiveParameter] mixed $value): Http\Response
+  private function setWopiConnectorCredentials(#[SensitiveParameter] mixed $value): Http\Response
   {
     if ($value !== null && (!is_array($value)
         || !is_string($value['user'] ?? null)

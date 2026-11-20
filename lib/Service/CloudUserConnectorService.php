@@ -30,6 +30,7 @@ use UnexpectedValueException;
 
 use Psr\Container\ContainerInterface;
 use OCP\App\IAppManager;
+use OCP\AppFramework\App;
 use OCP\IConfig;
 use OCP\IL10N;
 use Psr\Log\LoggerInterface as ILogger;
@@ -47,6 +48,7 @@ use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\RequestService;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Exception\DriverException as DBALDriverException;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Platforms;
+use OCA\UserSQL\Properties as UserSqlProperties;
 
 /**
  * Manage database-views and grants in order to selectively provide only the
@@ -435,8 +437,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
     ?string $dataBaseName,
     ?array $account = null,
     bool $checkAccess = false,
-  ):void
-  {
+  ):void {
     $cloudDbUser = $this->connectorGrantee($account);
     $currentStatement = null;
     try {
@@ -639,6 +640,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
    * config space.
    *
    * @param bool $erase
+   *
    * @return array
    */
   public function configureCloudUserBackend(bool $erase = false):array
@@ -725,7 +727,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
   /** @return \ArrayAccess The user_sql app's settings storage. */
   protected function userSqlProperties(): \ArrayAccess
   {
-    return (new \OCP\AppFramework\App(self::CLOUD_USER_BACKEND))->getContainer()->get(\OCA\UserSQL\Properties::class);
+    return (new App(self::CLOUD_USER_BACKEND))->getContainer()->get(UserSqlProperties::class);
   }
 
   /** @return void */
@@ -1206,8 +1208,7 @@ SELECT t.* FROM " . $table . " t";
     ?string $dataBaseName,
     ?array $account = null,
     bool $checkAccess = false,
-  ):void
-  {
+  ):void {
     $cloudDbUser = $this->connectorGrantee($account);
     $statements = $this->generateMusicianPersonalizedViewsStatements($dataBaseName, $cloudDbUser);
     $currentStatement = null;

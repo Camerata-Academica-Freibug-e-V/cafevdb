@@ -129,8 +129,7 @@ class WopiCredentialsViewServiceTest extends TestCase
     bool $failOnSelectGrant = false,
     ?ConnectorDatabaseCredentials $credentialStore = null,
     string $dbType = 'mysql',
-  ): WopiCredentialsViewService
-  {
+  ): WopiCredentialsViewService {
     $connection = $this->createStub(Connection::class);
     $connection->method('quote')->willReturnCallback(static fn(string $value): string => "'" . $value . "'");
     $connection->method('executeStatement')->willReturnCallback(

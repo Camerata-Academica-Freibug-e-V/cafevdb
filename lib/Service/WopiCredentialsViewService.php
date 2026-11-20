@@ -50,8 +50,7 @@ class WopiCredentialsViewService
     ?string $database,
     #[SensitiveParameter] ?array $credentials = null,
     bool $checkAccess = false,
-  ): void
-  {
+  ):void {
     $previousCredentials = $this->connectorCredentials->load(ConnectorDatabaseCredentials::WOPI);
     $grantee = $this->grantee($credentials ?? $previousCredentials);
     $appDbName = $this->encryptionService->getConfigValue(ConfigConstants::APP_DB_NAME);
