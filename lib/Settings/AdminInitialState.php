@@ -33,7 +33,7 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\DTO\AbstractDTO;
 class AdminInitialState extends AbstractDTO
 {
   /** @var array<string, FontFileNames> */
-  #[PhpToTypeScript\Attributes\LiteralTypeScriptType("Partial<typeof Service.FontService.FONT_FILE_NAMES>")]
+  // #[PhpToTypeScript\Attributes\LiteralTypeScriptType("Partial<typeof Service.FontService.FONT_FILE_NAMES>")]
   public readonly array $officeFonts;
 
   /** {@inheritdoc} */
