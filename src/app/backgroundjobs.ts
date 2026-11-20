@@ -49,7 +49,7 @@ const runner = async function() {
       await axios.get(url);
       console.info('Successful return from background jobs.');
     } catch (error) {
-      if (!isAxiosError(error) || (error.status !== 429)) {
+      if (!isAxiosError(error) || !(error.status === 429 || error.status === 403)) {
         console.info('Failed running background jobs', error);
       }
     } finally {
