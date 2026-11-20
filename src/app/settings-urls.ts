@@ -29,9 +29,11 @@ import type { UrlOptions } from '@nextcloud/router';
 import type { EnumPersonalSettingsKey } from '../../build/ts-types/php-modules/Controller.ts';
 
 import {
-  BASE_PATH,
   END_POINT_APP_GET,
   END_POINT_APP_SET,
+} from '../../build/ts-types/php-modules/Controller/OrchestraSettingsController.ts';
+import {
+  BASE_PATH,
   END_POINT_GET,
   END_POINT_PERSONAL_SET,
 } from '../../build/ts-types/php-modules/Controller/PersonalSettingsController.ts';

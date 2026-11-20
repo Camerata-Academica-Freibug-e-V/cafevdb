@@ -22,15 +22,8 @@
  -->
 <template>
   <div class="templateroot personal-settings">
-    <div class="personal-settings-content" :class="{ 'with-wide-margin': isGroupAdmin }">
-      <component :is="tabComponents[tab.key]"
-                 v-for="tab in tree"
-                 :key="tab.key"
-                 :entry="tab"
-                 @error="handleSettingsError"
-      />
-    </div>
-    <SettingsNavigation v-if="isGroupAdmin" :tree="tree" />
+    <UserSettings :entry="getPersonalSettingsEntry()" @error="handleSettingsError" />
+    <AboutSettings :entry="getAboutSettingsEntry()" />
     <div v-if="!!appError" class="flex-container flex-justify-center">
       <ErrorPageModal :show="!!appError"
                       :error="appError"
@@ -41,26 +34,16 @@
 </template>
 
 <script setup lang="ts">
-import type { Component } from 'vue'
-
 import { translate as t } from '@nextcloud/l10n'
 import { onUnmounted, ref } from 'vue'
 import ErrorPageModal from './ErrorPageModal.vue'
-import AboutSettings from './personal-settings/AboutSettings.vue'
-import CmsSettings from './personal-settings/CmsSettings.vue'
-import DevelopmentSettings from './personal-settings/DevelopmentSettings.vue'
-import EmailSettings from './personal-settings/EmailSettings.vue'
-import GeneralSettings from './personal-settings/GeneralSettings.vue'
-import OrchestraSettings from './personal-settings/OrchestraSettings.vue'
-import SettingsNavigation from './personal-settings/SettingsNavigation.vue'
-import SharingSettings from './personal-settings/SharingSettings.vue'
-import UserSettings from './personal-settings/UserSettings.vue'
+import AboutSettings from './settings/AboutSettings.vue'
+import UserSettings from './settings/UserSettings.vue'
 import { appName as appId } from '../config.ts'
 import useErrorHandlerStore from '../stores/error-handler.ts'
 import { AppError } from '../toolkit/types/errors.ts'
-import getInitialState from '../toolkit/util/initial-state.ts'
 import Console from '../util/console.ts'
-import { getSettingsTree } from './personal-settings/settings-tree.ts'
+import { getAboutSettingsEntry, getPersonalSettingsEntry } from './settings/settings-tree.ts'
 
 const COMPONENT_NAME = 'PersonalSettings'
 const logger = new Console(COMPONENT_NAME)
@@ -86,21 +69,6 @@ const handleSettingsError = (error: Error) => {
   ))
 }
 
-const initialState = getInitialState<{ isGroupAdmin?: boolean }>({ section: 'CAFEVDB', defaults: {} })
-const isGroupAdmin = !!initialState?.isGroupAdmin
-
-const tree = getSettingsTree(isGroupAdmin)
-const tabComponents: Record<string, Component> = {
-  user: UserSettings,
-  general: GeneralSettings,
-  orchestra: OrchestraSettings,
-  sharing: SharingSettings,
-  email: EmailSettings,
-  cms: CmsSettings,
-  development: DevelopmentSettings,
-  about: AboutSettings,
-}
-
 onUnmounted(() => {
   errorHandlerProvider.popHandler()
 })
@@ -108,20 +76,6 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .personal-settings {
-  display: flex;
-  align-items: flex-start;
-
-  .personal-settings-content {
-    flex: 1 1 auto;
-    min-width: 0;
-
-    // Leave room for the app-navigation toggle which is rendered by the server.
-    @media only screen and (width >= 1024px) {
-      &.with-wide-margin :deep(.settings-section) {
-        margin-left: calc(var(--default-grid-baseline) * 10);
-        width: min(900px, 100% - var(--default-grid-baseline) * 17);
-      }
-    }
-  }
+  min-width: 0;
 }
 </style>

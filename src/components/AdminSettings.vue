@@ -21,446 +21,471 @@
  - along with this program. If not, see <http://www.gnu.org/licenses/>.
  -->
 <template>
-  <div class="templateroot" :class="[...cloudVersionClasses]">
-    <NcSettingsSection class="major" :name="t(appId, 'Camerata DB')">
-      <div v-if="config.isAdmin">
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <p class="info" v-html="forword" />
-        <hr>
-      </div>
-      <div>
-        <SelectWithSubmitButton v-model="settings.userAndGroupBackend"
-                                inputId="user-and-group-backend-select"
-                                :inputLabel="t(appId, 'User and group backend')"
-                                :hint="hints['settings:admin:user-and-group-backend']"
-                                :required="true"
+  <div class="templateroot admin-settings" :class="[...cloudVersionClasses]">
+    <div class="admin-settings-content">
+      <NcSettingsSection id="admin-settings-backend" class="major" :name="t(appId, 'Camerata DB')">
+        <div v-if="config.isAdmin">
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <p class="info" v-html="forword" />
+          <hr>
+        </div>
+        <div>
+          <SelectWithSubmitButton v-model="settings.userAndGroupBackend"
+                                  inputId="user-and-group-backend-select"
+                                  :inputLabel="t(appId, 'User and group backend')"
+                                  :hint="hints['settings:admin:user-and-group-backend']"
+                                  :required="true"
+                                  :clearable="false"
+                                  :options="config.userAndGroupBackends"
+                                  :multiple="false"
+                                  :loading="loading.settings"
+                                  :disabled="loading.general || !config.isAdmin"
+                                  @update="saveSetting('userAndGroupBackend')"
+                                  @error="showErrorToast"
+          >
+            <template #actions>
+              <NcActionButton v-tooltip="hints['settings:admin:user-backend:move-users']"
+                              icon="icon-play"
+                              @click="synchronizeUserBackends"
+              >
+                {{ t(appId, 'Sychronize User Backends') }}
+              </NcActionButton>
+            </template>
+          </SelectWithSubmitButton>
+        </div>
+        <div v-if="config.isSubAdmin || config.isAdmin">
+          <SettingsSelectGroup v-model="settings.orchestraUserGroup"
+                               :label="t(appId, 'User Group')"
+                               :hint="hints['settings:admin:user-group']"
+                               :multiple="false"
+                               :required="true"
+                               :loading="loading.settings"
+                               :disabled="loading.general || !config.isAdmin"
+                               @update="saveSetting('orchestraUserGroup')"
+                               @error="showErrorToast"
+          />
+          <SettingsSelectUsers v-model="settings.orchestraUserGroupAdmins"
+                               :label="t(appId, 'User Group Admins')"
+                               :hint="hints['settings:admin:user-group:admins']"
+                               :loading="loading.settings"
+                               :disabled="loading.general || groupAdminsDisabled"
+                               :required="true"
+                               @input="logger.info"
+                               @update="saveSetting('orchestraUserGroupAdmins')"
+                               @error="showErrorToast"
+          />
+        </div>
+        <div v-if="settings.orchestraUserGroup && (config.isSubAdmin || config.isAdmin)">
+          <ul class="orchestra-groups">
+            <NcListItem v-for="(group, gid) in orchestraGroups"
+                        :key="gid"
+                        :name="group.displayname + (gid !== group.displayname ? ' (' + gid + ')' : '')"
+                        :bold="true"
+                        :forceDisplayActions="true"
+                        :details="group.backends.join(', ')"
+                        :counterNumber="group.usercount"
+                        counterType="highlighted"
+            >
+              <template #icon>
+                <GroupIcon :size="24" />
+              </template>
+              <template #subname>
+                {{ group?.users?.join(', ') || '' }}
+              </template>
+              <template #indicator>
+                <CheckboxBlankCircle v-if="group.status === 'inaccessible'" :size="16" fillColor="red" />
+                <CheckboxBlankCircle v-else-if="group.disabled" :size="16" fillColor="yellow" />
+                <CheckboxBlankCircle v-else-if="group.backends.indexOf(settings.userAndGroupBackend) == -1"
+                                     :size="16"
+                                     fillColor="purple"
+                />
+                <CheckboxBlankCircle v-else :size="16" fillColor="green" />
+              </template>
+              <template #actions>
+                <NcActionButton :disabled="group.status !== 'inaccessible' || group.backends.length > 0"
+                                @click="createGroup(group.id)"
+                >
+                  {{ t(appId, 'Create Group') }}
+                </NcActionButton>
+                <NcActionButton>
+                  Button two
+                </NcActionButton>
+                <NcActionButton>
+                  Button three
+                </NcActionButton>
+              </template>
+            </NcListItem>
+          </ul>
+        </div>
+        <div v-if="config.isSubAdmin || config.isAdmin">
+          <label for="wiki-name-space">
+            {{ t(appId, 'Wiki Name-Space') }}
+          </label>
+          <!-- Note: v-model does not work here -->
+          <TextField id="wiki-name-space"
+                     v-model="settings.wikiNameSpace"
+                     type="text"
+                     :label="t(appId, 'Wiki Name-Space')"
+                     :hint="hints['settings:admin:wiki-name-space']"
+                     :disabled="loading.general || !config.isAdmin"
+                     @submit="saveSetting('wikiNameSpace', settings.wikiNameSpace)"
+          />
+        </div>
+      </NcSettingsSection>
+      <NcSettingsSection v-if="config.isSubAdmin" id="admin-settings-configure-user-backend" :name="t(appId, 'Configure User Backend')">
+        <div>
+          <button type="button"
+                  name="cloudUserBackendConfig"
+                  value="update"
+                  :disabled="!config.haveCloudUserBackendConfig"
+                  @click="saveSetting('haveCloudUserBackendConfig')"
+          >
+            {{ t(appId, 'Autoconfigure "{cloudUserBackend}" app', { cloudUserBackend: config.cloudUserBackend }) }}
+          </button>
+          <p class="hint">
+            {{ hints['settings:admin:cloud-user-backend-conf'] }}
+          </p>
+        </div>
+      </NcSettingsSection>
+      <NcSettingsSection v-if="config.isSubAdmin"
+                         id="admin-settings-recryption"
+                         class="sub-admin"
+                         :class="[{ 'icon-loading': loading.recryption }]"
+                         :name="t(appId, 'Recryption Requests')"
+      >
+        <div v-for="(request, userId) in recryption.requests" :key="request.id" class="recryption-request-container">
+          <input :id="['mark', userId].join('-')"
+                 v-model="recryption.requests[userId].marked"
+                 type="checkbox"
+                 class="checkbox request-mark"
+                 @change="markRecryptionRequest"
+          >
+          <label :for="['mark', userId].join('-')" />
+          <NcActions>
+            <NcActionButton icon="icon-confirm" @click="handleRecryptionRequest(userId)">
+              {{ t(appId, 'recrypt') }}
+            </NcActionButton>
+            <NcActionButton icon="icon-delete" @click="deleteRecryptionRequest(userId)">
+              {{ t(appId, 'reject') }}
+            </NcActionButton>
+          </NcActions>
+          <div class="recryption-request-data flex-container flex-justify-left flex-align-center" :class="[{ marked: request.marked }]">
+            <span class="first visible display-name" :title="userId">{{ request.displayName }}</span>
+            <span class="following visible time-stamp">{{ formatDate(request.timeStamp, 'LLL') }}</span>
+            <span class="following user-tag organizer" :class="[{ visible: request.isOrganizer, invisible: !request.isOrganizer }]">{{
+              t(appId, 'organizer') }}</span>
+            <span class="following user-tag group-admin" :class="[{ visible: request.isGroupAdmin, invisible: !request.isGroupAdmin }]">{{
+              t(appId, 'group-admin') }}</span>
+          </div>
+        </div>
+        <div v-if="Object.keys(recryption.requests).length > 0" class="bulk-operations flex-container flex-align-center">
+          <input id="mark-all"
+                 v-model="recryption.allRequestsMarked"
+                 type="checkbox"
+                 class="checkbox request-mark"
+                 @change="markAllRecryptionRequests"
+          >
+          <label class="bulk-operation-mark" for="mark-all">{{ t(appId, 'mark/unmark all.') }}</label>
+          <span class="bulk-operation-title">
+            {{ t(appId, 'With the marked requests perform the following action:') }}
+          </span>
+          <NcActions>
+            <NcActionButton icon="icon-confirm" @click="handleMarkedRecrytpionRequests">
+              {{ t(appId, 'recrypt') }}
+            </NcActionButton>
+            <NcActionButton icon="icon-delete" @click="deleteMarkedRecryptionRequests">
+              {{ t(appId, 'reject') }}
+            </NcActionButton>
+          </NcActions>
+        </div>
+        <div v-else>
+          <span class="hint">{{ t(appId, 'No recryption requests are pending.') }}</span>
+        </div>
+      </NcSettingsSection>
+      <NcSettingsSection v-if="config.isSubAdmin"
+                         id="admin-settings-access-control"
+                         class="sub-admin"
+                         :name="t(appId, 'Access Control')"
+      >
+        <SelectMusicians v-model="access.musicians"
+                         :tooltip="access.musicians.length ? false : hints['settings:admin:access-control:musicians']"
+                         :label="t(appId, 'Musicians')"
+                         :placeholder="t(appId, 'e.g. Jane Doe')"
+                         :multiple="true"
+                         :deselectFromDropdown="true"
+                         :closeOnSelect="false"
+                         :submitButton="false"
+                         :clearButton="true"
+                         :projectId="projectId"
+                         searchScope="musicians"
+        />
+        <SelectProjects v-model="access.project"
+                        :tooltip="hints['settings:admin:access-control:project-restriction']"
+                        :label="t(appId, 'Restrict User Selection to Project')"
+                        :placeholder="t(appId, 'e.g. Auvergne2019')"
+                        :multiple="false"
+                        :submitButton="false"
+        />
+        <input id="include-disabled"
+               v-model="access.includeDeactivated"
+               type="checkbox"
+               class="checkbox access-flags"
+               :disabled="!applyAccessToAll"
+        >
+        <label for="include-disabled" class="access-flags checkbox-label">
+          {{ t(appId, 'include disabled accounts') }}
+        </label>
+        <input id="include-deactivated"
+               v-model="access.includeDisabled"
+               type="checkbox"
+               class="checkbox access-flags"
+               :disabled="!applyAccessToAll"
+        >
+        <label for="include-deactivated" class="access-flags checkbox-label">
+          {{ t(appId, 'include deactivated accounts') }}
+        </label>
+        <span v-if="showAccessActionProgress">
+          <div class="access-action-status">
+            <span class="access-action-text">{{ accessActionLabel }}</span>
+            <button v-if="accessActionFinished"
+                    class="button primary access-action-clear"
+                    :title="t(appId, 'Remove the status feedback from the last action.')"
+                    @click="hideAccessActionFeedback()"
+            >
+              {{ t(appId, 'Ok') }}
+            </button>
+            <span class="flex-spacer" />
+            <span class="access-action-counter">{{ accessActionCounter }}</span>
+          </div>
+          <NcProgressBar :value="accessActionPercentage" :error="accessActionError" size="medium" />
+        </span>
+        <span v-else class="flex-container flex-align-center flex-justify-start">
+          <span class="bulk-operation-title">
+            {{ t(appId, 'With the selected musicians perform the following action:') }}
+          </span>
+          <NcActions>
+            <NcActionButton icon="icon-disabled-user" @click="handleAccessAction('deny')">
+              {{ t(appId, 'deny access') }}
+            </NcActionButton>
+            <NcActionButton icon="icon-confirm" @click="handleAccessAction('grant')">
+              {{ t(appId, 'grant access') }}
+            </NcActionButton>
+          </NcActions>
+        </span>
+      </NcSettingsSection>
+      <NcNoteCard v-if="orchestraState?.error" type="error" class="orchestra-settings-error">
+        {{ orchestraState.error }}
+      </NcNoteCard>
+      <component :is="orchestraComponents[tab.key]"
+                 v-for="tab in orchestraTabs"
+                 :key="tab.key"
+                 :entry="tab"
+                 @error="handleSettingsError"
+      />
+      <NcSettingsSection v-if="config.isSubAdmin"
+                         id="admin-settings-finance"
+                         class="sub-admin finance"
+                         :name="t(appId, 'Finance')"
+      >
+        <div>
+          <label for="gnucash-participant-receivables-template">
+            {{ t(appId, 'GnuCash Participant Receivables Account') }}
+          </label>
+          <!-- Note: v-model does not work here -->
+          <TextField id="gnucash-participant-receivables-template"
+                     v-model="settings.gnuCashParticipantReceivablesAccount"
+                     type="text"
+                     :label="t(appId, 'GnuCash Participant Receivables Account')"
+                     :placeholder="t(appId, 'e.g. &quot;assets:receivables:participants:{PERSON}:{PROJECT}:{GENERATOR_TAG}&quot;.')"
+                     :hint="hints['settings:admin:gnu-cash:participant-receivables-account']"
+                     @submit="saveSetting('gnuCashParticipantReceivablesAccount', settings.gnuCashParticipantReceivablesAccount)"
+          />
+          <label for="gnucash-instrument-insurances-template">
+            {{ t(appId, 'GnuCash Instrument Insurances Balancing Account') }}
+          </label>
+          <!-- Note: v-model does not work here -->
+          <TextField id="gnucash-instrument-insurances-template"
+                     v-model="settings.gnuCashInstrumentInsuranceBalancingAccount"
+                     type="text"
+                     :label="t(appId, 'GnuCash Instrument Insurances Balancing Account')"
+                     :placeholder="t(appId, 'e.g. &quot;outside-capital:escrow-accounts:insurances:receivables:{BROKER}&quot;.')"
+                     :hint="hints['settings:admin:gnu-cash:instrument-insurance-balancing-account']"
+                     @submit="saveSetting('gnuCashInstrumentInsuranceBalancingAccount', settings.gnuCashInstrumentInsuranceBalancingAccount)"
+          />
+          <label for="gnucash-accounts-tree-data">
+            {{ t(appId, 'GnuCash Accounts Tree') }}
+          </label>
+          <!-- Note: v-model does not work here -->
+          <TextField id="gnucash-accounts-tree"
+                     v-model="settings.gnuCashAccountsTreeData"
+                     type="text"
+                     :label="t(appId, 'GnuCash Accounts Tree (CSV export)')"
+                     :placeholder="t(appId, 'e.g. &quot;{sharedFolder}/finance/ledger/accounts.csv&quot;.', config)"
+                     :hint="hints['settings:admin:gnu-cash:accounts-tree-data']"
+                     @submit="saveSetting('gnuCashAccountsTreeData', settings.gnuCashAccountsTreeData)"
+          >
+            <template #alignedAfter>
+              <NcActions>
+                <NcActionButton :name="t(appId, 'choose')"
+                                @click="openGnuCashAccountsPicker"
+                >
+                  <template #icon>
+                    <IconChooseGnuCashAccountsData />
+                  </template>
+                </NcActionButton>
+              </NcActions>
+            </template>
+          </TextField>
+        </div>
+      </NcSettingsSection>
+      <NcSettingsSection v-if="config.isSubAdmin"
+                         id="admin-settings-office-fonts"
+                         class="sub-admin fonts-container"
+                         :name="t(appId, 'Configure Office Fonts for Office Exports')"
+      >
+        <div>
+          <span class="file-name-label">{{ t(appId, 'Font Data Folder') }}</span>
+          <span class="file-name">{{ humanOfficeFontsFolder }}</span>
+        </div>
+        <SelectWithSubmitButton v-model="defaultOfficeFont"
+                                inputId="default-font"
+                                :labelOutside="true"
+                                :options="Object.values(config.officeFonts)"
+                                :loading="loading.fonts"
+                                label="family"
                                 :clearable="false"
-                                :options="config.userAndGroupBackends"
                                 :multiple="false"
-                                :loading="loading.settings"
-                                :disabled="loading.general || !config.isAdmin"
-                                @update="saveSetting('userAndGroupBackend')"
+                                :disabled="loading.general || loading.fonts"
+                                :submitButton="true"
+                                :clearAction="false"
+                                :resetAction="false"
+                                :resetState="savedDefaultOfficeFont"
+                                @update="saveSetting('defaultOfficeFont')"
                                 @error="showErrorToast"
         >
+          <template #alignedBefore>
+            <label for="default-font" class="default-font">
+              {{ t(appId, 'Default Font') }}
+            </label>
+          </template>
           <template #actions>
-            <NcActionButton v-tooltip="hints['settings:admin:user-backend:move-users']"
-                            icon="icon-play"
-                            @click="synchronizeUserBackends"
-            >
-              {{ t(appId, 'Sychronize User Backends') }}
+            <NcActionButton icon="icon-add" @click="updateFontData">
+              {{ t(appId, 'Update Font Data') }}
+            </NcActionButton>
+            <NcActionButton icon="icon-play" @click="rescanFontData">
+              {{ t(appId, 'Rescan Font Data') }}
+            </NcActionButton>
+            <NcActionButton icon="icon-delete" @click="purgeFontData">
+              {{ t(appId, 'Purge Font Data') }}
             </NcActionButton>
           </template>
         </SelectWithSubmitButton>
-      </div>
-      <div v-if="config.isSubAdmin || config.isAdmin">
-        <SettingsSelectGroup v-model="settings.orchestraUserGroup"
-                             :label="t(appId, 'User Group')"
-                             :hint="hints['settings:admin:user-group']"
-                             :multiple="false"
-                             :required="true"
-                             :loading="loading.settings"
-                             :disabled="loading.general || !config.isAdmin"
-                             @update="saveSetting('orchestraUserGroup')"
-                             @error="showErrorToast"
-        />
-        <SettingsSelectUsers v-model="settings.orchestraUserGroupAdmins"
-                             :label="t(appId, 'User Group Admins')"
-                             :hint="hints['settings:admin:user-group:admins']"
-                             :loading="loading.settings"
-                             :disabled="loading.general || groupAdminsDisabled"
-                             :required="true"
-                             @input="logger.info"
-                             @update="saveSetting('orchestraUserGroupAdmins')"
-                             @error="showErrorToast"
-        />
-      </div>
-      <div v-if="settings.orchestraUserGroup && (config.isSubAdmin || config.isAdmin)">
-        <ul class="orchestra-groups">
-          <NcListItem v-for="(group, gid) in orchestraGroups"
-                      :key="gid"
-                      :name="group.displayname + (gid !== group.displayname ? ' (' + gid + ')' : '')"
-                      :bold="true"
-                      :forceDisplayActions="true"
-                      :details="group.backends.join(', ')"
-                      :counterNumber="group.usercount"
-                      counterType="highlighted"
+      </NcSettingsSection>
+      <NcSettingsSection v-if="config.isSubAdmin"
+                         id="admin-settings-problem-reports"
+                         class="sub-admin problem-reports"
+                         :name="t(appId, 'Configure Problem Report Handling')"
+      >
+        <div class="problem-report email-recipient" :class="['verification-status-' + settings.problemReportEmailRecipientStatus]">
+          <TextField v-model="settings.problemReportEmailRecipient"
+                     :disabled="settings.problemReportEmailRecipientStatus === 'pending'"
+                     type="text"
+                     :label="t(appId, 'Problem Report Email Recipient')"
+                     class="recipient-email-address"
+                     :showTrailingButton="true"
+                     trailingButtonIcon="arrowRight"
+                     :helperText="hints['settings:admin:problem-report:email:recipient']"
+                     :success="settings.problemReportEmailRecipientStatus === 'verified'"
+                     :error="settings.problemReportEmailRecipientStatus === 'failed'"
+                     @submit="saveProblemReportEmailRecipient"
           >
-            <template #icon>
-              <GroupIcon :size="24" />
+            <IconEmailVerified v-if="settings.problemReportEmailRecipientStatus === 'verified'"
+                               v-tooltip="hints['settings:admin:problem-report:email:verification:status:verified']"
+                               :size="props.leadingIconSize"
+            />
+            <IconEmailVerificationFailed v-else-if="settings.problemReportEmailRecipientStatus === 'failed'"
+                                         v-tooltip="hints['settings:admin:problem-report:email:verification:status:failed']"
+                                         :size="props.leadingIconSize"
+            />
+            <IconEmailVerificationPending v-else
+                                          v-tooltip="hints['settings:admin:problem-report:email:verification:status:pending']"
+                                          :size="props.leadingIconSize"
+            />
+          </TextField>
+          <TextField v-if="settings.problemReportEmailRecipientStatus === 'pending' || settings.problemReportEmailRecipientStatus === 'failed'"
+                     v-model="settings.problemReportEmailRecipientVerification"
+                     type="text"
+                     :label="t(appId, 'Email Verification Code')"
+                     :helperText="hints['settings:admin:problem-report:email:verification:code']"
+                     class="verification-code"
+                     :class="[{ 'new-input': problemReportRecipientVerificationInput }]"
+                     :error="settings.problemReportEmailRecipientStatus === 'failed'"
+                     @input="problemReportRecipientVerificationInput = true"
+                     @submit="saveProblemReportEmailRecipientVerification"
+          >
+            <IconEmailVerificationFailed v-if="settings.problemReportEmailRecipientStatus === 'failed'"
+                                         v-tooltip="hints['settings:admin:problem-report:email:verification:status:failed']"
+                                         :size="props.leadingIconSize"
+            />
+            <IconEmailVerificationPending v-else
+                                          v-tooltip="hints['settings:admin:problem-report:email:verification:status:pending']"
+                                          :size="props.leadingIconSize"
+            />
+            <template #alignedAfter>
+              <NcActions>
+                <NcActionButton v-tooltip="hints['settings:admin:problem-report:email:verification:resend']"
+                                :name="t(appId, 'resend verification code')"
+                                @click="saveProblemReportEmailRecipient"
+                >
+                  <template #icon>
+                    <IconResendVerificationCode />
+                  </template>
+                </NcActionButton>
+                <NcActionButton v-tooltip="hints['settings:admin:problem-report:email:verification:cancel']"
+                                :name="t(appId, 'cancel verification')"
+                                @click="cancelProblemReportEmailRecipientVerification"
+                >
+                  <template #icon>
+                    <IconCancel />
+                  </template>
+                </NcActionButton>
+              </NcActions>
             </template>
-            <template #subname>
-              {{ group?.users?.join(', ') || '' }}
-            </template>
-            <template #indicator>
-              <CheckboxBlankCircle v-if="group.status === 'inaccessible'" :size="16" fillColor="red" />
-              <CheckboxBlankCircle v-else-if="group.disabled" :size="16" fillColor="yellow" />
-              <CheckboxBlankCircle v-else-if="group.backends.indexOf(settings.userAndGroupBackend) == -1"
-                                   :size="16"
-                                   fillColor="purple"
-              />
-              <CheckboxBlankCircle v-else :size="16" fillColor="green" />
-            </template>
-            <template #actions>
-              <NcActionButton :disabled="group.status !== 'inaccessible' || group.backends.length > 0"
-                              @click="createGroup(group.id)"
-              >
-                {{ t(appId, 'Create Group') }}
-              </NcActionButton>
-              <NcActionButton>
-                Button two
-              </NcActionButton>
-              <NcActionButton>
-                Button three
-              </NcActionButton>
-            </template>
-          </NcListItem>
-        </ul>
-      </div>
-      <div v-if="config.isSubAdmin || config.isAdmin">
-        <label for="wiki-name-space">
-          {{ t(appId, 'Wiki Name-Space') }}
-        </label>
-        <!-- Note: v-model does not work here -->
-        <TextField id="wiki-name-space"
-                   v-model="settings.wikiNameSpace"
-                   type="text"
-                   :label="t(appId, 'Wiki Name-Space')"
-                   :hint="hints['settings:admin:wiki-name-space']"
-                   :disabled="loading.general || !config.isAdmin"
-                   @submit="saveSetting('wikiNameSpace', settings.wikiNameSpace)"
-        />
-      </div>
-    </NcSettingsSection>
-    <NcSettingsSection v-if="config.isSubAdmin" :name="t(appId, 'Configure User Backend')">
-      <div>
-        <button type="button"
-                name="cloudUserBackendConfig"
-                value="update"
-                :disabled="!config.haveCloudUserBackendConfig"
-                @click="saveSetting('haveCloudUserBackendConfig')"
-        >
-          {{ t(appId, 'Autoconfigure "{cloudUserBackend}" app', { cloudUserBackend: config.cloudUserBackend }) }}
-        </button>
-        <p class="hint">
-          {{ hints['settings:admin:cloud-user-backend-conf'] }}
+          </TextField>
+        </div>
+        <div v-if="config.isSubAdmin" class="problem-report github">
+          <TextField v-model="settings.problemReportGithubRepository"
+                     type="text"
+                     :label="t(appId, 'GitHub Repository for Problem Reports (owner/name)')"
+                     class="github-repository"
+                     :showTrailingButton="true"
+                     trailingButtonIcon="arrowRight"
+                     @submit="saveSetting('problemReportGithubRepository')"
+          />
+          <TextField v-model="problemReportGithubTokenInput"
+                     type="password"
+                     :label="settings.problemReportGithubToken === 'set' ? t(appId, 'GitHub Access Token (set, enter new value to replace)') : t(appId, 'GitHub Access Token')"
+                     class="github-token"
+                     autocomplete="off"
+                     :showTrailingButton="true"
+                     trailingButtonIcon="arrowRight"
+                     @submit="saveProblemReportGithubToken"
+          />
+        </div>
+        <p>
+          {{ t(appId, 'Generate an artificial error, then submit its problem report to test the configured reporting methods.') }}
         </p>
-      </div>
-    </NcSettingsSection>
-    <NcSettingsSection v-if="config.isSubAdmin"
-                       class="sub-admin"
-                       :class="[{ 'icon-loading': loading.recryption }]"
-                       :name="t(appId, 'Recryption Requests')"
-    >
-      <div v-for="(request, userId) in recryption.requests" :key="request.id" class="recryption-request-container">
-        <input :id="['mark', userId].join('-')"
-               v-model="recryption.requests[userId].marked"
-               type="checkbox"
-               class="checkbox request-mark"
-               @change="markRecryptionRequest"
-        >
-        <label :for="['mark', userId].join('-')" />
-        <NcActions>
-          <NcActionButton icon="icon-confirm" @click="handleRecryptionRequest(userId)">
-            {{ t(appId, 'recrypt') }}
-          </NcActionButton>
-          <NcActionButton icon="icon-delete" @click="deleteRecryptionRequest(userId)">
-            {{ t(appId, 'reject') }}
-          </NcActionButton>
-        </NcActions>
-        <div class="recryption-request-data flex-container flex-justify-left flex-align-center" :class="[{ marked: request.marked }]">
-          <span class="first visible display-name" :title="userId">{{ request.displayName }}</span>
-          <span class="following visible time-stamp">{{ formatDate(request.timeStamp, 'LLL') }}</span>
-          <span class="following user-tag organizer" :class="[{ visible: request.isOrganizer, invisible: !request.isOrganizer }]">{{
-            t(appId, 'organizer') }}</span>
-          <span class="following user-tag group-admin" :class="[{ visible: request.isGroupAdmin, invisible: !request.isGroupAdmin }]">{{
-            t(appId, 'group-admin') }}</span>
-        </div>
-      </div>
-      <div v-if="Object.keys(recryption.requests).length > 0" class="bulk-operations flex-container flex-align-center">
-        <input id="mark-all"
-               v-model="recryption.allRequestsMarked"
-               type="checkbox"
-               class="checkbox request-mark"
-               @change="markAllRecryptionRequests"
-        >
-        <label class="bulk-operation-mark" for="mark-all">{{ t(appId, 'mark/unmark all.') }}</label>
-        <span class="bulk-operation-title">
-          {{ t(appId, 'With the marked requests perform the following action:') }}
-        </span>
-        <NcActions>
-          <NcActionButton icon="icon-confirm" @click="handleMarkedRecrytpionRequests">
-            {{ t(appId, 'recrypt') }}
-          </NcActionButton>
-          <NcActionButton icon="icon-delete" @click="deleteMarkedRecryptionRequests">
-            {{ t(appId, 'reject') }}
-          </NcActionButton>
-        </NcActions>
-      </div>
-      <div v-else>
-        <span class="hint">{{ t(appId, 'No recryption requests are pending.') }}</span>
-      </div>
-    </NcSettingsSection>
-    <NcSettingsSection v-if="config.isSubAdmin"
-                       class="sub-admin"
-                       :name="t(appId, 'Access Control')"
-    >
-      <SelectMusicians v-model="access.musicians"
-                       :tooltip="access.musicians.length ? false : hints['settings:admin:access-control:musicians']"
-                       :label="t(appId, 'Musicians')"
-                       :placeholder="t(appId, 'e.g. Jane Doe')"
-                       :multiple="true"
-                       :deselectFromDropdown="true"
-                       :closeOnSelect="false"
-                       :submitButton="false"
-                       :clearButton="true"
-                       :projectId="projectId"
-                       searchScope="musicians"
-      />
-      <SelectProjects v-model="access.project"
-                      :tooltip="hints['settings:admin:access-control:project-restriction']"
-                      :label="t(appId, 'Restrict User Selection to Project')"
-                      :placeholder="t(appId, 'e.g. Auvergne2019')"
-                      :multiple="false"
-                      :submitButton="false"
-      />
-      <input id="include-disabled"
-             v-model="access.includeDeactivated"
-             type="checkbox"
-             class="checkbox access-flags"
-             :disabled="!applyAccessToAll"
-      >
-      <label for="include-disabled" class="access-flags checkbox-label">
-        {{ t(appId, 'include disabled accounts') }}
-      </label>
-      <input id="include-deactivated"
-             v-model="access.includeDisabled"
-             type="checkbox"
-             class="checkbox access-flags"
-             :disabled="!applyAccessToAll"
-      >
-      <label for="include-deactivated" class="access-flags checkbox-label">
-        {{ t(appId, 'include deactivated accounts') }}
-      </label>
-      <span v-if="showAccessActionProgress">
-        <div class="access-action-status">
-          <span class="access-action-text">{{ accessActionLabel }}</span>
-          <button v-if="accessActionFinished"
-                  class="button primary access-action-clear"
-                  :title="t(appId, 'Remove the status feedback from the last action.')"
-                  @click="hideAccessActionFeedback()"
-          >
-            {{ t(appId, 'Ok') }}
-          </button>
-          <span class="flex-spacer" />
-          <span class="access-action-counter">{{ accessActionCounter }}</span>
-        </div>
-        <NcProgressBar :value="accessActionPercentage" :error="accessActionError" size="medium" />
-      </span>
-      <span v-else class="flex-container flex-align-center flex-justify-start">
-        <span class="bulk-operation-title">
-          {{ t(appId, 'With the selected musicians perform the following action:') }}
-        </span>
-        <NcActions>
-          <NcActionButton icon="icon-disabled-user" @click="handleAccessAction('deny')">
-            {{ t(appId, 'deny access') }}
-          </NcActionButton>
-          <NcActionButton icon="icon-confirm" @click="handleAccessAction('grant')">
-            {{ t(appId, 'grant access') }}
-          </NcActionButton>
-        </NcActions>
-      </span>
-    </NcSettingsSection>
-    <NcSettingsSection v-if="config.isSubAdmin" class="sub-admin finance" :name="t(appId, 'Finance')">
-      <div>
-        <label for="gnucash-participant-receivables-template">
-          {{ t(appId, 'GnuCash Participant Receivables Account') }}
-        </label>
-        <!-- Note: v-model does not work here -->
-        <TextField id="gnucash-participant-receivables-template"
-                   v-model="settings.gnuCashParticipantReceivablesAccount"
-                   type="text"
-                   :label="t(appId, 'GnuCash Participant Receivables Account')"
-                   :placeholder="t(appId, 'e.g. &quot;assets:receivables:participants:{PERSON}:{PROJECT}:{GENERATOR_TAG}&quot;.')"
-                   :hint="hints['settings:admin:gnu-cash:participant-receivables-account']"
-                   @submit="saveSetting('gnuCashParticipantReceivablesAccount', settings.gnuCashParticipantReceivablesAccount)"
-        />
-        <label for="gnucash-instrument-insurances-template">
-          {{ t(appId, 'GnuCash Instrument Insurances Balancing Account') }}
-        </label>
-        <!-- Note: v-model does not work here -->
-        <TextField id="gnucash-instrument-insurances-template"
-                   v-model="settings.gnuCashInstrumentInsuranceBalancingAccount"
-                   type="text"
-                   :label="t(appId, 'GnuCash Instrument Insurances Balancing Account')"
-                   :placeholder="t(appId, 'e.g. &quot;outside-capital:escrow-accounts:insurances:receivables:{BROKER}&quot;.')"
-                   :hint="hints['settings:admin:gnu-cash:instrument-insurance-balancing-account']"
-                   @submit="saveSetting('gnuCashInstrumentInsuranceBalancingAccount', settings.gnuCashInstrumentInsuranceBalancingAccount)"
-        />
-        <label for="gnucash-accounts-tree-data">
-          {{ t(appId, 'GnuCash Accounts Tree') }}
-        </label>
-        <!-- Note: v-model does not work here -->
-        <TextField id="gnucash-accounts-tree"
-                   v-model="settings.gnuCashAccountsTreeData"
-                   type="text"
-                   :label="t(appId, 'GnuCash Accounts Tree (CSV export)')"
-                   :placeholder="t(appId, 'e.g. &quot;{sharedFolder}/finance/ledger/accounts.csv&quot;.', config)"
-                   :hint="hints['settings:admin:gnu-cash:accounts-tree-data']"
-                   @submit="saveSetting('gnuCashAccountsTreeData', settings.gnuCashAccountsTreeData)"
-        >
-          <template #alignedAfter>
-            <NcActions>
-              <NcActionButton :name="t(appId, 'choose')"
-                              @click="openGnuCashAccountsPicker"
-              >
-                <template #icon>
-                  <IconChooseGnuCashAccountsData />
-                </template>
-              </NcActionButton>
-            </NcActions>
-          </template>
-        </TextField>
-      </div>
-    </NcSettingsSection>
-    <NcSettingsSection v-if="config.isSubAdmin"
-                       class="sub-admin fonts-container"
-                       :name="t(appId, 'Configure Office Fonts for Office Exports')"
-    >
-      <div>
-        <span class="file-name-label">{{ t(appId, 'Font Data Folder') }}</span>
-        <span class="file-name">{{ humanOfficeFontsFolder }}</span>
-      </div>
-      <SelectWithSubmitButton v-model="defaultOfficeFont"
-                              inputId="default-font"
-                              :labelOutside="true"
-                              :options="Object.values(config.officeFonts)"
-                              :loading="loading.fonts"
-                              label="family"
-                              :clearable="false"
-                              :multiple="false"
-                              :disabled="loading.general || loading.fonts"
-                              :submitButton="true"
-                              :clearAction="false"
-                              :resetAction="false"
-                              :resetState="savedDefaultOfficeFont"
-                              @update="saveSetting('defaultOfficeFont')"
-                              @error="showErrorToast"
-      >
-        <template #alignedBefore>
-          <label for="default-font" class="default-font">
-            {{ t(appId, 'Default Font') }}
-          </label>
-        </template>
-        <template #actions>
-          <NcActionButton icon="icon-add" @click="updateFontData">
-            {{ t(appId, 'Update Font Data') }}
-          </NcActionButton>
-          <NcActionButton icon="icon-play" @click="rescanFontData">
-            {{ t(appId, 'Rescan Font Data') }}
-          </NcActionButton>
-          <NcActionButton icon="icon-delete" @click="purgeFontData">
-            {{ t(appId, 'Purge Font Data') }}
-          </NcActionButton>
-        </template>
-      </SelectWithSubmitButton>
-    </NcSettingsSection>
-    <NcSettingsSection v-if="config.isSubAdmin"
-                       class="sub-admin problem-reports"
-                       :name="t(appId, 'Configure Problem Report Handling')"
-    >
-      <div class="problem-report email-recipient" :class="['verification-status-' + settings.problemReportEmailRecipientStatus]">
-        <TextField v-model="settings.problemReportEmailRecipient"
-                   :disabled="settings.problemReportEmailRecipientStatus === 'pending'"
-                   type="text"
-                   :label="t(appId, 'Problem Report Email Recipient')"
-                   class="recipient-email-address"
-                   :showTrailingButton="true"
-                   trailingButtonIcon="arrowRight"
-                   :helperText="hints['settings:admin:problem-report:email:recipient']"
-                   :success="settings.problemReportEmailRecipientStatus === 'verified'"
-                   :error="settings.problemReportEmailRecipientStatus === 'failed'"
-                   @submit="saveProblemReportEmailRecipient"
-        >
-          <IconEmailVerified v-if="settings.problemReportEmailRecipientStatus === 'verified'"
-                             v-tooltip="hints['settings:admin:problem-report:email:verification:status:verified']"
-                             :size="props.leadingIconSize"
-          />
-          <IconEmailVerificationFailed v-else-if="settings.problemReportEmailRecipientStatus === 'failed'"
-                                       v-tooltip="hints['settings:admin:problem-report:email:verification:status:failed']"
-                                       :size="props.leadingIconSize"
-          />
-          <IconEmailVerificationPending v-else
-                                        v-tooltip="hints['settings:admin:problem-report:email:verification:status:pending']"
-                                        :size="props.leadingIconSize"
-          />
-        </TextField>
-        <TextField v-if="settings.problemReportEmailRecipientStatus === 'pending' || settings.problemReportEmailRecipientStatus === 'failed'"
-                   v-model="settings.problemReportEmailRecipientVerification"
-                   type="text"
-                   :label="t(appId, 'Email Verification Code')"
-                   :helperText="hints['settings:admin:problem-report:email:verification:code']"
-                   class="verification-code"
-                   :class="[{ 'new-input': problemReportRecipientVerificationInput }]"
-                   :error="settings.problemReportEmailRecipientStatus === 'failed'"
-                   @input="problemReportRecipientVerificationInput = true"
-                   @submit="saveProblemReportEmailRecipientVerification"
-        >
-          <IconEmailVerificationFailed v-if="settings.problemReportEmailRecipientStatus === 'failed'"
-                                       v-tooltip="hints['settings:admin:problem-report:email:verification:status:failed']"
-                                       :size="props.leadingIconSize"
-          />
-          <IconEmailVerificationPending v-else
-                                        v-tooltip="hints['settings:admin:problem-report:email:verification:status:pending']"
-                                        :size="props.leadingIconSize"
-          />
-          <template #alignedAfter>
-            <NcActions>
-              <NcActionButton v-tooltip="hints['settings:admin:problem-report:email:verification:resend']"
-                              :name="t(appId, 'resend verification code')"
-                              @click="saveProblemReportEmailRecipient"
-              >
-                <template #icon>
-                  <IconResendVerificationCode />
-                </template>
-              </NcActionButton>
-              <NcActionButton v-tooltip="hints['settings:admin:problem-report:email:verification:cancel']"
-                              :name="t(appId, 'cancel verification')"
-                              @click="cancelProblemReportEmailRecipientVerification"
-              >
-                <template #icon>
-                  <IconCancel />
-                </template>
-              </NcActionButton>
-            </NcActions>
-          </template>
-        </TextField>
-      </div>
-      <div v-if="config.isSubAdmin" class="problem-report github">
-        <TextField v-model="settings.problemReportGithubRepository"
-                   type="text"
-                   :label="t(appId, 'GitHub Repository for Problem Reports (owner/name)')"
-                   class="github-repository"
-                   :showTrailingButton="true"
-                   trailingButtonIcon="arrowRight"
-                   @submit="saveSetting('problemReportGithubRepository')"
-        />
-        <TextField v-model="problemReportGithubTokenInput"
-                   type="password"
-                   :label="settings.problemReportGithubToken === 'set' ? t(appId, 'GitHub Access Token (set, enter new value to replace)') : t(appId, 'GitHub Access Token')"
-                   class="github-token"
-                   autocomplete="off"
-                   :showTrailingButton="true"
-                   trailingButtonIcon="arrowRight"
-                   @submit="saveProblemReportGithubToken"
-        />
-      </div>
-      <p>
-        {{ t(appId, 'Generate an artificial error, then submit its problem report to test the configured reporting methods.') }}
-      </p>
-      <NcButton class="test-problem-report" @click="generateTestError">
-        {{ t(appId, 'Generate Test Error') }}
-      </NcButton>
-    </NcSettingsSection>
+        <NcButton class="test-problem-report" @click="generateTestError">
+          {{ t(appId, 'Generate Test Error') }}
+        </NcButton>
+      </NcSettingsSection>
+    </div>
+    <SettingsNavigation :tree="tree" />
+    <ErrorPageModal v-if="appError"
+                    :show="true"
+                    :error="appError"
+                    @update:show="appError = null"
+    />
     <ErrorPageModal v-if="testError"
                     :show="true"
                     :error="testError"
@@ -472,6 +497,7 @@
 <script setup lang="ts">
 import type { OCSResponse } from '@nextcloud/typings/ocs'
 import type { AxiosResponse } from 'axios'
+import type { Component } from 'vue'
 import type { AdminSettingsResponse, UserRecryptionResponse } from '../../build/ts-types/php-modules/Controller/DTO.ts'
 import type { FontFileNames } from '../../build/ts-types/php-modules/Service/DTO.ts'
 import type { AdminInitialState } from '../../build/ts-types/php-modules/Settings.ts'
@@ -489,6 +515,7 @@ import {
   NcActions,
   NcButton,
   NcListItem,
+  NcNoteCard,
   NcProgressBar,
   NcSettingsSection,
 } from '@nextcloud/vue'
@@ -515,6 +542,13 @@ import IconResendVerificationCode from 'vue-material-design-icons/Sync.vue'
 import ErrorPageModal from './ErrorPageModal.vue'
 import SelectMusicians from './SelectMusicians.vue'
 import SelectProjects from './SelectProjects.vue'
+import CmsSettings from './settings/CmsSettings.vue'
+import DevelopmentSettings from './settings/DevelopmentSettings.vue'
+import EmailSettings from './settings/EmailSettings.vue'
+import GeneralSettings from './settings/GeneralSettings.vue'
+import OrchestraSettings from './settings/OrchestraSettings.vue'
+import SettingsNavigation from './settings/SettingsNavigation.vue'
+import SharingSettings from './settings/SharingSettings.vue'
 import SettingsSelectGroup from './SettingsSelectGroup.vue'
 import SettingsSelectUsers from './SettingsSelectUsers.vue'
 import {
@@ -530,11 +564,13 @@ import {
 import * as SettingsKeys from '../../build/ts-types/php-modules/Settings/Admin.ts'
 import { appName as appId } from '../config.ts'
 import { useCloudUsersGroupsStore } from '../stores/cloud-users-groups.ts'
+import useErrorHandlerStore from '../stores/error-handler.ts'
 import useTooltipsStore from '../stores/tooltips.ts'
 import { AppError } from '../toolkit/types/errors.ts'
 import cloudVersionClasses from '../toolkit/util/cloud-version-classes.ts'
 import dialogConfirm from '../toolkit/util/dialog-confirm.ts'
 import { generateOcsUrl as generateAppOcsUrl, generateUrl as generateAppUrl } from '../toolkit/util/generate-url.ts'
+import getInitialState from '../toolkit/util/initial-state.ts'
 import {
   getFilePickerBuilder,
   showError,
@@ -545,6 +581,7 @@ import {
 import Console from '../util/console.ts'
 import formatDate from '../util/formatDate.ts'
 import { showErrorToast } from '../util/toasts.ts'
+import { getAdminSettingsTree } from './settings/settings-tree.ts'
 
 /*
  * End type definitions
@@ -564,6 +601,27 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits(['error'])
+const orchestraComponents: Record<string, Component> = {
+  general: GeneralSettings,
+  orchestra: OrchestraSettings,
+  sharing: SharingSettings,
+  email: EmailSettings,
+  cms: CmsSettings,
+  development: DevelopmentSettings,
+}
+const appError = ref<AppError|null>(null)
+const errorHandlerProvider = useErrorHandlerStore()
+const handleAppError = <E extends AppError>(error: E) => {
+  appError.value = error
+}
+const handleSettingsError = (error: Error) => {
+  handleAppError(new AppError(
+    { component: 'AdminSettings' },
+    t(appId, 'Unable to save administrative setting.'),
+    { cause: error },
+  ))
+}
+errorHandlerProvider.pushHandler(handleAppError)
 
 const IconCancel = IconEmailVerificationFailed
 
@@ -687,6 +745,12 @@ const generateTestError = () => {
 const settingsBackup = reactive<AppAdminSettings>(settings)
 const orchestraGroups = reactive({} as Record<string, GroupType>)
 const config = reactive(initialState)
+const orchestraState = getInitialState<{ enabled: boolean, error?: string }>({ section: 'orchestraSettings', defaults: { enabled: false } })
+const tree = getAdminSettingsTree({
+  isSubAdmin: config.isSubAdmin,
+  orchestraSettingsEnabled: !!orchestraState?.enabled,
+})
+const orchestraTabs = tree.filter((tab) => tab.key in orchestraComponents)
 
 const tooltipKeys = [
   'settings:admin:cloud-user-backend-conf',
@@ -1388,12 +1452,30 @@ const openGnuCashAccountsPicker = async () => {
 
 onBeforeMount(getData)
 onUnmounted(() => {
+  errorHandlerProvider.popHandler()
   clearTimeout(recryptionPollTimer)
   recryptionPollTimer = undefined
 })
 </script>
 
 <style lang="scss" scoped>
+.admin-settings {
+  display: flex;
+  align-items: flex-start;
+
+  .admin-settings-content {
+    flex: 1 1 auto;
+    min-width: 0;
+
+    @media only screen and (width >= 1024px) {
+      :deep(.settings-section) {
+        margin-left: calc(var(--default-grid-baseline) * 10);
+        width: min(900px, 100% - var(--default-grid-baseline) * 17);
+      }
+    }
+  }
+}
+
 .cloud-version {
   --cloud-icon-checkmark: var(--icon-checkmark-dark);
   &.cloud-version-major-24 {

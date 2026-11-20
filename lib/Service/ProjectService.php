@@ -394,7 +394,7 @@ class ProjectService
    *
    * @return void
    *
-   * @see OCA\CAFEVDB\Controller\PersonalSettingsController::setApp()
+   * @see OCA\CAFEVDB\Controller\OrchestraSettingsController::setApp()
    */
   public function persistProject(Entities\Project $project):void
   {

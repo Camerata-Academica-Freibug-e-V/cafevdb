@@ -42,6 +42,7 @@ import { AppError } from '~/src/toolkit/types/errors.ts';
 import { loadState } from '@nextcloud/initial-state';
 import { AUTHORIZATION_GROUP_SUFFIXES, INITIAL_STATE_SECTION } from '~/build/ts-types/php-modules/Settings/Admin.ts';
 import { appName } from '~/src/config.ts';
+import SettingsNavigation from '~/src/components/settings/SettingsNavigation.vue';
 
 // No server is available: fail requests without network access and do not
 // try to render toasts, which jsdom cannot do reliably.
@@ -103,6 +104,61 @@ vi.mock(import('@nextcloud/initial-state'), async (originalImport) => {
 });
 
 describe('AdminSettings component', () => {
+  it('keeps recovery controls visible when orchestra configuration fails', () => {
+    const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
+    const error = 'Unable to load orchestra settings. The remaining administration settings are still available.';
+    vi.mocked(loadState).mockReturnValueOnce({ ...initialState, isSubAdmin: true })
+      .mockReturnValueOnce({ enabled: false, error });
+    const pinia = createTestingPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(AdminSettings, {
+      global: {
+        plugins: [pinia],
+        directives: { tooltip: Tooltip },
+        stubs: { SettingsNavigation: true },
+      },
+    });
+    expect(wrapper.get('.orchestra-settings-error').text()).toBe(error);
+    expect(wrapper.find('#admin-settings-backend').exists()).toBe(true);
+    expect(wrapper.find('#admin-settings-access-control').exists()).toBe(true);
+    expect(wrapper.find('#admin-settings-finance').exists()).toBe(true);
+    expect(wrapper.find('#admin-settings-about').exists()).toBe(false);
+    expect(wrapper.find('#admin-settings-orchestra').exists()).toBe(false);
+    const tree = wrapper.getComponent(SettingsNavigation).props('tree');
+    expect(tree.map(({ id }) => id)).not.toContain('admin-settings-orchestra');
+    expect(tree.map(({ id }) => id)).toContain('admin-settings-access-control');
+    wrapper.unmount();
+  });
+
+  it('renders the moved sections after Access Control and matches the sidebar order', () => {
+    const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
+    vi.mocked(loadState).mockReturnValueOnce({ ...initialState, isSubAdmin: true })
+      .mockReturnValueOnce({ enabled: true });
+    const sectionStub = { props: ['entry'], template: '<section :id="entry.id" />' };
+    const pinia = createTestingPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(AdminSettings, {
+      global: {
+        plugins: [pinia],
+        directives: { tooltip: Tooltip },
+        stubs: {
+          SettingsNavigation: true,
+          GeneralSettings: sectionStub,
+          OrchestraSettings: sectionStub,
+          SharingSettings: sectionStub,
+          EmailSettings: sectionStub,
+          CmsSettings: sectionStub,
+          DevelopmentSettings: sectionStub,
+        },
+      },
+    });
+    const tree = wrapper.getComponent(SettingsNavigation).props('tree');
+    expect(wrapper.findAll('[id^="admin-settings-"]').map((section) => section.attributes('id')))
+      .toEqual(tree.map(({ id }) => id));
+    expect(wrapper.find('#personal-settings-user').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('should be a Vue instance', () => {
 
     const pinia = createTestingPinia();
@@ -112,6 +168,7 @@ describe('AdminSettings component', () => {
       global: {
         plugins: [pinia],
         directives: { tooltip: Tooltip },
+        stubs: { SettingsNavigation: true },
       },
     });
     expect(wrapper.vm).toBeTruthy();
@@ -129,7 +186,7 @@ describe('AdminSettings component', () => {
       global: {
         plugins: [pinia],
         directives: { tooltip: Tooltip },
-        stubs: { ErrorPageModal: true },
+        stubs: { ErrorPageModal: true, SettingsNavigation: true },
       },
     });
     expect(wrapper.findComponent(ErrorPageModal).exists()).toBe(false);

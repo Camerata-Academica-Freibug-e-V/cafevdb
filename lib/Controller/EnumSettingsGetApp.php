@@ -26,7 +26,7 @@ namespace OCA\CAFEVDB\Controller;
 
 use OCA\RotDrop\DevScripts\PhpToTypeScript;
 
-/** Items understood by PersonalSettingsController::getApp() */
+/** Items understood by OrchestraSettingsController::getApp() */
 #[PhpToTypeScript\Attributes\TypeScript(options: ['nativeEnums' => true])]
 enum EnumSettingsGetApp: string
 {

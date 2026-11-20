@@ -25,6 +25,7 @@
  * @module
  */
 
+import Tooltip from '@rotdrop/nextcloud-vue-components/lib/directives/Tooltip';
 import { createPinia } from 'pinia';
 import { createApp } from 'vue';
 import AdminSettings from './components/AdminSettings.vue';
@@ -37,6 +38,7 @@ const pinia = createPinia();
 
 const app = createApp(AdminSettings);
 app.config.performance = !!(import.meta?.env?.DEV);
+app.directive('tooltip', Tooltip);
 app.provide('appId', appName);
 app.mixin(globalMixin);
 app.use(pinia);

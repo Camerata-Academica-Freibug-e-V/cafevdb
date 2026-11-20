@@ -32,34 +32,59 @@ export interface NavigationEntry {
 
 export interface TabEntry extends NavigationEntry {
   key: string;
-  adminOnly: boolean;
   children: NavigationEntry[];
 }
 
 /**
- * Single source of truth for the settings tree: top-level tabs and
- * their sub-sections. Used for rendering as well as for the in-page
- * navigation.
- *
- * @param isGroupAdmin Include the admin-only tabs.
+ * The personal page has no administrative sections or sidebar.
  */
-export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
-  const tabs: TabEntry[] = [
-    {
-      key: 'user',
-      id: 'personal-settings-user',
-      name: t(appId, 'Personal'),
-      adminOnly: false,
-      children: [
-        { id: 'personal-settings', name: t(appId, 'Personal settings') },
-        { id: 'encryption-key', name: t(appId, 'Encryption key') },
-      ],
-    },
+export const getPersonalSettingsEntry = (): TabEntry => ({
+  key: 'user',
+  id: 'personal-settings-user',
+  name: t(appId, 'Personal'),
+  children: [
+    { id: 'personal-settings-user-personal-settings', name: t(appId, 'Personal settings') },
+    { id: 'personal-settings-user-encryption-key', name: t(appId, 'Encryption key') },
+  ],
+});
+
+export const getAboutSettingsEntry = (): TabEntry => ({
+  key: 'about',
+  id: 'personal-settings-about',
+  name: t(appId, 'About'),
+  children: [],
+});
+
+/**
+ * Single source of truth for admin section ordering and sidebar visibility.
+ *
+ * @param permissions Current orchestra permissions and encryption-key availability.
+ */
+export const getAdminSettingsTree = (permissions: {
+  isSubAdmin: boolean;
+  orchestraSettingsEnabled: boolean;
+}): TabEntry[] => {
+  const entry = (key: string, name: string): TabEntry => ({
+    key,
+    id: 'admin-settings-' + key,
+    name,
+    children: [],
+  });
+  const top = [
+    entry('backend', t(appId, 'Camerata DB')),
+    ...(permissions.isSubAdmin
+      ? [
+        entry('configure-user-backend', t(appId, 'Configure User Backend')),
+        entry('recryption', t(appId, 'Recryption Requests')),
+        entry('access-control', t(appId, 'Access Control')),
+      ]
+      : []),
+  ];
+  const orchestra: TabEntry[] = [
     {
       key: 'general',
-      id: 'personal-settings-general',
+      id: 'admin-settings-general',
       name: t(appId, 'General'),
-      adminOnly: true,
       children: [
         { id: 'general-settings', name: t(appId, 'General settings') },
         { id: 'encryption-settings', name: t(appId, 'Encryption settings') },
@@ -68,9 +93,8 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
     },
     {
       key: 'orchestra',
-      id: 'personal-settings-orchestra',
+      id: 'admin-settings-orchestra',
       name: t(appId, 'Orchestra'),
-      adminOnly: true,
       children: [
         { id: 'street-address', name: t(appId, 'Street Address') },
         { id: 'bank-account', name: t(appId, 'Bank Account') },
@@ -80,9 +104,8 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
     },
     {
       key: 'sharing',
-      id: 'personal-settings-sharing',
+      id: 'admin-settings-sharing',
       name: t(appId, 'Sharing'),
-      adminOnly: true,
       children: [
         { id: 'share-owner', name: t(appId, 'Share owner') },
         { id: 'calendars', name: t(appId, 'Calendars') },
@@ -94,9 +117,8 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
     },
     {
       key: 'email',
-      id: 'personal-settings-email',
+      id: 'admin-settings-email',
       name: t(appId, 'Email'),
-      adminOnly: true,
       children: [
         { id: 'server-settings', name: t(appId, 'Email Server and Account') },
         { id: 'bulk-email-composition', name: t(appId, 'Bulk Email Composition') },
@@ -107,9 +129,8 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
     },
     {
       key: 'cms',
-      id: 'personal-settings-cms',
+      id: 'admin-settings-cms',
       name: t(appId, 'CMS'),
-      adminOnly: true,
       children: [
         { id: 'redaxo-categories', name: t(appId, 'Redaxo Categories') },
         { id: 'redaxo-templates', name: t(appId, 'Redaxo Templates') },
@@ -118,24 +139,24 @@ export const getSettingsTree = (isGroupAdmin: boolean): TabEntry[] => {
     },
     {
       key: 'development',
-      id: 'personal-settings-development',
+      id: 'admin-settings-development',
       name: t(appId, 'Development'),
-      adminOnly: true,
       children: [
         { id: 'links', name: t(appId, 'Links') },
       ],
     },
-    {
-      key: 'about',
-      id: 'personal-settings-about',
-      name: t(appId, 'About'),
-      adminOnly: false,
-      children: [
-      ],
-    },
   ];
-  return tabs
-    .filter((tab) => isGroupAdmin || !tab.adminOnly)
+  return [
+    ...top,
+    ...(permissions.orchestraSettingsEnabled ? orchestra : []),
+    ...(permissions.isSubAdmin
+      ? [
+        entry('finance', t(appId, 'Finance')),
+        entry('office-fonts', t(appId, 'Configure Office Fonts for Office Exports')),
+        entry('problem-reports', t(appId, 'Configure Problem Report Handling')),
+      ]
+      : []),
+  ]
     .map((tab) => ({
       ...tab,
       children: tab.children.map((child) => ({ ...child, id: tab.id + '-' + child.id })),

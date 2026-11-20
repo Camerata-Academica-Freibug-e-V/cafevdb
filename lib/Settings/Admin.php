@@ -161,6 +161,7 @@ class Admin implements IDelegatedSettings
     ]);
 
     $this->initialState->provideInitialState(self::INITIAL_STATE_SECTION, $configData);
+    $this->di(OrchestraSettingsInitialState::class)->publish();
 
     Util::addScript($this->appName(), $this->assetService->getJSAsset(self::TEMPLATE));
     Util::addStyle($this->appName(), $this->assetService->getCSSAsset(self::TEMPLATE));
