@@ -1751,18 +1751,10 @@ index 2f57f95..6356fca 100644
  /**
   * Search and filter state for a list of rooms
 diff --git a/node_modules/@nextcloud/app-calendar/src/contactsMenu.js b/node_modules/@nextcloud/app-calendar/src/contactsMenu.js
-index 8a8301b..4e375af 100644
+index 8a8301b..592b36a 100644
 --- a/node_modules/@nextcloud/app-calendar/src/contactsMenu.js
 +++ b/node_modules/@nextcloud/app-calendar/src/contactsMenu.js
-@@ -3,14 +3,14 @@
-  * SPDX-License-Identifier: AGPL-3.0-or-later
-  */
- 
--import CalendarBlankSvg from '@mdi/svg/svg/calendar-blank.svg'
-+import CalendarBlankSvg from '@mdi/svg/svg/calendar-blank.svg?raw'
- import { getRequestToken } from '@nextcloud/auth'
- import { translate as t } from '@nextcloud/l10n'
- import { linkTo } from '@nextcloud/router'
+@@ -10,7 +10,7 @@ import { linkTo } from '@nextcloud/router'
  import { registerContactsMenuAction } from '@nextcloud/vue/functions/contactsMenu'
  
  import 'core-js/stable/index.js'
@@ -1771,18 +1763,7 @@ index 8a8301b..4e375af 100644
  
  // CSP config for webpack dynamic chunk loading
  
-@@ -23,17 +23,15 @@ __webpack_nonce__ = btoa(getRequestToken())
- // eslint-disable-next-line
- __webpack_public_path__ = linkTo('calendar', 'js/')
- 
--// Decode calendar icon (inline data url -> raw svg)
--const CalendarBlankSvgRaw = atob(CalendarBlankSvg.split(',')[1])
- 
- registerContactsMenuAction({
- 	id: 'calendar-availability',
- 	displayName: () => t('calendar', 'Show availability'),
--	iconSvg: () => CalendarBlankSvgRaw,
-+	iconSvg: () => CalendarBlankSvg,
+@@ -33,7 +33,7 @@ registerContactsMenuAction({
  	enabled: (entry) => entry.isUser,
  	callback: async (args) => {
  		const { createApp } = await import('vue')
@@ -2171,7 +2152,7 @@ index a26e2b9..85c71a4 100644
  const pinia = createPinia()
  
 diff --git a/node_modules/@nextcloud/app-calendar/src/mixins/EditorMixin.js b/node_modules/@nextcloud/app-calendar/src/mixins/EditorMixin.js
-index 0e51d33..75abf84 100644
+index 2cba614..6432c7e 100644
 --- a/node_modules/@nextcloud/app-calendar/src/mixins/EditorMixin.js
 +++ b/node_modules/@nextcloud/app-calendar/src/mixins/EditorMixin.js
 @@ -9,21 +9,21 @@ import { generateUrl } from '@nextcloud/router'
@@ -3428,27 +3409,9 @@ index be53e68..c681fc5 100644
  export default {
  	name: 'ContactsMenuAvailability',
 diff --git a/node_modules/@nextcloud/app-calendar/src/views/EditFull.vue b/node_modules/@nextcloud/app-calendar/src/views/EditFull.vue
-index e75d4ff..bfc488b 100644
+index a9f9de8..bfc488b 100644
 --- a/node_modules/@nextcloud/app-calendar/src/views/EditFull.vue
 +++ b/node_modules/@nextcloud/app-calendar/src/views/EditFull.vue
-@@ -3,7 +3,7 @@
-   - SPDX-License-Identifier: AGPL-3.0-or-later
- -->
- 
--<template>
-+<template><div>
- 	<NcModal
- 		v-if="calendarObjectInstance"
- 		v-model="showFullModal"
-@@ -352,7 +352,7 @@
- 			:buttons="cancelButtons"
- 			@update:open="showCancelDialog = $event" />
- 	</NcModal>
--</template>
-+</div></template>
- 
- <script>
- import IconCancel from '@mdi/svg/svg/cancel.svg?raw'
 @@ -383,29 +383,29 @@ import HelpCircleIcon from 'vue-material-design-icons/HelpCircleOutline.vue'
  import Delete from 'vue-material-design-icons/TrashCanOutline.vue'
  import Download from 'vue-material-design-icons/TrayArrowDown.vue'
