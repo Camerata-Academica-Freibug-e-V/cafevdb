@@ -3503,7 +3503,7 @@ index e75d4ff..bfc488b 100644
  export default {
  	name: 'EditFull',
 diff --git a/node_modules/@nextcloud/app-calendar/src/views/EditSimple.vue b/node_modules/@nextcloud/app-calendar/src/views/EditSimple.vue
-index 3e9ca8a..f3ecf25 100644
+index 4ba0285..5f97717 100644
 --- a/node_modules/@nextcloud/app-calendar/src/views/EditSimple.vue
 +++ b/node_modules/@nextcloud/app-calendar/src/views/EditSimple.vue
 @@ -333,26 +333,26 @@ import EditIcon from 'vue-material-design-icons/PencilOutline.vue'
