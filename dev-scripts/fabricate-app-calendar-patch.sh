@@ -49,40 +49,6 @@ function transformDirectory(directory) {
 
 transformDirectory(source)
 
-const contactsMenu = path.join(source, 'contactsMenu.js')
-let contacts = changes.get(contactsMenu) ?? readFileSync(contactsMenu, 'utf8')
-const svgImport = /(['"])@mdi\/svg\/svg\/calendar-blank\.svg(?:\?rawb?)?\1/
-if (!svgImport.test(contacts)) {
-    throw new Error('Cannot find the calendar SVG import in contactsMenu.js')
-}
-contacts = contacts.replace(svgImport, '$1@mdi/svg/svg/calendar-blank.svg?raw$1')
-contacts = contacts.replace(
-    /^[ \t]*\/\/ Decode calendar icon \(inline data url -> raw svg\)\r?\n/m,
-    '',
-).replace(
-    /^[ \t]*const CalendarBlankSvgRaw = atob\(CalendarBlankSvg\.split\((['"]),\1\)\[1\]\);?\r?\n/m,
-    '',
-)
-if (/\batob\s*\(\s*CalendarBlankSvg\b/.test(contacts)) {
-    throw new Error('Unsupported calendar SVG decoding expression in contactsMenu.js')
-}
-contacts = contacts.replace(/\bCalendarBlankSvgRaw\b/g, 'CalendarBlankSvg')
-changes.set(contactsMenu, contacts)
-
-const editFull = path.join(source, 'views/EditFull.vue')
-let component = changes.get(editFull) ?? readFileSync(editFull, 'utf8')
-if (!/^<template><div>\r?$/m.test(component)) {
-    if (!/^<template>\r?$/m.test(component) || !/^<\/template>\r?$/m.test(component)) {
-        throw new Error('Cannot find the outer template in EditFull.vue')
-    }
-    component = component.replace(/^<template>(\r?)$/m, '<template><div>$1')
-        .replace(/^<\/template>(\r?)$/m, '</div></template>$1')
-}
-if (!/^<\/div><\/template>\r?$/m.test(component)) {
-    throw new Error('Cannot find the outer div wrapper closing tag in EditFull.vue')
-}
-changes.set(editFull, component)
-
 for (const [filename, contents] of changes) {
     writeFileSync(filename, contents)
 }
