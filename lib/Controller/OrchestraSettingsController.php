@@ -30,6 +30,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use PHP_IBAN;
 use RuntimeException;
+use SensitiveParameter;
 use Throwable;
 
 use OCA\RotDrop\DevScripts\PhpToTypeScript;
@@ -47,6 +48,7 @@ use OCA\CAFEVDB\AddressBook\AddressBookProvider;
 use OCA\CAFEVDB\Attributes;
 use OCA\CAFEVDB\Common\NumberFormatter;
 use OCA\CAFEVDB\Common\Util;
+use OCA\CAFEVDB\Database\Connection;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Documents\OpenDocumentFiller;
@@ -55,6 +57,7 @@ use OCA\CAFEVDB\Service\CalDavService;
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\ConfigCheckService;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\ConnectorDatabaseCredentials;
 use OCA\CAFEVDB\Service\EmailAddressService;
 use OCA\CAFEVDB\Service\Finance\FinanceService;
 use OCA\CAFEVDB\Service\Finance\InstrumentInsuranceService;
@@ -146,7 +149,7 @@ class OrchestraSettingsController extends Controller
     url: '/' . self::BASE_PATH . '/' . self::END_POINT_APP_SET . '/{parameter}',
   )]
   #[CoreAttributes\NoAdminRequired]
-  public function setApp(string $parameter, mixed $value): Http\Response
+  public function setApp(string $parameter, #[SensitiveParameter] mixed $value = null): Http\Response
   {
     switch ($parameter) {
       case ConfigConstants::ORCHESTRA_LOCALE_KEY: // could check for valid locale ...
@@ -1325,12 +1328,14 @@ class OrchestraSettingsController extends Controller
           $userConnectorService = $this->di(CloudUserConnectorService::class);
           list('hints' => $hints ,) = $userConnectorService->checkRequirements($cloudUserViewsDatabase);
           if ($realValue) {
-            $userConnectorService->updateUserSqlViews($cloudUserViewsDatabase);
+            $userConnectorService->updateUserSqlViews($cloudUserViewsDatabase, checkAccess: true);
             $userConnectorService->writeUserSqlConfig($cloudUserViewsDatabase);
             // following can fail
             try {
               $userConnectorService->configureCloudUserBackend();
               $userConnectorService->setCloudUserSubAdmins();
+            } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+              throw $t;
             } catch (Throwable $t) {
               $this->logException($t, 'Unable to configure "' . CloudUserConnectorService::CLOUD_USER_BACKEND . '".');
             }
@@ -1339,6 +1344,8 @@ class OrchestraSettingsController extends Controller
             try {
               $userConnectorService->setCloudUserSubAdmins(delete: true);
               $userConnectorService->configureCloudUserBackend(erase: true);
+            } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+              throw $t;
             } catch (Throwable $t) {
               $this->logException($t, 'Perhaps unable to deconfigure "' . CloudUserConnectorService::CLOUD_USER_BACKEND . '".');
             }
@@ -1346,6 +1353,8 @@ class OrchestraSettingsController extends Controller
             $userConnectorService->removeUserSqlViews($cloudUserViewsDatabase);
             $userConnectorService->writeUserSqlConfig($cloudUserViewsDatabase, delete: true);
           }
+        } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+          throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
           throw new Exceptions\EnduserNotificationException(
             message: $realValue
@@ -1365,13 +1374,15 @@ class OrchestraSettingsController extends Controller
           /** @var CloudUserConnectorService $userConnectorService */
           $userConnectorService = $this->di(CloudUserConnectorService::class);
           list('hints' => $hints,) = $userConnectorService->checkRequirements($cloudUserViewsDatabase);
-          $userConnectorService->updateUserSqlViews($cloudUserViewsDatabase);
+          $userConnectorService->updateUserSqlViews($cloudUserViewsDatabase, checkAccess: true);
           $userConnectorService->writeUserSqlConfig($cloudUserViewsDatabase);
 
           // also try to re-grant the sub-admin right and reconfigure user-sql
           try {
             $userConnectorService->configureCloudUserBackend();
             $userConnectorService->setCloudUserSubAdmins();
+          } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+            throw $t;
           } catch (Throwable $t) {
             throw new Exceptions\EnduserNotificationException(
               // TRANSLATORS: Parameter is the name of a user backend.
@@ -1379,6 +1390,8 @@ class OrchestraSettingsController extends Controller
               previous: $t,
             );
           }
+        } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+          throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
           throw new Exceptions\EnduserNotificationException(
             message: $this->l->t('Unable to recreate the views for the cloud user backend.'),
@@ -1394,19 +1407,33 @@ class OrchestraSettingsController extends Controller
       case EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value:
         $newValue = Util::normalizeSpaces($value);
         $oldValue = $this->getConfigValue($parameter, null);
-        $this->logInfo('OLD / NEW ' . $oldValue . ' / ' . $newValue);
+        $importUsers = $this->getConfigValue(EnumSimpleSettingsKey::IMPORT_CLUB_MEMBERS_AS_CLOUD_USERS->value, 'off') === 'on';
+        $personalizedViews = $this->getConfigValue(EnumSimpleSettingsKey::MUSICIAN_PERSONALIZED_VIEWS->value, 'off') === 'on';
         $hints = [];
         if ($newValue != $oldValue) {
           try {
             /** @var CloudUserConnectorService $userConnectorService */
             $userConnectorService = $this->di(CloudUserConnectorService::class);
             list('hints' => $hints,) = $userConnectorService->checkRequirements($newValue);
-            $userConnectorService->removeUserSqlViews($oldValue);
-            $userConnectorService->updateUserSqlViews($newValue);
-            $userConnectorService->writeUserSqlConfig($newValue);
-
-            $userConnectorService->removeMusicianPersonalizedViews($oldValue);
-            $userConnectorService->updateMusicianPersonalizedViews($newValue);
+            if ($personalizedViews) {
+              $userConnectorService->updateMusicianPersonalizedViews($newValue, checkAccess: true);
+            }
+            if ($importUsers) {
+              $userConnectorService->updateUserSqlViews($newValue, checkAccess: true);
+              $userConnectorService->writeUserSqlConfig($newValue);
+              $userConnectorService->configureCloudUserBackend();
+            }
+            if (($newValue ?: $this->getConfigValue(ConfigConstants::APP_DB_NAME))
+                !== ($oldValue ?: $this->getConfigValue(ConfigConstants::APP_DB_NAME))) {
+              if ($importUsers) {
+                $userConnectorService->removeUserSqlViews($oldValue);
+              }
+              if ($personalizedViews) {
+                $userConnectorService->removeMusicianPersonalizedViews($oldValue);
+              }
+            }
+          } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+            throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
           } catch (Throwable $t) {
             throw new Exceptions\EnduserNotificationException(
               message: $this->l->t('Unable to reconfigure the database for the cloud - orchestra member interaction.'),
@@ -1416,7 +1443,7 @@ class OrchestraSettingsController extends Controller
         }
         return $this->setSimpleConfigValue(
           $parameter,
-          $value,
+          $newValue,
           messages: $hints,
           hints: $hints,
         );
@@ -1429,10 +1456,12 @@ class OrchestraSettingsController extends Controller
         try {
           if ($realValue) {
             $database = $this->wopiCredentialsViewDatabase();
-            $this->wopiCredentialsViewService()->updateWopiCredentialsView($database);
+            $this->wopiCredentialsViewService()->updateWopiCredentialsView($database, checkAccess: true);
           } elseif ($this->getAppValue(WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, '') !== '') {
             $this->wopiCredentialsViewService()->removeWopiCredentialsView();
           }
+        } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+          throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
           throw new Exceptions\EnduserNotificationException(
             message: $realValue
@@ -1447,8 +1476,10 @@ class OrchestraSettingsController extends Controller
         $newValue = Util::normalizeSpaces($value);
         try {
           if ($this->wopiConnectorEnabled()) {
-            $this->wopiCredentialsViewService()->updateWopiCredentialsView($newValue ?: null);
+            $this->wopiCredentialsViewService()->updateWopiCredentialsView($newValue ?: null, checkAccess: true);
           }
+        } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+          throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
           throw new Exceptions\EnduserNotificationException(
             message: $this->l->t('Unable to reconfigure WOPI access to database storage.'),
@@ -1470,10 +1501,12 @@ class OrchestraSettingsController extends Controller
           $userConnectorService = $this->di(CloudUserConnectorService::class);
           list('hints' => $hints,) = $userConnectorService->checkRequirements($cloudUserViewsDatabase);
           if ($realValue) {
-            $userConnectorService->updateMusicianPersonalizedViews($cloudUserViewsDatabase);
+            $userConnectorService->updateMusicianPersonalizedViews($cloudUserViewsDatabase, checkAccess: true);
           } else {
             $userConnectorService->removeMusicianPersonalizedViews($cloudUserViewsDatabase);
           }
+        } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+          throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
           throw new Exceptions\EnduserNotificationException(
             message: $realValue
@@ -1496,7 +1529,9 @@ class OrchestraSettingsController extends Controller
           /** @var CloudUserConnectorService $userConnectorService */
           $userConnectorService = $this->di(CloudUserConnectorService::class);
           list('hints' => $hints,) = $userConnectorService->checkRequirements($cloudUserViewsDatabase);
-          $userConnectorService->updateMusicianPersonalizedViews($cloudUserViewsDatabase);
+          $userConnectorService->updateMusicianPersonalizedViews($cloudUserViewsDatabase, checkAccess: true);
+        } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+          throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
           throw new Exceptions\EnduserNotificationException(
             message: $this->l->t('Unable to regenerate the views for the personal access of club-members to their data.'),
@@ -1518,7 +1553,9 @@ class OrchestraSettingsController extends Controller
             throw new RuntimeException('WOPI credential view is disabled.');
           }
           $database = $this->wopiCredentialsViewDatabase();
-          $this->wopiCredentialsViewService()->updateWopiCredentialsView($database);
+          $this->wopiCredentialsViewService()->updateWopiCredentialsView($database, checkAccess: true);
+        } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
+          throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
           throw new Exceptions\EnduserNotificationException(
             message: $this->l->t('Unable to regenerate the WOPI credential view.'),
@@ -1528,6 +1565,12 @@ class OrchestraSettingsController extends Controller
         return (new DTO\MessagesResponse([
           $this->l->t('WOPI credential view has been regenerated successfully.'),
         ]))->response();
+
+      case CloudUserConnectorService::CONNECTOR_ACCOUNT_CONFIG:
+        return $this->setCloudConnectorAccount($value);
+
+      case ConnectorDatabaseCredentials::WOPI:
+        return $this->setWopiConnectorCredentials($value);
 
       case 'keydistribute':
         list('status' => $status, 'messages' => $messages) = $this->distributeEncryptionKey();
@@ -2215,6 +2258,74 @@ class OrchestraSettingsController extends Controller
   private function wopiCredentialsViewService(): WopiCredentialsViewService
   {
     return $this->di(WopiCredentialsViewService::class);
+  }
+
+  /**
+   * @param mixed $value The MariaDB account, or null to use the Nextcloud account.
+   *
+   * @return Http\Response
+   */
+  private function setCloudConnectorAccount(mixed $value): Http\Response
+  {
+    if ($value !== null && (!is_array($value)
+        || !is_string($value['user'] ?? null)
+        || !is_string($value['accountHost'] ?? null))) {
+      return self::grumble($this->l->t('Enter a database username and account host.'));
+    }
+
+    try {
+      $connector = $this->di(CloudUserConnectorService::class);
+      $account = $value === null ? [] : $connector->normalizeConnectorAccount($value['user'], $value['accountHost']);
+      $database = $this->getConfigValue(EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value, null);
+      if ($this->getConfigValue(EnumSimpleSettingsKey::IMPORT_CLUB_MEMBERS_AS_CLOUD_USERS->value, 'off') === 'on') {
+        $connector->updateUserSqlViews($database, $account, checkAccess: true);
+      }
+      if ($this->getConfigValue(EnumSimpleSettingsKey::MUSICIAN_PERSONALIZED_VIEWS->value, 'off') === 'on') {
+        $connector->updateMusicianPersonalizedViews($database, $account, checkAccess: true);
+      }
+      $connector->saveConnectorAccount($account);
+    } catch (Exceptions\DatabaseCloudConnectorViewException $exception) {
+      return self::grumble($exception->getMessage());
+    } catch (Throwable $exception) {
+      $this->logException($exception, 'Unable to save the connector database account.');
+      return self::grumble($this->l->t('Unable to save the connector database account.'));
+    }
+
+    return (new DTO\MessagesResponse([
+      $this->l->t('Connector database account saved. Configure and verify the consumer connections separately.'),
+    ]))->response();
+  }
+
+  /**
+   * @param mixed $value Replacement credentials, or null to restore Nextcloud credentials.
+   *
+   * @return Http\Response
+   */
+  private function setWopiConnectorCredentials(#[SensitiveParameter] mixed $value): Http\Response
+  {
+    if ($value !== null && (!is_array($value)
+        || !is_string($value['user'] ?? null)
+        || !is_string($value['password'] ?? null))) {
+      return self::grumble($this->l->t('Enter a database username and password.'));
+    }
+
+    $service = $this->di(ConnectorDatabaseCredentials::class);
+    try {
+      $credentials = $value === null ? [] : $service->prepare($this->di(Connection::class), trim($value['user']), $value['password']);
+      if ($this->wopiConnectorEnabled()) {
+        $this->wopiCredentialsViewService()->updateWopiCredentialsView($this->wopiCredentialsViewDatabase(), $credentials, checkAccess: true);
+      } else {
+        $service->save(ConnectorDatabaseCredentials::WOPI, $credentials);
+      }
+    } catch (Exceptions\DatabaseCloudConnectorViewException $exception) {
+      return self::grumble($exception->getMessage());
+    } catch (Throwable) {
+      return self::grumble($this->l->t('Unable to save connector database credentials.'));
+    }
+
+    return (new DTO\MessagesResponse([
+      $value === null ? $this->l->t('Restored Nextcloud database credentials.') : $this->l->t('Connector database credentials saved.'),
+    ]))->response();
   }
 
   /**
