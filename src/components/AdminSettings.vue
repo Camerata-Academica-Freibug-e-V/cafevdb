@@ -354,6 +354,7 @@
                                 inputId="default-font"
                                 :labelOutside="true"
                                 :options="Object.values(config.officeFonts)"
+                                :selectable="isFontSelectable"
                                 :loading="loading.fonts"
                                 label="family"
                                 :clearable="false"
@@ -840,7 +841,9 @@ const accessActionCounter = computed(() => {
   return t(appId, '{current} of {totals}', { current, totals })
 })
 const accessActionError = computed(() => access.action.failure)
-const savedDefaultOfficeFont = computed(() => config.officeFonts?.[settingsBackup.defaultOfficeFont])
+const getOfficeFont = (fonts: InitialState['officeFonts'], fontKey: undefined | string | (keyof InitialState['officeFonts'])) =>
+  fonts[fontKey as (keyof InitialState['officeFonts'])]
+const savedDefaultOfficeFont = computed(() => getOfficeFont(config.officeFonts, settingsBackup.defaultOfficeFont))
 
 watch(defaultOfficeFont, (newValue) => {
   if (newValue) {
@@ -874,7 +877,7 @@ const getData = async () => {
 
   loadOrchestraGroups()
 
-  defaultOfficeFont.value = config.officeFonts[settings.defaultOfficeFont]
+  defaultOfficeFont.value = getOfficeFont(config.officeFonts, settings.defaultOfficeFont)
   await vueNextTick()
   loading.fonts = false
   loading.general = false
@@ -1404,14 +1407,17 @@ const rescanFontData = () => fontCacheOperaton('rescan')
 
 const purgeFontData = () => fontCacheOperaton('purge')
 
+const fontDisabled: Record<string, boolean> = {}
+
+const isFontSelectable = (font: FontFileNames) => !fontDisabled[font.family]
+
 /** TBD. */
 function disableUnavailableFontOptions() {
   for (const [fontName, fontFiles] of Object.entries(config.officeFonts)) {
     if (fontFiles.x && fontFiles.xb && fontFiles.xi && fontFiles.xbi) {
-      config.officeFonts[fontName].disabled = false
+      fontDisabled[fontName] = false
     } else {
-      config.officeFonts[fontName].disabled = true
-      config.officeFonts[fontName].$isDisabled = true
+      fontDisabled[fontName] = true
       logger.info('DISABLE FONT', fontName, config.officeFonts[fontName])
     }
   }
