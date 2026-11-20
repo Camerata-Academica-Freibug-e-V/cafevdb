@@ -89,9 +89,6 @@ class FinanceService
     'christmas-next-day'      => '12-26',
   ];
 
-  /** @var Repositories\SepaDebitMandatesRepository */
-  private $mandatesRepository;
-
   /** {@inheritdoc} */
   public function __construct(
     private EventsService $eventsService,
@@ -101,8 +98,6 @@ class FinanceService
     protected EntityManager $entityManager,
   ) {
     $this->l = $this->l10n();
-
-    $this->mandatesRepository = $this->getDatabaseRepository(self::ENTITY);
 
     BusinessDay::enable([
       Carbon::class,
@@ -1113,7 +1108,7 @@ class FinanceService
   {
     $mandate = null;
 
-    $mandate = $this->mandatesRepository->findNewest($projectId, $musicianId);
+    $mandate = $this->getDatabaseRepository(self::ENTITY)->findNewest($projectId, $musicianId);
 
     if (!empty($mandate) && !$expired
         && $this->mandateIsExpired($mandate['mandateReference'])) {
@@ -1258,7 +1253,7 @@ class FinanceService
    */
   public function mandateReferenceUsage(string $reference, bool $brief = false):array
   {
-    return $this->mandatesRepository->usage($reference, $brief);
+    return $this->getDatabaseRepository(self::ENTITY)->usage($reference, $brief);
   }
 
   /**
@@ -1308,7 +1303,7 @@ class FinanceService
    */
   public function deactivateSepaMandate(string $mandateReference):?Entities\SepaDebitMandate
   {
-    return !empty($this->mandatesRepository->ban($mandateReference));
+    return !empty($this->getDatabaseRepository(self::ENTITY)->ban($mandateReference));
   }
 
   /**
@@ -1321,7 +1316,7 @@ class FinanceService
    */
   public function deleteSepaMandate(string $mandateReference):bool
   {
-    return !empty($this->mandatesRepository->remove($mandateReference));
+    return !empty($this->getDatabaseRepository(self::ENTITY)->remove($mandateReference));
   }
 
 

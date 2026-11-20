@@ -127,7 +127,6 @@ class ProjectService
     protected EntityManager $entityManager,
   ) {
     try {
-      $this->repository = $this->getDatabaseRepository(Entities\Project::class);
     } catch (Throwable $t) {
       $this->logError('HELLO');
       /** @var \OCP\IRequest $request */
@@ -159,6 +158,15 @@ class ProjectService
         $this->repository = $this->getDatabaseRepository(Entities\Project::class);
       }
     );
+  }
+
+  /** @return ProjectsRepository */
+  private function getRepository(): ProjectsRepository
+  {
+    if ($this->repository === null) {
+      $this->repository = $this->getDatabaseRepository(Entities\Project::class);
+    }
+    return $this->repository;
   }
 
   /**
@@ -271,7 +279,7 @@ class ProjectService
    */
   public function projectOptions(array $criteria = [], int $selectedProject = 0):array
   {
-    $projects = $this->repository->findBy($criteria, [ 'year' => 'DESC', 'name' => 'ASC' ]);
+    $projects = $this->getRepository()->findBy($criteria, [ 'year' => 'DESC', 'name' => 'ASC' ]);
     $options = [];
     foreach ($projects as $project) {
       $flags = ($project['id'] == $selectedProject) ? Navigation::SELECTED : 0;
@@ -357,7 +365,7 @@ class ProjectService
    */
   public function findProjectIds()
   {
-    return $this->repository->findProjectIds();
+    return $this->getRepository()->findProjectIds();
   }
 
   /**
@@ -369,7 +377,7 @@ class ProjectService
    */
   public function findById(int $projectId):?Entities\Project
   {
-    return $this->repository->find($projectId);
+    return $this->getRepository()->find($projectId);
   }
 
   /**
@@ -381,7 +389,7 @@ class ProjectService
    */
   public function findByName(string $projectName):?Entities\Project
   {
-    return $this->repository->findOneBy([
+    return $this->getRepository()->findOneBy([
       'name' => $projectName,
       'deleted' => null,
     ]);
@@ -409,7 +417,7 @@ class ProjectService
    */
   public function fetchName(int $projectId):?string
   {
-    $project = $this->repository->find($projectId);
+    $project = $this->getRepository()->find($projectId);
     if ($project == null) {
       return null;
     }
@@ -421,7 +429,7 @@ class ProjectService
    */
   public function fetchAll():array
   {
-    return $this->repository->findAll();
+    return $this->getRepository()->findAll();
   }
 
   /**
@@ -444,7 +452,7 @@ class ProjectService
     if (!in_array('INDEX', array_values($orderBy))) {
       $orderBy['id'] = 'INDEX';
     }
-    return $this->repository->findBy($criteria, $orderBy);
+    return $this->getRepository()->findBy($criteria, $orderBy);
   }
 
   /**
@@ -467,7 +475,7 @@ class ProjectService
   public function getProjectRegistrationDeadline(mixed $projectOrId, bool $ignoreExplicit = false):?DateTimeInterface
   {
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     if (!$ignoreExplicit) {
       $deadline = $project->getRegistrationDeadline();
       if (!empty($deadline)) {
@@ -550,7 +558,7 @@ class ProjectService
    */
   public function getProjectFolder($projectOrId, ?string $only = null)
   {
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     $pathPrefix = $this->getProjectPathPrefix($project);
     $sharedFolder = Constants::PATH_SEP . $this->getConfigValue(ConfigConstants::SHARED_FOLDER);
     $folders = $only ? [ $only ] : self::PROJECT_FOLDER_CONFIG_KEYS;
@@ -650,7 +658,7 @@ class ProjectService
     bool $dry = false
   ):array {
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
 
     if (empty($project)) {
       throw new Exception('CANNOT FIND PROJECT FOR ID ' . $projectOrId);
@@ -752,7 +760,7 @@ class ProjectService
   public function removeProjectFolders($projectOrId):bool
   {
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
 
     $pathPrefix = $this->getProjectPathPrefix($project);
 
@@ -942,7 +950,7 @@ class ProjectService
   public function ensureDownloadsShare($projectOrId, bool $noCreate = false):array
   {
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     try {
       if ($noCreate) {
         $path = $this->ensureDownloadsFolder($projectOrId, dry: true);
@@ -1409,7 +1417,7 @@ class ProjectService
 
     $projects = [];
     foreach (ProjectType::cases() as $projectType) {
-      $projects[$projectType->value] = $this->repository->findBy(
+      $projects[$projectType->value] = $this->getRepository()->findBy(
         [
           [ '!id' => $exclude ],
           [ 'type' => $projectType ],
@@ -1645,7 +1653,7 @@ Whatever.',
    */
   public function fetchProjectWebPages(mixed $projectOrId)
   {
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     if (empty($project)) {
       return null;
     }
@@ -1668,7 +1676,7 @@ Whatever.',
    */
   public function projectWebPages(mixed $projectOrId)
   {
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     if (empty($project)) {
       return false;
     }
@@ -1729,7 +1737,7 @@ Whatever.',
   public function createProjectWebPage(mixed $projectOrId, string $kind = self::WEBPAGE_TYPE_CONCERT):array
   {
     $webPagesRPC = $this->webPagesRPC();
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     if (empty($project)) {
       throw new Exception($this->l->t('Empty project.'));
     }
@@ -1945,7 +1953,7 @@ Whatever.',
    */
   public function nameProjectWebPages(mixed $projectOrId, ?string $projectName = null):bool
   {
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     if (empty($project)) {
       return false;
     }
@@ -1997,7 +2005,7 @@ Whatever.',
   public function attachMatchingWebPages(mixed $projectOrId):bool
   {
     $webPagesRPC = $this->webPagesRPC();
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     $projectId = $project->getId();
     $projectName = $project->getName();
 
@@ -2061,7 +2069,7 @@ Whatever.',
     ParticipationContext $participationContext,
   ):array {
     if (!($projectOrId instanceof Entities\Project)) {
-      $project = $this->repository->find($projectOrId);
+      $project = $this->getRepository()->find($projectOrId);
       if (empty($project)) {
         throw new Exception($this->l->t('Unabled to retrieve project with id %d', $projectOrId));
       }
@@ -2396,7 +2404,7 @@ Whatever.',
   public function createProjectMailingList($projectOrId):?array
   {
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
 
     $listId = $project->getMailingListId();
 
@@ -2526,7 +2534,7 @@ Whatever.',
   public function deleteProjectMailingList($projectOrId):void
   {
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
 
     $listId = $project->getMailingListId();
     if (empty($listId)) {
@@ -2687,7 +2695,7 @@ Whatever.',
   public function createProjectInfraStructure($projectOrId):void
   {
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
 
     if (empty($project)) {
       throw new InvalidArgumentException($this->l->t('Unable to fetch the project for id "%s".', print_r($projectOrId, true)));
@@ -2836,7 +2844,7 @@ Whatever.',
   public function deleteProject($projectOrId):?Entities\Project
   {
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     if (empty($project)) {
       throw new RuntimeException($this->l->t('Unable to find the project to delete (id = %d)', $projectOrId));
     }
@@ -3060,7 +3068,7 @@ Whatever.',
   // public function copyProject($projectOrId, ?string $newName = null):? Entities\Project
   // {
   //   /** @var Entities\Project $project */
-  //   $project = $this->repository->ensureProject($projectOrId);
+  //   $project = $this->getRepository()->ensureProject($projectOrId);
   //   if (empty($project)) {
   //     throw new RuntimeException($this->l->t('Unable to find the project to copy (id = %d)', $projectOrId));
   //   }
@@ -3122,7 +3130,7 @@ Whatever.',
     // already reflects the new state, so rather rely on the data.
     $identifier = is_array($projectOrId) ? ['id' => $projectOrId['id']] : $projectOrId;
     /** @var Entities\Project $project */
-    $project = $this->repository->ensureProject($identifier);
+    $project = $this->getRepository()->ensureProject($identifier);
     if ($project === null) {
       throw new Exceptions\DatabaseEntityNotFoundException(
         $this->l->t('Unable to find the project specified by given data (%s)', print_r($projectOrId, true)),
@@ -3407,7 +3415,7 @@ Whatever.',
    */
   public function sanitizeProject(mixed $projectOrId):void
   {
-    $project = $this->repository->ensureProject($projectOrId);
+    $project = $this->getRepository()->ensureProject($projectOrId);
     if (empty($project)) {
       throw new  RuntimeException($this->l->t('Project not found.'));
     }
