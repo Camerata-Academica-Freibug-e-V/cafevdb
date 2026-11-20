@@ -2152,7 +2152,7 @@ index a26e2b9..85c71a4 100644
  const pinia = createPinia()
  
 diff --git a/node_modules/@nextcloud/app-calendar/src/mixins/EditorMixin.js b/node_modules/@nextcloud/app-calendar/src/mixins/EditorMixin.js
-index 2cba614..6432c7e 100644
+index 25c1a08..ba2ceb7 100644
 --- a/node_modules/@nextcloud/app-calendar/src/mixins/EditorMixin.js
 +++ b/node_modules/@nextcloud/app-calendar/src/mixins/EditorMixin.js
 @@ -9,21 +9,21 @@ import { generateUrl } from '@nextcloud/router'
@@ -3409,7 +3409,7 @@ index be53e68..c681fc5 100644
  export default {
  	name: 'ContactsMenuAvailability',
 diff --git a/node_modules/@nextcloud/app-calendar/src/views/EditFull.vue b/node_modules/@nextcloud/app-calendar/src/views/EditFull.vue
-index a9f9de8..bfc488b 100644
+index 7753c36..07e70e0 100644
 --- a/node_modules/@nextcloud/app-calendar/src/views/EditFull.vue
 +++ b/node_modules/@nextcloud/app-calendar/src/views/EditFull.vue
 @@ -383,29 +383,29 @@ import HelpCircleIcon from 'vue-material-design-icons/HelpCircleOutline.vue'
@@ -3431,7 +3431,7 @@ index a9f9de8..bfc488b 100644
 -import Repeat from '@/components/Editor/Repeat/Repeat.vue'
 -import ResourceList from '@/components/Editor/Resources/ResourceList.vue'
 -import SaveButtons from '@/components/Editor/SaveButtons.vue'
--import EditorMixin from '@/mixins/EditorMixin.js'
+-import EditorMixin, { routerGuards } from '@/mixins/EditorMixin.js'
 -import { shareFile } from '@/services/attachmentService.js'
 -import getTimezoneManager from '@/services/timezoneDataProviderService.js'
 -import useCalendarObjectInstanceStore from '@/store/calendarObjectInstance.js'
@@ -3454,7 +3454,7 @@ index a9f9de8..bfc488b 100644
 +import Repeat from '../../src/components/Editor/Repeat/Repeat.vue'
 +import ResourceList from '../../src/components/Editor/Resources/ResourceList.vue'
 +import SaveButtons from '../../src/components/Editor/SaveButtons.vue'
-+import EditorMixin from '../../src/mixins/EditorMixin.js'
++import EditorMixin, { routerGuards } from '../../src/mixins/EditorMixin.js'
 +import { shareFile } from '../../src/services/attachmentService.js'
 +import getTimezoneManager from '../../src/services/timezoneDataProviderService.js'
 +import useCalendarObjectInstanceStore from '../../src/store/calendarObjectInstance.js'
@@ -3466,7 +3466,7 @@ index a9f9de8..bfc488b 100644
  export default {
  	name: 'EditFull',
 diff --git a/node_modules/@nextcloud/app-calendar/src/views/EditSimple.vue b/node_modules/@nextcloud/app-calendar/src/views/EditSimple.vue
-index 4ba0285..5f97717 100644
+index d0c56ef..c727e46 100644
 --- a/node_modules/@nextcloud/app-calendar/src/views/EditSimple.vue
 +++ b/node_modules/@nextcloud/app-calendar/src/views/EditSimple.vue
 @@ -333,26 +333,26 @@ import EditIcon from 'vue-material-design-icons/PencilOutline.vue'
@@ -3495,7 +3495,7 @@ index 4ba0285..5f97717 100644
 -import Repeat from '@/components/Editor/Repeat/Repeat.vue'
 -import PropertySelectMultiple from '@/components/Editor/Properties/PropertySelectMultiple.vue'
 -import SaveButtons from '@/components/Editor/SaveButtons.vue'
--import EditorMixin from '@/mixins/EditorMixin.js'
+-import EditorMixin, { routerGuards } from '@/mixins/EditorMixin.js'
 -import useCalendarObjectInstanceStore from '@/store/calendarObjectInstance.js'
 -import useSettingsStore from '@/store/settings.js'
 -import useWidgetStore from '@/store/widget.js'
@@ -3505,7 +3505,7 @@ index 4ba0285..5f97717 100644
 +import Repeat from '../../src/components/Editor/Repeat/Repeat.vue'
 +import PropertySelectMultiple from '../../src/components/Editor/Properties/PropertySelectMultiple.vue'
 +import SaveButtons from '../../src/components/Editor/SaveButtons.vue'
-+import EditorMixin from '../../src/mixins/EditorMixin.js'
++import EditorMixin, { routerGuards } from '../../src/mixins/EditorMixin.js'
 +import useCalendarObjectInstanceStore from '../../src/store/calendarObjectInstance.js'
 +import useSettingsStore from '../../src/store/settings.js'
 +import useWidgetStore from '../../src/store/widget.js'
