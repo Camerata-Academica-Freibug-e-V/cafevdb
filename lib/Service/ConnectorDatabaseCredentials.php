@@ -25,7 +25,6 @@ use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\DriverManager;
 /** Connector secrets must be readable even before the orchestra app is unlocked. */
 class ConnectorDatabaseCredentials
 {
-  public const CLOUD = 'cloudConnectorCredentials';
   public const WOPI = 'wopiConnectorCredentials';
 
   // phpcs:disable Squiz.Commenting.FunctionComment.Missing
@@ -91,18 +90,6 @@ class ConnectorDatabaseCredentials
       $params['dbname'] = $database;
     }
     return DriverManager::getConnection($params);
-  }
-
-  public function hostname(#[SensitiveParameter] array $credentials): string
-  {
-    $host = $credentials['host'];
-    if (str_contains($host, ':') && !str_starts_with($host, '[')) {
-      $host = '[' . $host . ']';
-    }
-    return $host . (
-      isset($credentials['unix_socket']) ? ':' . $credentials['unix_socket']
-      : (isset($credentials['port']) ? ':' . $credentials['port'] : '')
-    );
   }
 
   public function checkViews(#[SensitiveParameter] array $credentials, string $database, array $views): void

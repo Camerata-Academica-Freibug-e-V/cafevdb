@@ -1565,9 +1565,11 @@ class OrchestraSettingsController extends Controller
           $this->l->t('WOPI credential view has been regenerated successfully.'),
         ]))->response();
 
-      case ConnectorDatabaseCredentials::CLOUD:
+      case CloudUserConnectorService::CONNECTOR_ACCOUNT_CONFIG:
+        return $this->setCloudConnectorAccount($value);
+
       case ConnectorDatabaseCredentials::WOPI:
-        return $this->setConnectorCredentials($parameter, $value);
+        return $this->setWopiConnectorCredentials($value);
 
       case 'keydistribute':
         list('status' => $status, 'messages' => $messages) = $this->distributeEncryptionKey();
@@ -2258,12 +2260,47 @@ class OrchestraSettingsController extends Controller
   }
 
   /**
-   * @param string $key Connector configuration key.
+   * @param mixed $value The MariaDB account, or null to use the Nextcloud account.
+   *
+   * @return Http\Response
+   */
+  private function setCloudConnectorAccount(mixed $value): Http\Response
+  {
+    if ($value !== null && (!is_array($value)
+        || !is_string($value['user'] ?? null)
+        || !is_string($value['accountHost'] ?? null))) {
+      return self::grumble($this->l->t('Enter a database username and account host.'));
+    }
+
+    try {
+      $connector = $this->di(CloudUserConnectorService::class);
+      $account = $value === null ? [] : $connector->normalizeConnectorAccount($value['user'], $value['accountHost']);
+      $database = $this->getConfigValue(EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value, null);
+      if ($this->getConfigValue(EnumSimpleSettingsKey::IMPORT_CLUB_MEMBERS_AS_CLOUD_USERS->value, 'off') === 'on') {
+        $connector->updateUserSqlViews($database, $account, checkAccess: true);
+      }
+      if ($this->getConfigValue(EnumSimpleSettingsKey::MUSICIAN_PERSONALIZED_VIEWS->value, 'off') === 'on') {
+        $connector->updateMusicianPersonalizedViews($database, $account, checkAccess: true);
+      }
+      $connector->saveConnectorAccount($account);
+    } catch (Exceptions\DatabaseCloudConnectorViewException $exception) {
+      return self::grumble($exception->getMessage());
+    } catch (Throwable $exception) {
+      $this->logException($exception, 'Unable to save the connector database account.');
+      return self::grumble($this->l->t('Unable to save the connector database account.'));
+    }
+
+    return (new DTO\MessagesResponse([
+      $this->l->t('Connector database account saved. Configure and verify the consumer connections separately.'),
+    ]))->response();
+  }
+
+  /**
    * @param mixed $value Replacement credentials, or null to restore Nextcloud credentials.
    *
    * @return Http\Response
    */
-  private function setConnectorCredentials(string $key, #[\SensitiveParameter] mixed $value): Http\Response
+  private function setWopiConnectorCredentials(#[\SensitiveParameter] mixed $value): Http\Response
   {
     if ($value !== null && (!is_array($value)
         || !is_string($value['user'] ?? null)
@@ -2273,29 +2310,11 @@ class OrchestraSettingsController extends Controller
 
     $service = $this->di(ConnectorDatabaseCredentials::class);
     try {
-      if ($key === ConnectorDatabaseCredentials::CLOUD) {
-        $this->di(CloudUserConnectorService::class)->requireBackendAdmin();
-      }
       $credentials = $value === null ? [] : $service->prepare($this->di(Connection::class), trim($value['user']), $value['password']);
-      if ($key === ConnectorDatabaseCredentials::WOPI && $this->wopiConnectorEnabled()) {
+      if ($this->wopiConnectorEnabled()) {
         $this->wopiCredentialsViewService()->updateWopiCredentialsView($this->wopiCredentialsViewDatabase(), $credentials, checkAccess: true);
       } else {
-        if ($key === ConnectorDatabaseCredentials::CLOUD) {
-          $connector = $this->di(CloudUserConnectorService::class);
-          $database = $this->getConfigValue(EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value, null);
-          $importUsers = $this->getConfigValue(EnumSimpleSettingsKey::IMPORT_CLUB_MEMBERS_AS_CLOUD_USERS->value, 'off') === 'on';
-          if ($importUsers) {
-            $connector->updateUserSqlViews($database, $credentials, checkAccess: true);
-          }
-          if ($this->getConfigValue(EnumSimpleSettingsKey::MUSICIAN_PERSONALIZED_VIEWS->value, 'off') === 'on') {
-            $connector->updateMusicianPersonalizedViews($database, $credentials, checkAccess: true);
-          }
-          if ($importUsers) {
-            $connector->writeUserSqlConfig($database);
-            $connector->configureCloudUserBackend(credentials: $credentials);
-          }
-        }
-        $service->save($key, $credentials);
+        $service->save(ConnectorDatabaseCredentials::WOPI, $credentials);
       }
     } catch (Exceptions\DatabaseCloudConnectorViewException $exception) {
       return self::grumble($exception->getMessage());

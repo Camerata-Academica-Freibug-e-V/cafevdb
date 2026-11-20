@@ -115,14 +115,4 @@ class ConnectorDatabaseCredentialsTest extends TestCase
     $service->checkViews($credentials, 'view`db', ['RestrictedView']);
   }
 
-  public function testUserSqlHostnamePreservesIpv6AndPort(): void
-  {
-    $service = new ConnectorDatabaseCredentials(
-      $this->createStub(IConfig::class), $this->createStub(ICrypto::class),
-      $this->createStub(IDBConnection::class), $this->createStub(IL10N::class), 'cafevdb',
-    );
-    self::assertSame('[::1]:3307', $service->hostname(['host' => '::1', 'port' => 3307]));
-    self::assertSame('[::1]', $service->hostname(['host' => '[::1]']));
-    self::assertSame('localhost:/run/mysql.sock', $service->hostname(['host' => 'localhost', 'unix_socket' => '/run/mysql.sock']));
-  }
 }

@@ -233,6 +233,7 @@ class OrchestraSettingsInitialState
         ),
         'importClubMembersAsCloudUsers' => $this->getConfigValue('importClubMembersAsCloudUsers', 'off') === 'on',
         'cloudUserViewsDatabase' => $this->getConfigValue('cloudUserViewsDatabase'),
+        'cloudConnectorAccount' => $this->cloudUserService->getConnectorAccount(),
         'musicianPersonalizedViews' => $this->getConfigValue('musicianPersonalizedViews'),
         'wopiCredentialsViewEnabled' => $this->getConfigValue(
           'wopiCredentialsViewEnabled',

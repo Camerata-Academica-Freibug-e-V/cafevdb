@@ -45,7 +45,7 @@ describe('Connector credentials', () => {
     const error = new Error('test-only');
     vi.mocked(setAdminSetting).mockRejectedValue(error);
     vi.mocked(showSettingError).mockReturnValue(false);
-    const wrapper = mount(ConnectorCredentials, { props: { setting: 'cloudConnectorCredentials' } });
+    const wrapper = mount(ConnectorCredentials, { props: { setting: 'wopiConnectorCredentials' } });
     await wrapper.get('input[aria-label="Connector database username"]').setValue('restricted');
     await wrapper.get('input[aria-label="Connector database password"]').setValue('test-only');
     await wrapper.get('form').trigger('submit');
