@@ -173,14 +173,14 @@ WHERE m.email IS NOT NULL AND m.email <> ""
     DatabaseTables::FIELD_TRANSLATIONS_TABLE,
   ];
 
-  const GRANT_EXECUTE = 'GRANT EXECUTE ON FUNCTION %1$s TO %2$s@\'localhost\'';
-  const REVOKE_EXECUTE = 'REVOKE EXECUTE ON FUNCTION %1$s FROM %2$s@\'localhost\'';
-  const GRANT_INSERT = 'GRANT INSERT ON %1$s TO %2$s@\'localhost\'';
-  const REVOKE_INSERT = 'REVOKE INSERT ON %1$s FROM %2$s@\'localhost\'';
-  const GRANT_SELECT = 'GRANT SELECT ON %1$s TO %2$s@\'localhost\'';
-  const REVOKE_SELECT = 'REVOKE SELECT ON %1$s FROM %2$s@\'localhost\'';
-  const GRANT_FIELD_UPDATE = 'GRANT UPDATE (%3$s) ON %1$s TO %2$s@\'localhost\'';
-  const REVOKE_FIELD_UPDATE = 'REVOKE IF EXISTS UPDATE (%3$s) ON %1$s FROM %2$s@\'localhost\'';
+  const GRANT_EXECUTE = 'GRANT EXECUTE ON FUNCTION %1$s TO %2$s';
+  const REVOKE_EXECUTE = 'REVOKE EXECUTE ON FUNCTION %1$s FROM %2$s';
+  const GRANT_INSERT = 'GRANT INSERT ON %1$s TO %2$s';
+  const REVOKE_INSERT = 'REVOKE INSERT ON %1$s FROM %2$s';
+  const GRANT_SELECT = 'GRANT SELECT ON %1$s TO %2$s';
+  const REVOKE_SELECT = 'REVOKE SELECT ON %1$s FROM %2$s';
+  const GRANT_FIELD_UPDATE = 'GRANT UPDATE (%3$s) ON %1$s TO %2$s';
+  const REVOKE_FIELD_UPDATE = 'REVOKE IF EXISTS UPDATE (%3$s) ON %1$s FROM %2$s';
 
   const PRIVILEGES = [
     'ProjectApplications' => [
@@ -241,7 +241,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
   {
     $viewName = $prefix . Util::dashesToCamelCase($baseName, true, '_') . self::VIEW_POSTFIX;
     if (!empty($dataBaseName)) {
-      $viewName = $dataBaseName . '.' . $viewName;
+      $viewName = WopiCredentialStore::qualify($dataBaseName, $viewName);
     }
     return $viewName;
   }
@@ -259,22 +259,29 @@ WHERE m.email IS NOT NULL AND m.email <> ""
   }
 
   /**
-   * @return string
+   * @param null|array $credentials Override, or null to use saved credentials.
+   *
+   * @return string Quoted MariaDB account.
    *
    * @throws Exceptions\DatabaseCloudConnectorViewException
    */
-  private function checkAndGetCloudDbUser():string
+  private function connectorGrantee(#[\SensitiveParameter] ?array $credentials = null):string
   {
+    $credentials ??= $this->appContainer->get(ConnectorDatabaseCredentials::class)->load(ConnectorDatabaseCredentials::CLOUD);
+    if ($credentials !== []) {
+      return $this->connection->quote($credentials['user']) . '@' . $this->connection->quote($credentials['accountHost']);
+    }
+
     $cloudDbHost = $this->cloudConfig->getSystemValue('dbhost');
     $cloudDbUser = $this->cloudConfig->getSystemValue(ConfigConstants::APP_DB_USER);
 
-    if ($cloudDbHost !== $this->appDbHost) {
+    if ($this->cloudConfig->getSystemValue('dbtype', 'sqlite') !== 'mysql' || $cloudDbHost !== $this->appDbHost) {
       throw new Exceptions\DatabaseCloudConnectorViewException(
-        $this->l->t('Cloud database server "%s" and app database server "%s" must coincide.', [ $cloudDbHost, $this->appDbHost ])
+        $this->l->t('Nextcloud must use MySQL or MariaDB on the orchestra database server, or you must configure separate connector credentials.'),
       );
     }
 
-    return $cloudDbUser;
+    return $this->connection->quote($cloudDbUser) . "@'localhost'";
   }
 
   /**
@@ -345,13 +352,22 @@ WHERE m.email IS NOT NULL AND m.email <> ""
    * will be created. The cafevdb database user must have GRANT rights on the
    * databse. If null the views are created in the standard database.
    *
+   * @param null|array $credentials Override, or null to use saved credentials.
+   * @param bool $checkAccess Whether to verify the views using the connector connection.
+   *
    * @return void
    *
    * @throws Exceptions\DatabaseCloudConnectorViewException
   */
-  public function updateUserSqlViews(?string $dataBaseName):void
+  public function updateUserSqlViews(
+    ?string $dataBaseName,
+    #[\SensitiveParameter] ?array $credentials = null,
+    bool $checkAccess = false,
+  ):void
   {
-    $cloudDbUser = $this->checkAndGetCloudDbUser();
+    $credentialService = $this->appContainer->get(ConnectorDatabaseCredentials::class);
+    $credentials ??= $credentialService->load(ConnectorDatabaseCredentials::CLOUD);
+    $cloudDbUser = $this->connectorGrantee($credentials);
     $currentStatement = null;
     try {
       foreach (self::USER_SQL_VIEWS as $name => $sql) {
@@ -388,6 +404,13 @@ WHERE m.email IS NOT NULL AND m.email <> ""
         $this->l->t('Unable to create or update the user-sql cloud-connector views: %s.', $currentStatement),
         $t->getCode(),
         $t
+      );
+    }
+    if ($checkAccess) {
+      $credentialService->checkViews(
+        $credentials,
+        $dataBaseName ?: $this->appDbName,
+        array_map(fn(string $name) => $this->viewName(null, self::USER_SQL_PREFIX, $name), array_keys(self::USER_SQL_VIEWS)),
       );
     }
   }
@@ -467,7 +490,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
     }
 
     return [
-      'db.database' => $dataBaseName ?? $this->appDbName,
+      'db.database' => $dataBaseName ?: $this->appDbName,
       'db.driver' => $driver,
       'db.hostname' => $cloudDbHost,
       'db.password' => $cloudDbPass,
@@ -547,11 +570,15 @@ WHERE m.email IS NOT NULL AND m.email <> ""
    * config space.
    *
    * @param bool $erase
+   * @param null|array $credentials Override, or null to use saved credentials.
    *
    * @return array
    */
-  public function configureCloudUserBackend(bool $erase = false):array
+  public function configureCloudUserBackend(bool $erase = false, #[\SensitiveParameter] ?array $credentials = null):array
   {
+    $credentialService = $this->appContainer->get(ConnectorDatabaseCredentials::class);
+    $savedCredentials = $credentialService->load(ConnectorDatabaseCredentials::CLOUD);
+    $credentials ??= $savedCredentials;
     $configKeys = $this->cloudConfig->getAppKeys($this->appName);
     $prefix = self::CLOUD_USER_BACKEND . ':';
     $prefixLen = strlen($prefix);
@@ -566,13 +593,49 @@ WHERE m.email IS NOT NULL AND m.email <> ""
     $cloudUserBackendParams = [];
     foreach ($cloudUserBackendKeys as $cloudUserBackendKey) {
       $cloudUserBackendValue = $erase ? '' : $this->cloudConfig->getAppValue($this->appName, $prefix . $cloudUserBackendKey);
-      if (preg_match('/%system:(\w+)%/', $cloudUserBackendValue, $matches)) {
-        $cloudUserBackendValue = $this->cloudConfig->getSystemValue($matches[1]);
+      $systemKey = match ($cloudUserBackendKey) {
+        'db.hostname' => 'dbhost',
+        'db.username' => 'dbuser',
+        'db.password' => 'dbpassword',
+        default => null,
+      };
+      if ($systemKey !== null && $cloudUserBackendValue === '%system:' . $systemKey . '%') {
+        $cloudUserBackendValue = $this->cloudConfig->getSystemValue($systemKey);
       }
       // $this->cloudConfig->setAppValue(self::CLOUD_USER_BACKEND, $cloudUserBackendKey, $cloudUserBackendValue);
       $cloudUserBackendParams[str_replace('.', '-', $cloudUserBackendKey)] = $cloudUserBackendValue;
     }
-    // $this->logInfo('USER SQL POST PARAMS ' . print_r($cloudUserBackendParams, true));
+
+    if ($credentials !== [] || $savedCredentials !== []) {
+      $this->requireBackendAdmin();
+      if (!$erase && $credentials !== []) {
+        $cloudUserBackendParams['db-hostname'] = $credentialService->hostname($credentials);
+        $cloudUserBackendParams['db-username'] = $credentials['user'];
+        $cloudUserBackendParams['db-password'] = $credentials['password'];
+      }
+      // user_sql's saveProperties route logs changed property values, including the password.
+      // Set the properties through its storage API instead.
+      try {
+        $properties = (new \OCP\AppFramework\App(self::CLOUD_USER_BACKEND))->getContainer()->get(\OCA\UserSQL\Properties::class);
+        // A cache hit in user_sql can leave the storage flag uninitialized.
+        $properties['opt.safe_store'] = $this->cloudConfig->getAppValue(self::CLOUD_USER_BACKEND, 'opt.safe_store', '0');
+        foreach ($cloudUserBackendKeys as $key) {
+          if ($key === 'opt.safe_store') {
+            continue; // Honor the backend's choice of where to store its credentials.
+          }
+          $value = $cloudUserBackendParams[str_replace('.', '-', $key)];
+          if ($erase || $value === null) {
+            unset($properties[$key]);
+          } else {
+            $properties[$key] = $value;
+          }
+        }
+        $this->clearUserBackendCache();
+      } catch (Throwable) {
+        throw new Exceptions\DatabaseCloudConnectorViewException($this->l->t('Unable to configure the user_sql database connection.'));
+      }
+      return [$this->l->t('The user_sql database connection has been configured.')];
+    }
 
     // try also to clear the cache after and before changing the configuration
     $this->clearUserBackendCache();
@@ -601,6 +664,17 @@ WHERE m.email IS NOT NULL AND m.email <> ""
   private function clearUserBackendCache(): void
   {
     $this->requestService->postToRoute(implode('.', [self::CLOUD_USER_BACKEND, 'Settings', 'clearCache']));
+  }
+
+  /** @return void */
+  public function requireBackendAdmin(): void
+  {
+    $uid = $this->appContainer->get(\OCP\IUserSession::class)->getUser()?->getUID();
+    if ($uid === null || !$this->appContainer->get(\OCP\IGroupManager::class)->isAdmin($uid)) {
+      throw new Exceptions\DatabaseCloudConnectorViewException(
+        $this->l->t('Only a Nextcloud administrator can configure the cloud-user database credentials.'),
+      );
+    }
   }
 
   /**
@@ -656,6 +730,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
    * directory entries, and the storages associated with those root entries.
    *
    * @param null|string $dataBaseName
+   * @param string $cloudDbUser Quoted MariaDB account.
    *
    * @return array<string, string>
    * ```
@@ -664,9 +739,9 @@ WHERE m.email IS NOT NULL AND m.email <> ""
    * ]
    * ```
    */
-  private function generateMusicianPersonalizedViewsStatements(?string $dataBaseName):array
+  private function generateMusicianPersonalizedViewsStatements(?string $dataBaseName, string $cloudDbUser):array
   {
-    $functionPrefix = empty($dataBaseName) ? '' : $dataBaseName . '.';
+    $functionPrefix = empty($dataBaseName) ? '' : '`' . str_replace('`', '``', $dataBaseName) . '`.';
     $functions = [
       'ROW_ACCESS_TOKEN' => "()
   RETURNS CHAR(128) CHARSET ascii
@@ -818,8 +893,6 @@ END",
     foreach ($functions as $name => $definition) {
       $statements[$functionPrefix . $name] = self::CREATE_FUNCTION_PREFIX . " " . $functionPrefix . $name . $definition;
     }
-
-    $cloudDbUser = $this->checkAndGetCloudDbUser();
 
     $musicianViewName = $this->personalizedViewName($dataBaseName, 'Musicians');
     $statements[$musicianViewName] = "CREATE OR REPLACE
@@ -1060,15 +1133,33 @@ SELECT t.* FROM " . $table . " t";
    * will be created. The cafevdb database user must have GRANT rights on the
    * database. If null the views are created in the standard databse.
    *
+   * @param null|array $credentials Override, or null to use saved credentials.
+   * @param bool $checkAccess Whether to verify the view using the connector connection.
+   *
    * @return void
    *
    * @throws Exceptions\DatabaseCloudConnectorViewException
    */
-  public function updateMusicianPersonalizedViews(?string $dataBaseName):void
+  public function updateMusicianPersonalizedViews(
+    ?string $dataBaseName,
+    #[\SensitiveParameter] ?array $credentials = null,
+    bool $checkAccess = false,
+  ):void
   {
-    $statements = $this->generateMusicianPersonalizedViewsStatements($dataBaseName);
-
-    $cloudDbUser = $this->checkAndGetCloudDbUser();
+    $credentialService = $this->appContainer->get(ConnectorDatabaseCredentials::class);
+    $credentials ??= $credentialService->load(ConnectorDatabaseCredentials::CLOUD);
+    $cloudDbUser = $this->connectorGrantee($credentials);
+    $membersDbUser = null;
+    if ($credentials !== []
+        && $this->cloudConfig->getSystemValue('dbtype', 'sqlite') === 'mysql'
+        && $this->cloudConfig->getSystemValue('dbhost') === $this->appDbHost) {
+      // The companion members app still connects with Nextcloud's credentials.
+      $membersDbUser = $this->connectorGrantee([]);
+      if ($membersDbUser === $cloudDbUser) {
+        $membersDbUser = null;
+      }
+    }
+    $statements = $this->generateMusicianPersonalizedViewsStatements($dataBaseName, $cloudDbUser);
     $currentStatement = null;
     try {
       foreach ($statements as $viewName => $statement) {
@@ -1076,6 +1167,12 @@ SELECT t.* FROM " . $table . " t";
         if (preg_match(self::CREATE_FUNCTION_REGEXP, $statement)) {
           $this->logInfo('SQL ' . $currentStatement);
           $this->connection->prepare($currentStatement)->executeQuery();
+          $accountSuffix = ' TO ' . $cloudDbUser;
+          if ($membersDbUser !== null && str_starts_with($currentStatement, 'GRANT ')
+              && str_ends_with($currentStatement, $accountSuffix)) {
+            $currentStatement = substr($currentStatement, 0, -strlen($accountSuffix)) . ' TO ' . $membersDbUser;
+            $this->connection->prepare($currentStatement)->executeQuery();
+          }
           $currentStatement = sprintf(self::GRANT_EXECUTE, $viewName, $cloudDbUser);
         } elseif (preg_match(self::CREATE_VIEW_REGEXP, $statement)) {
           $this->logInfo('SQL ' . $currentStatement);
@@ -1099,6 +1196,11 @@ SELECT t.* FROM " . $table . " t";
         $t
       );
     }
+    if ($checkAccess) {
+      $credentialService->checkViews($credentials, $dataBaseName ?: $this->appDbName, [
+        $this->personalizedViewName(null, 'Musicians'),
+      ]);
+    }
   }
 
   /**
@@ -1115,9 +1217,8 @@ SELECT t.* FROM " . $table . " t";
    */
   public function removeMusicianPersonalizedViews(?string $dataBaseName):void
   {
-    $statements = $this->generateMusicianPersonalizedViewsStatements($dataBaseName);
-
-    $cloudDbUser = $this->checkAndGetCloudDbUser();
+    $cloudDbUser = $this->connectorGrantee();
+    $statements = $this->generateMusicianPersonalizedViewsStatements($dataBaseName, $cloudDbUser);
     $currentStatement = null;
     try {
       foreach ($statements as $key => $sql) {
@@ -1149,9 +1250,9 @@ SELECT t.* FROM " . $table . " t";
           $currentStatement = sprintf('DROP VIEW IF EXISTS %1$s', $key);
         } else {
           $matches = null;
-          if (preg_match('/GRANT\s*([^ ]+)\s*([^ ]+)?\s*ON\s*([^ ]+)\s*TO\s*([^ ]+)/', $sql, $matches)) {
+          if (preg_match('/^GRANT (.+) ON (.+) TO (.+)$/', $sql, $matches)) {
             array_shift($matches);
-            $currentStatement = sprintf('REVOKE %1$s %2$s ON %3$s FROM %4$s', ...$matches);
+            $currentStatement = sprintf('REVOKE %1$s ON %2$s FROM %3$s', ...$matches);
             $this->logDebug('SQL ' . $currentStatement);
             try {
               $this->connection->prepare($currentStatement)->executeQuery();

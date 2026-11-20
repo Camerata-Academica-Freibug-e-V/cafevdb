@@ -53,6 +53,32 @@ same, not guest or remote-user tokens.
 Protect WOPI tokens in storage and transport: someone who obtains both a token
 and its encrypted credential can recover the shared app key.
 
+Connector databases
+-------------------
+
+In the orchestra's sharing settings, enter separate connector credentials under
+**Members as Cloud-Users** and **WOPI access to DB-Storage**. Create a dedicated
+MariaDB account for each connector before saving its username and password. The
+views must be on the orchestra database server, but Nextcloud itself may use
+another database engine or server. Keep the database name in the views database
+field. The orchestra database account needs permission to create the views and
+grant access; the connector accounts do not need access to the underlying tables.
+
+The credential fields are write-only. Saving checks the login and, when the
+connector is enabled, verifies that its views can be queried. Use **Use Nextcloud
+database credentials** to remove an override; this only works for an enabled
+connector if Nextcloud is using MySQL or MariaDB on the same server. When replacing
+or retiring a dedicated account, revoke any grants it no longer needs.
+Changing the cloud-user connector credentials requires a Nextcloud administrator.
+The companion cafevdb-members app currently still uses Nextcloud's database
+credentials for personalized views, so those views require a MySQL/MariaDB
+Nextcloud database on the orchestra server until that app supports independent
+credentials. When possible, CafeVDB also grants the Nextcloud database user access
+to the personalized views to preserve this integration.
+CafeVDB encrypts its connector settings with Nextcloud's system crypto. The
+user_sql backend stores its own connection settings according to its safe-store
+setting; without safe-store, its password is stored in Nextcloud's app database.
+
 Frontend builds
 ---------------
 

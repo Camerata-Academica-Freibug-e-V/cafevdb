@@ -19,6 +19,10 @@
       </NcNoteCard>
     </template>
     <template #members-as-cloud-users>
+      <ConnectorCredentials setting="cloudConnectorCredentials" />
+      <NcNoteCard type="info">
+        {{ t(appId, 'The companion members app still requires Nextcloud database credentials for personalized views.') }}
+      </NcNoteCard>
       <NcNoteCard v-for="(requirement, index) in cloudUserRequirements" :key="index" type="info">
         {{ requirement }}
       </NcNoteCard>
@@ -35,6 +39,7 @@
       </NcNoteCard>
     </template>
     <template #wopi-credentials-view>
+      <ConnectorCredentials setting="wopiConnectorCredentials" />
       <div class="admin-actions">
         <NcButton v-if="wopiViewEnabled" :disabled="runningWopiAction" @click="recreateWopiView">
           {{ t(appId, 'Regenerate WOPI access views') }}
@@ -55,6 +60,7 @@ import { translate as t } from '@nextcloud/l10n'
 import { NcButton, NcNoteCard, NcPasswordField } from '@nextcloud/vue'
 import { computed, ref } from 'vue'
 import AdminSettingsTab from './AdminSettingsTab.vue'
+import ConnectorCredentials from './ConnectorCredentials.vue'
 import {
   BALANCES_FOLDER,
   CALENDAR_KEY_POSTFIX,

@@ -101,6 +101,8 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\RequestService;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261101120000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261118191044::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialStore::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EmailTemplateDefaultsService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalDavService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConfigService::class)]
@@ -300,6 +302,7 @@ class CloudUserConnectorServiceTest extends TestCase
     $dbConfig = $this->databaseProvider->getDatabaseConfig();
     $this->cloudConfig->setSystemValue('dbhost', $dbConfig->databaseServer);
     $this->cloudConfig->setSystemValue('dbuser', DatabaseProvider::CLOUD_DB_USER);
+    $this->cloudConfig->setSystemValue('dbtype', 'mysql');
 
     $this->cloudUserConnectorService->updateUserSqlViews($cloudConnectorDatabase);
     $this->cloudUserConnectorService->updateMusicianPersonalizedViews($cloudConnectorDatabase);
@@ -308,6 +311,29 @@ class CloudUserConnectorServiceTest extends TestCase
     $this->cloudUserConnectorService->removeUserSqlViews($cloudConnectorDatabase);
 
     $this->unapplyMigrations();
+  }
+
+  /** @return void */
+  public function testDedicatedCredentialsAccessViewsWhenNextcloudUsesPostgres(): void
+  {
+    $this->applyMigrations('latest');
+    $database = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
+    $dbConfig = $this->databaseProvider->getDatabaseConfig();
+    $credentialService = $this->mockProvider->getAppContainer()->get(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $credentials = $credentialService->prepare(
+      $this->getEntityManager()->getConnection(),
+      DatabaseProvider::CLOUD_DB_USER,
+      $dbConfig->databasePassword,
+    );
+    $oldType = $this->cloudConfig->getSystemValue('dbtype', 'sqlite');
+    try {
+      $this->cloudConfig->setSystemValue('dbtype', 'pgsql');
+      $this->cloudUserConnectorService->updateUserSqlViews($database, $credentials, checkAccess: true);
+      $this->cloudUserConnectorService->updateMusicianPersonalizedViews($database, $credentials, checkAccess: true);
+    } finally {
+      $this->cloudConfig->setSystemValue('dbtype', $oldType);
+      $this->unapplyMigrations();
+    }
   }
 
   /**
