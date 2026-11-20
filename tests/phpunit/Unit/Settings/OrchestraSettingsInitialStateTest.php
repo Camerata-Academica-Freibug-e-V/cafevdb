@@ -38,7 +38,6 @@ use OCP\IGroup;
 use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IInitialStateService;
-use OCP\App\IAppManager;
 
 use OCA\CAFEVDB\AddressBook\AddressBookProvider;
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
@@ -128,7 +127,7 @@ class OrchestraSettingsInitialStateTest extends TestCase
     $this->preparePublishing($form);
     $form->publish();
     $this->assertSame(['enabled' => false], $this->published['orchestraSettings']);
-    $this->assertArrayHasKey('about', $this->published);
+    $this->assertArrayNotHasKey('about', $this->published);
     $this->assertArrayNotHasKey('adminSettings', $this->published);
   }
 
@@ -143,7 +142,7 @@ class OrchestraSettingsInitialStateTest extends TestCase
   }
 
   #[Attributes\DataProvider('configurationFailures')]
-  public function testConfigurationFailuresAreLoggedWithoutLosingAboutOrPublishingPartialSettings(
+  public function testConfigurationFailuresAreLoggedWithoutPublishingPartialSettings(
     string $method,
     Throwable $failure,
   ):void {
@@ -273,10 +272,10 @@ class OrchestraSettingsInitialStateTest extends TestCase
     $form->method('encryptionKeyValid')->willReturn(true);
     $form->method('buildSettings')->willReturn(['orchestraName' => 'Test orchestra']);
     $form->expects($this->never())->method('logException');
-    $this->preparePublishing($form, 3);
+    $this->preparePublishing($form, 2);
 
     $form->publish();
-    $this->assertSame(['about', 'adminSettings', 'orchestraSettings'], array_keys($this->published));
+    $this->assertSame(['adminSettings', 'orchestraSettings'], array_keys($this->published));
     $this->assertSame(['orchestraName' => 'Test orchestra'], $this->published['adminSettings']);
     $this->assertSame(['enabled' => true], $this->published['orchestraSettings']);
   }
@@ -284,7 +283,7 @@ class OrchestraSettingsInitialStateTest extends TestCase
   /** @return void */
   private function assertFailedConfiguration():void
   {
-    $this->assertArrayHasKey('about', $this->published);
+    $this->assertArrayNotHasKey('about', $this->published);
     $this->assertArrayNotHasKey('adminSettings', $this->published);
     $this->assertSame([
       'enabled' => false,
@@ -299,15 +298,12 @@ class OrchestraSettingsInitialStateTest extends TestCase
    *
    * @return void
    */
-  private function preparePublishing(OrchestraSettingsInitialState $form, int $publications = 2):void
+  private function preparePublishing(OrchestraSettingsInitialState $form, int $publications = 1):void
   {
     $config = $this->createMock(ConfigService::class);
     $config->method('getAppName')->willReturn('cafevdb');
     $config->expects($this->never())->method('getAppContainer');
     (new ReflectionProperty(OrchestraSettingsInitialState::class, 'configService'))->setValue($form, $config);
-    $apps = $this->createStub(IAppManager::class);
-    $apps->method('getAppInfo')->willReturn(['licence' => 'AGPL-3.0']);
-    (new ReflectionProperty(OrchestraSettingsInitialState::class, 'appManager'))->setValue($form, $apps);
     $l10n = $this->createStub(IL10N::class);
     $l10n->method('t')->willReturnArgument(0);
     (new ReflectionProperty(OrchestraSettingsInitialState::class, 'l'))->setValue($form, $l10n);

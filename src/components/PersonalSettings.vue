@@ -23,6 +23,7 @@
 <template>
   <div class="templateroot personal-settings">
     <UserSettings :entry="getPersonalSettingsEntry()" @error="handleSettingsError" />
+    <AboutSettings :entry="getAboutSettingsEntry()" />
     <div v-if="!!appError" class="flex-container flex-justify-center">
       <ErrorPageModal :show="!!appError"
                       :error="appError"
@@ -36,12 +37,13 @@
 import { translate as t } from '@nextcloud/l10n'
 import { onUnmounted, ref } from 'vue'
 import ErrorPageModal from './ErrorPageModal.vue'
+import AboutSettings from './settings/AboutSettings.vue'
 import UserSettings from './settings/UserSettings.vue'
 import { appName as appId } from '../config.ts'
 import useErrorHandlerStore from '../stores/error-handler.ts'
 import { AppError } from '../toolkit/types/errors.ts'
 import Console from '../util/console.ts'
-import { getPersonalSettingsEntry } from './settings/settings-tree.ts'
+import { getAboutSettingsEntry, getPersonalSettingsEntry } from './settings/settings-tree.ts'
 
 const COMPONENT_NAME = 'PersonalSettings'
 const logger = new Console(COMPONENT_NAME)

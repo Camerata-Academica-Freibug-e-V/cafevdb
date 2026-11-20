@@ -104,7 +104,7 @@ vi.mock(import('@nextcloud/initial-state'), async (originalImport) => {
 });
 
 describe('AdminSettings component', () => {
-  it('keeps recovery controls and About visible when orchestra configuration fails', () => {
+  it('keeps recovery controls visible when orchestra configuration fails', () => {
     const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
     const error = 'Unable to load orchestra settings. The remaining administration settings are still available.';
     vi.mocked(loadState).mockReturnValueOnce({ ...initialState, isSubAdmin: true })
@@ -115,14 +115,14 @@ describe('AdminSettings component', () => {
       global: {
         plugins: [pinia],
         directives: { tooltip: Tooltip },
-        stubs: { SettingsNavigation: true, AboutSettings: { props: ['entry'], template: '<section :id="entry.id" />' } },
+        stubs: { SettingsNavigation: true },
       },
     });
     expect(wrapper.get('.orchestra-settings-error').text()).toBe(error);
     expect(wrapper.find('#admin-settings-backend').exists()).toBe(true);
     expect(wrapper.find('#admin-settings-access-control').exists()).toBe(true);
     expect(wrapper.find('#admin-settings-finance').exists()).toBe(true);
-    expect(wrapper.find('#admin-settings-about').exists()).toBe(true);
+    expect(wrapper.find('#admin-settings-about').exists()).toBe(false);
     expect(wrapper.find('#admin-settings-orchestra').exists()).toBe(false);
     const tree = wrapper.getComponent(SettingsNavigation).props('tree');
     expect(tree.map(({ id }) => id)).not.toContain('admin-settings-orchestra');
@@ -143,7 +143,6 @@ describe('AdminSettings component', () => {
         directives: { tooltip: Tooltip },
         stubs: {
           SettingsNavigation: true,
-          AboutSettings: sectionStub,
           GeneralSettings: sectionStub,
           OrchestraSettings: sectionStub,
           SharingSettings: sectionStub,
@@ -169,7 +168,7 @@ describe('AdminSettings component', () => {
       global: {
         plugins: [pinia],
         directives: { tooltip: Tooltip },
-        stubs: { SettingsNavigation: true, AboutSettings: true },
+        stubs: { SettingsNavigation: true },
       },
     });
     expect(wrapper.vm).toBeTruthy();
@@ -187,7 +186,7 @@ describe('AdminSettings component', () => {
       global: {
         plugins: [pinia],
         directives: { tooltip: Tooltip },
-        stubs: { ErrorPageModal: true, SettingsNavigation: true, AboutSettings: true },
+        stubs: { ErrorPageModal: true, SettingsNavigation: true },
       },
     });
     expect(wrapper.findComponent(ErrorPageModal).exists()).toBe(false);

@@ -479,7 +479,6 @@
           {{ t(appId, 'Generate Test Error') }}
         </NcButton>
       </NcSettingsSection>
-      <AboutSettings :entry="getAboutSettingsEntry()" />
     </div>
     <SettingsNavigation :tree="tree" />
     <ErrorPageModal v-if="appError"
@@ -543,7 +542,6 @@ import IconResendVerificationCode from 'vue-material-design-icons/Sync.vue'
 import ErrorPageModal from './ErrorPageModal.vue'
 import SelectMusicians from './SelectMusicians.vue'
 import SelectProjects from './SelectProjects.vue'
-import AboutSettings from './settings/AboutSettings.vue'
 import CmsSettings from './settings/CmsSettings.vue'
 import DevelopmentSettings from './settings/DevelopmentSettings.vue'
 import EmailSettings from './settings/EmailSettings.vue'
@@ -583,7 +581,7 @@ import {
 import Console from '../util/console.ts'
 import formatDate from '../util/formatDate.ts'
 import { showErrorToast } from '../util/toasts.ts'
-import { getAboutSettingsEntry, getAdminSettingsTree } from './settings/settings-tree.ts'
+import { getAdminSettingsTree } from './settings/settings-tree.ts'
 
 /*
  * End type definitions

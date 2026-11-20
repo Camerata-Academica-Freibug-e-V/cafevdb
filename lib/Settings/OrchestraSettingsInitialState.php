@@ -27,7 +27,6 @@ namespace OCA\CAFEVDB\Settings;
 use RuntimeException;
 use Throwable;
 
-use OCP\App\IAppManager;
 use OCP\IInitialStateService;
 
 use Cmixin\BusinessDay;
@@ -38,14 +37,13 @@ use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumParticipationStatus as Particip
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\GeoCodingService;
-use Composer\Spdx\SpdxLicenses;
 use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Storage\UserStorage;
 use OCA\CAFEVDB\Service\WebPagesRPC;
 use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\CAFEVDB\Wrapped\Carbon\CarbonImmutable;
 
-/** Initial state for the orchestra configuration and app information. */
+/** Initial state for the orchestra configuration. */
 class OrchestraSettingsInitialState
 {
   use \OCA\CAFEVDB\Traits\ConfigTrait;
@@ -64,13 +62,12 @@ class OrchestraSettingsInitialState
   public function __construct(
     protected ConfigService $configService,
     private IInitialStateService $initialStateService,
-    private IAppManager $appManager,
   ) {
     $this->l = $this->l10N();
   }
 
   /**
-   * Publish app information and, for authorized key holders, orchestra settings.
+   * Publish orchestra settings for authorized key holders.
    *
    * @return void
    */
@@ -78,7 +75,6 @@ class OrchestraSettingsInitialState
   {
     $state = ['enabled' => false];
     try {
-      $this->publishAbout();
       if ($this->inGroup() && $this->isSubAdminOfGroup() && $this->encryptionKeyValid()) {
         $settings = $this->buildSettings();
         $this->initialStateService->provideInitialState($this->appName(), 'adminSettings', $settings);
@@ -89,38 +85,6 @@ class OrchestraSettingsInitialState
       $state['error'] = $this->l->t('Unable to load orchestra settings. The remaining administration settings are still available. See the server log for details.');
     }
     $this->initialStateService->provideInitialState($this->appName(), 'orchestraSettings', $state);
-  }
-
-  /** @return void */
-  private function publishAbout():void
-  {
-    $aboutInfo = $this->appManager->getAppInfo($this->appName());
-    $licence = trim($aboutInfo['licence'] ?? '');
-    $longLicence = (new SpdxLicenses)->getLicenseByIdentifier($licence);
-    $credits = $aboutInfo['credits']['item'] ?? [];
-    if (isset($credits['title'])) {
-      $credits = [ $credits ];
-    }
-    $this->initialStateService->provideInitialState(
-      $this->appName(),
-      'about',
-      [
-        'name' => $aboutInfo['name'] ?? $this->appName(),
-        'version' => $aboutInfo['version'] ?? '',
-        'codeName' => trim($aboutInfo['codename'] ?? ''),
-        'description' => !empty($aboutInfo['description']) ? $this->l->t($aboutInfo['description']) : '',
-        'lifetime' => $aboutInfo['lifetime'] ?? '',
-        'licence' => $licence,
-        'licenceName' => $longLicence[0] ?? $licence,
-        'author' => $aboutInfo['author']['@value'] ?? '',
-        'authorEmail' => $aboutInfo['author']['@attributes']['mail'] ?? '',
-        'homePage' => $aboutInfo['author']['@attributes']['homepage'] ?? '',
-        'credits' => array_values(array_map(
-          fn(array $item) => [ 'title' => (string)$item['title'], 'link' => (string)$item['link'] ],
-          $credits,
-        )),
-      ],
-    );
   }
 
   /** @return array Sanitized orchestra configuration, published only after loading succeeds. */

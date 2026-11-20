@@ -132,11 +132,12 @@ not printed. Failures stop the command with a non-zero exit status.
 Settings pages
 ---------------
 
-The personal settings page contains user preferences and the user's encryption
-key. Orchestra configuration is in the app's administration settings, together
-with its existing delegated settings and app information. The right-hand
-navigation follows the visible sections; administration through **Access
-Control** remains at the top. On narrow screens, use the navigation toggle.
+The personal settings page contains user preferences, the user's encryption
+key, and app information. Orchestra configuration is in the app's
+administration settings, together with its existing delegated settings. The
+right-hand navigation follows the visible sections; administration through
+**Access Control** remains at the top. On narrow screens, use the navigation
+toggle.
 
 The moved orchestra sections still require membership in the configured
 orchestra group, sub-admin rights for that group, and a valid encryption key.
@@ -145,8 +146,8 @@ these sections. Existing delegated settings retain their previous permissions.
 Personal preferences and orchestra configuration use separate controllers;
 their existing HTTP endpoint URLs and stored configuration keys are unchanged.
 If orchestra configuration cannot be loaded, those sections are hidden and an
-error notice is shown. About and the existing administration controls remain
-available; the server log contains the failure details.
+error notice is shown. The existing administration controls remain available;
+the server log contains the failure details.
 
 Testing problem reports
 -----------------------

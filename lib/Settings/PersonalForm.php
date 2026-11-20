@@ -11,6 +11,8 @@
 
 namespace OCA\CAFEVDB\Settings;
 
+use Composer\Spdx\SpdxLicenses;
+use OCP\App\IAppManager;
 use OCP\IInitialStateService;
 use OCP\Util as CoreUtil;
 
@@ -37,6 +39,7 @@ class PersonalForm
     private ErrorService $errorService,
     private IInitialStateService $initialStateService,
     private OrganizationalRolesService $roles,
+    private IAppManager $appManager,
   ) {
     $this->l = $this->l10N();
   }
@@ -81,9 +84,42 @@ class PersonalForm
         ],
       );
       $this->initialStateService->provideInitialState($this->appName(), 'PHPMyEdit', []);
+      $this->publishAbout();
       return $this->templateResponse(self::TEMPLATE, []);
     } catch (\Exception $e) {
       return $this->errorService->exceptionTemplate($e);
     }
+  }
+
+  /** @return void */
+  private function publishAbout():void
+  {
+    $aboutInfo = $this->appManager->getAppInfo($this->appName());
+    $licence = trim($aboutInfo['licence'] ?? '');
+    $longLicence = (new SpdxLicenses)->getLicenseByIdentifier($licence);
+    $credits = $aboutInfo['credits']['item'] ?? [];
+    if (isset($credits['title'])) {
+      $credits = [ $credits ];
+    }
+    $this->initialStateService->provideInitialState(
+      $this->appName(),
+      'about',
+      [
+        'name' => $aboutInfo['name'] ?? $this->appName(),
+        'version' => $aboutInfo['version'] ?? '',
+        'codeName' => trim($aboutInfo['codename'] ?? ''),
+        'description' => !empty($aboutInfo['description']) ? $this->l->t($aboutInfo['description']) : '',
+        'lifetime' => $aboutInfo['lifetime'] ?? '',
+        'licence' => $licence,
+        'licenceName' => $longLicence[0] ?? $licence,
+        'author' => $aboutInfo['author']['@value'] ?? '',
+        'authorEmail' => $aboutInfo['author']['@attributes']['mail'] ?? '',
+        'homePage' => $aboutInfo['author']['@attributes']['homepage'] ?? '',
+        'credits' => array_values(array_map(
+          fn(array $item) => [ 'title' => (string)$item['title'], 'link' => (string)$item['link'] ],
+          $credits,
+        )),
+      ],
+    );
   }
 }

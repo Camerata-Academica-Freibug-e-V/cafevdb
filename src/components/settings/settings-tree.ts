@@ -50,7 +50,7 @@ export const getPersonalSettingsEntry = (): TabEntry => ({
 
 export const getAboutSettingsEntry = (): TabEntry => ({
   key: 'about',
-  id: 'admin-settings-about',
+  id: 'personal-settings-about',
   name: t(appId, 'About'),
   children: [],
 });
@@ -156,7 +156,6 @@ export const getAdminSettingsTree = (permissions: {
         entry('problem-reports', t(appId, 'Configure Problem Report Handling')),
       ]
       : []),
-    getAboutSettingsEntry(),
   ]
     .map((tab) => ({
       ...tab,

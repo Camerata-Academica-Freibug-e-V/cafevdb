@@ -25,9 +25,19 @@ describe('settings page structure', () => {
   it('keeps administration through Access Control ahead of all moved sections', () => {
     const tree = getAdminSettingsTree({ isSubAdmin: true, orchestraSettingsEnabled: true });
     expect(tree.map(({ key }) => key)).toEqual([
-      'backend', 'configure-user-backend', 'recryption', 'access-control',
-      'general', 'orchestra', 'sharing', 'email', 'cms', 'development',
-      'finance', 'office-fonts', 'problem-reports', 'about',
+      'backend',
+      'configure-user-backend',
+      'recryption',
+      'access-control',
+      'general',
+      'orchestra',
+      'sharing',
+      'email',
+      'cms',
+      'development',
+      'finance',
+      'office-fonts',
+      'problem-reports',
     ]);
     const ids = tree.flatMap((entry) => [entry.id, ...entry.children.map(({ id }) => id)]);
     expect(new Set(ids).size).toBe(ids.length);
@@ -36,14 +46,19 @@ describe('settings page structure', () => {
   it('omits encrypted configuration but retains existing delegated sections without a valid key', () => {
     const tree = getAdminSettingsTree({ isSubAdmin: true, orchestraSettingsEnabled: false });
     expect(tree.map(({ key }) => key)).toEqual([
-      'backend', 'configure-user-backend', 'recryption', 'access-control',
-      'finance', 'office-fonts', 'problem-reports', 'about',
+      'backend',
+      'configure-user-backend',
+      'recryption',
+      'access-control',
+      'finance',
+      'office-fonts',
+      'problem-reports',
     ]);
   });
 
   it('does not expose orchestra sections to unrelated delegates or instance admins', () => {
     expect(getAdminSettingsTree({ isSubAdmin: false, orchestraSettingsEnabled: false })
-      .map(({ key }) => key)).toEqual(['backend', 'about']);
+      .map(({ key }) => key)).toEqual(['backend']);
   });
 });
 
