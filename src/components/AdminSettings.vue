@@ -43,13 +43,16 @@
                                   @update="saveSetting('userAndGroupBackend')"
                                   @error="showErrorToast"
           >
-            <template #actions>
-              <NcActionButton v-tooltip="hints['settings:admin:user-backend:move-users']"
-                              icon="icon-play"
-                              @click="synchronizeUserBackends"
+            <template #alignedAfter>
+              <NcButton v-tooltip="hints['settings:admin:user-backend:move-users']"
+                        :ariaLabel="t(appId, 'Sychronize User Backends')"
+                        :disabled="loading.general || !config.isAdmin"
+                        @click="synchronizeUserBackends"
               >
-                {{ t(appId, 'Sychronize User Backends') }}
-              </NcActionButton>
+                <template #icon>
+                  <IconPlay :size="20" />
+                </template>
+              </NcButton>
             </template>
           </SelectWithSubmitButton>
         </div>
@@ -537,6 +540,7 @@ import CheckboxBlankCircle from 'vue-material-design-icons/CheckboxBlankCircle.v
 import IconEmailVerified from 'vue-material-design-icons/EmailCheck.vue'
 import IconChooseGnuCashAccountsData from 'vue-material-design-icons/File.vue'
 import IconEmailVerificationPending from 'vue-material-design-icons/Help.vue'
+import IconPlay from 'vue-material-design-icons/Play.vue'
 // import IconCancel from 'vue-material-design-icons/Cancel.vue'
 import IconResendVerificationCode from 'vue-material-design-icons/Sync.vue'
 import ErrorPageModal from './ErrorPageModal.vue'
