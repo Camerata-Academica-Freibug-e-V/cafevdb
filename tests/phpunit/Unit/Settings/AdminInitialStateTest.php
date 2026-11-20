@@ -123,4 +123,17 @@ class AdminInitialStateTest extends TestCase
   {
     $this->assertEquals(self::JSON_DATA, json_encode($this->configData, JSON_PRETTY_PRINT));
   }
+
+  /** @return void */
+  public function testSerializationWithoutSharedFolder(): void
+  {
+    $data = json_decode(self::JSON_DATA, true, flags: JSON_THROW_ON_ERROR);
+    $data[Admin::IS_SUB_ADMIN] = false;
+    $data[Admin::SHARED_FOLDER_KEY] = null;
+
+    $state = AdminInitialState::fromArray($data);
+
+    $serialized = json_decode(json_encode($state, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+    $this->assertSame('', $serialized[Admin::SHARED_FOLDER_KEY]);
+  }
 }

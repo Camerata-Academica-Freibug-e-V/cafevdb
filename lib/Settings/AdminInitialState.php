@@ -59,7 +59,7 @@ class AdminInitialState extends AbstractDTO
   }
 
   /**
-   * Initialize from the given array.
+   * Initialize from the given array, using an empty path for an unset shared folder.
    *
    * @param array $data
    *
@@ -81,7 +81,7 @@ class AdminInitialState extends AbstractDTO
       officeFonts: $officeFonts,
       officeFontsFolder: $officeFontsFolder,
       personalAppSettingsLink: $personalAppSettingsLink,
-      sharedFolder: $sharedFolder,
+      sharedFolder: $sharedFolder ?? '',
       userAndGroupBackends: $userAndGroupBackends,
     );
   }
