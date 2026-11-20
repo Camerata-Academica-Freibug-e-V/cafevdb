@@ -389,7 +389,6 @@ import { DateTime } from 'luxon'
 import { getActivePinia, storeToRefs } from 'pinia'
 import {
   computed,
-  getCurrentInstance,
   nextTick,
   onBeforeMount,
   onUnmounted,
@@ -724,10 +723,13 @@ const syncProjectData = async (projectName: string) => {
           if (entry.uri === 'rehearsals') {
             context.categories.push(recordAbsenceCategory)
           }
-          const nowSeconds = Math.round(Date.now() / 1000 / 3600) * 3600
+          const isAllDay = true
+          const nowSeconds = isAllDay
+            ? Math.round((new Date()).setHours(0, 0, 0, 0) / 1000)
+            : Math.round(Date.now() / 1000 / 3600) * 3600
           const params = {
             ...currentRoute.params,
-            allDay: '1',
+            allDay: isAllDay ? '1' : '0',
             dtstart: '' + nowSeconds,
             dtend: '' + nowSeconds,
             context: btoa(JSON.stringify(context)),
