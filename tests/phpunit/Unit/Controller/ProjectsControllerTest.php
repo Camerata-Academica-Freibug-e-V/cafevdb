@@ -433,13 +433,21 @@ class ProjectsControllerTest extends TestCase
   /** @return void */
   public function testGetEventMatrix(): void
   {
-    $this->entityManager->expects($this->atLeastOnce())->method('getRepository')->with(Entities\Project::class);
+    $repositories = [];
+    $this->entityManager->expects($this->atLeastOnce())->method('getRepository')->with(
+      $this->callback(function(string $className) use (&$repositories): bool {
+        $repositories[] = $className;
+        return true;
+      }),
+    );
     $this->calendarManager->expects($this->atLeastOnce())->method('getCalendars');
     $this->calDavBackend->expects($this->atLeastOnce())->method('getCalendarObject');
     $response = $this->projectsController->get(
       $this->project->getId(),
       ProjectsController::GET_EVENT_MATRIX,
     );
+    $this->assertContains(Entities\Project::class, $repositories);
+    $this->assertContains(Entities\ProjectEvent::class, $repositories);
     $matrix = $response->render();
     $matrix = json_decode($matrix, true);
     $matrix = array_map(fn(array $row) => EventMatrixRow::fromArray($row), $matrix);
