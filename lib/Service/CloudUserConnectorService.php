@@ -541,7 +541,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
 
     $catchAllGroup = $this->encryptionService->getConfigValue(ConfigConstants::MUSICIANS_ADDRESS_BOOK_KEY);
     if (empty($catchAllGroup)) {
-      $orchestraName = ucfirst($this->encryptionService->getConfigValue(ConfigConstants::ORCHESTRA_NAME_KEY));
+      $orchestraName = ucfirst($this->encryptionService->getConfigValue(ConfigConstants::ORCHESTRA_NAME_KEY) ?? '');
       $catchAllGroup = $orchestraName . ' ' . $this->l->t('Musicians');
     }
 

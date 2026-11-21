@@ -288,6 +288,42 @@ class CloudUserConnectorServiceTest extends TestCase
   }
 
   /** @return void */
+  public function testWriteUserSqlConfigWithoutOrchestraName(): void
+  {
+    $keys = [ConfigConstants::ORCHESTRA_NAME_KEY, ConfigConstants::MUSICIANS_ADDRESS_BOOK_KEY];
+    $values = [];
+    foreach ($keys as $key) {
+      $values[$key] = $this->encryptionService->getAppValue($key);
+      $this->encryptionService->deleteAppValue($key);
+    }
+    try {
+      $this->assertNull($this->encryptionService->getConfigValue(ConfigConstants::ORCHESTRA_NAME_KEY));
+      $this->assertNull($this->encryptionService->getConfigValue(ConfigConstants::MUSICIANS_ADDRESS_BOOK_KEY));
+      set_error_handler(static function(int $severity, string $message, string $file, int $line): never {
+        throw new \ErrorException($message, 0, $severity, $file, $line);
+      }, E_DEPRECATED);
+      try {
+        $this->cloudUserConnectorService->writeUserSqlConfig(dataBaseName: 'something');
+      } finally {
+        restore_error_handler();
+      }
+      $this->assertSame(
+        ' ' . $this->mockProvider->getL10N()->t('Musicians'),
+        $this->cloudConfig->getAppValue($this->appName, CloudUserConnectorService::CLOUD_USER_BACKEND . ':opt.default_group'),
+      );
+    } finally {
+      $this->cloudUserConnectorService->writeUserSqlConfig(dataBaseName: 'something', delete: true);
+      foreach ($values as $key => $value) {
+        if ($value === null) {
+          $this->encryptionService->deleteAppValue($key);
+        } else {
+          $this->encryptionService->setAppValue($key, $value);
+        }
+      }
+    }
+  }
+
+  /** @return void */
   public function testProjectGroupId(): void
   {
     $number = 47;
