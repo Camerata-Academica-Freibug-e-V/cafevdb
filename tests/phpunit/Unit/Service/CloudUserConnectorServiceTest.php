@@ -25,6 +25,7 @@
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
 use ArrayObject;
+use ErrorException;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -300,7 +301,7 @@ class CloudUserConnectorServiceTest extends TestCase
       $this->assertNull($this->encryptionService->getConfigValue(ConfigConstants::ORCHESTRA_NAME_KEY));
       $this->assertNull($this->encryptionService->getConfigValue(ConfigConstants::MUSICIANS_ADDRESS_BOOK_KEY));
       set_error_handler(static function(int $severity, string $message, string $file, int $line): never {
-        throw new \ErrorException($message, 0, $severity, $file, $line);
+        throw new ErrorException($message, 0, $severity, $file, $line);
       }, E_DEPRECATED);
       try {
         $this->cloudUserConnectorService->writeUserSqlConfig(dataBaseName: 'something');
