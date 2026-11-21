@@ -389,7 +389,7 @@ class ProjectsControllerTest extends TestCase
   /** @return void */
   public function testPostFailures(): void
   {
-    $this->entityManager->expects($this->never())->method('getRepository')->with(Entities\Project::class);
+    $this->entityManager->expects($this->atLeastOnce())->method('getRepository')->with(Entities\Project::class);
     try {
       $this->projectsController->post(
         projectId: 12345,
@@ -422,7 +422,7 @@ class ProjectsControllerTest extends TestCase
   /** @return void */
   public function testPostProjectShare(): void
   {
-    $this->entityManager->expects($this->never())->method('getRepository')->with(Entities\Project::class);
+    $this->entityManager->expects($this->atLeastOnce())->method('getRepository')->with(Entities\Project::class);
     $this->projectsController->post(
       projectId: $this->project->getId(),
       topic: ProjectsController::GET_PROJECT_SHARE,
