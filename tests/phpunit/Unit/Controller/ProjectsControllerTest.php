@@ -433,7 +433,7 @@ class ProjectsControllerTest extends TestCase
   /** @return void */
   public function testGetEventMatrix(): void
   {
-    $this->entityManager->expects($this->atLeastOnce())->method('getRepository')->with(Entities\ProjectEvent::class);
+    $this->entityManager->expects($this->atLeastOnce())->method('getRepository')->with(Entities\Project::class);
     $this->calendarManager->expects($this->atLeastOnce())->method('getCalendars');
     $this->calDavBackend->expects($this->atLeastOnce())->method('getCalendarObject');
     $response = $this->projectsController->get(
