@@ -29,6 +29,7 @@ use ErrorException;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 use OCP\App\IAppManager;
 use OCP\Http\Client\IClientService;
@@ -208,7 +209,7 @@ class CloudUserConnectorServiceTest extends TestCase
 
   public function testGrantToRevokeStatementHandlesFieldAndFunctionGrants(): void
   {
-    $method = new \ReflectionMethod(CloudUserConnectorService::class, 'grantToRevokeStatement');
+    $method = new ReflectionMethod(CloudUserConnectorService::class, 'grantToRevokeStatement');
     $invoke = fn(string $sql): ?string => $method->invoke(
       $this->cloudUserConnectorService,
       $sql,

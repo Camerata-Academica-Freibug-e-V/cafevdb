@@ -1248,6 +1248,13 @@ SELECT t.* FROM " . $table . " t";
     }
   }
 
+  /**
+   * Convert a supported MariaDB GRANT statement into its REVOKE equivalent.
+   *
+   * @param string $sql
+   *
+   * @return null|string
+   */
   private function grantToRevokeStatement(string $sql): ?string
   {
     $matches = null;

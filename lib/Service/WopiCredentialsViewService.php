@@ -100,6 +100,12 @@ class WopiCredentialsViewService
   /**
    * Revoke provisional grants and remove provisional objects after a failed
    * credential or view-validation change.
+   *
+   * @param string $database
+   * @param string $previousDatabase
+   * @param string $grantee
+   *
+   * @return void
    */
   private function rollbackNewConnectorAccess(string $database, string $previousDatabase, string $grantee): void
   {
