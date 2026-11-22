@@ -135,7 +135,7 @@
           />
         </div>
       </NcSettingsSection>
-      <NcSettingsSection v-if="config.isSubAdmin" id="admin-settings-configure-user-backend" :name="t(appId, 'Configure User Backend')">
+      <NcSettingsSection v-if="config.isSubAdmin && !orchestraState?.enabled" id="admin-settings-configure-user-backend" :name="t(appId, 'Configure User Backend')">
         <div>
           <button type="button"
                   name="cloudUserBackendConfig"
@@ -284,7 +284,23 @@
                  :key="tab.key"
                  :entry="tab"
                  @error="handleSettingsError"
-      />
+      >
+        <template v-if="tab.key === 'sharing' && config.isSubAdmin" #userBackend>
+          <div>
+            <button type="button"
+                    name="cloudUserBackendConfig"
+                    value="update"
+                    :disabled="!config.haveCloudUserBackendConfig"
+                    @click="saveSetting('haveCloudUserBackendConfig')"
+            >
+              {{ t(appId, 'Autoconfigure "{cloudUserBackend}" app', { cloudUserBackend: config.cloudUserBackend }) }}
+            </button>
+            <p class="hint">
+              {{ hints['settings:admin:cloud-user-backend-conf'] }}
+            </p>
+          </div>
+        </template>
+      </component>
       <NcSettingsSection v-if="config.isSubAdmin"
                          id="admin-settings-finance"
                          class="sub-admin finance"

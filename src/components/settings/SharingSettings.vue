@@ -20,6 +20,7 @@
     </template>
     <template #members-as-cloud-users>
       <ConnectorAccount :account="state?.cloudConnectorAccount" @error="emit('error', $event)" />
+      <slot name="userBackend" />
       <NcNoteCard type="info">
         {{ t(appId, 'The views account and password are shared with the members app and, when permitted, configured in user_sql. The account host is the host part of the MariaDB account, not the database server address.') }}
       </NcNoteCard>
@@ -42,7 +43,7 @@
       </NcNoteCard>
     </template>
     <template #wopi-credentials-view>
-      <ConnectorCredentials setting="wopiConnectorCredentials" />
+      <ConnectorAccount setting="wopiConnectorCredentials" :account="state?.wopiConnectorAccount" @error="emit('error', $event)" />
       <div class="admin-actions">
         <NcButton v-if="wopiViewEnabled" :disabled="runningWopiAction" @click="recreateWopiView">
           {{ t(appId, 'Regenerate WOPI access views') }}
@@ -64,7 +65,6 @@ import { NcButton, NcNoteCard, NcPasswordField } from '@nextcloud/vue'
 import { computed, ref } from 'vue'
 import AdminSettingsTab from './AdminSettingsTab.vue'
 import ConnectorAccount from './ConnectorAccount.vue'
-import ConnectorCredentials from './ConnectorCredentials.vue'
 import {
   BALANCES_FOLDER,
   CALENDAR_KEY_POSTFIX,
@@ -97,6 +97,7 @@ const state = getInitialState<{
   cloudUserRequirements?: { hints?: string[] }|string[]
   cloudUserViewsDatabase?: string
   cloudConnectorAccount?: { user?: string, accountHost?: string }
+  wopiConnectorAccount?: { user?: string, accountHost?: string }
   wopiCredentialsViewEnabled?: boolean|string
   wopiCredentialsViewDatabase?: string
 }>({ section: 'adminSettings', defaults: {} })
@@ -199,8 +200,8 @@ const groups: AdminSettingGroup[] = [
   }))),
   group(4, t(appId, 'Members as Cloud-Users'), [
     field('importClubMembersAsCloudUsers', t(appId, 'Import club members as cloud users'), 'checkbox'),
-    field('cloudUserViewsDatabase', t(appId, 'Dedicated views database')),
     field('musicianPersonalizedViews', t(appId, 'Musician personalized views'), 'checkbox'),
+    field('cloudUserViewsDatabase', t(appId, 'Dedicated views database')),
   ], 'members-as-cloud-users'),
   group(5, t(appId, 'WOPI access to DB-Storage'), [
     field('wopiCredentialsViewEnabled', t(appId, 'Enable WOPI access to database storage'), 'checkbox'),

@@ -36,6 +36,7 @@ use OCA\CAFEVDB\Common\Util;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumParticipationStatus as ParticipationStatus;
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\ConnectorDatabaseCredentials;
 use OCA\CAFEVDB\Service\GeoCodingService;
 use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Storage\UserStorage;
@@ -201,6 +202,7 @@ class OrchestraSettingsInitialState
     $postboxFolderShareLink = $this->getConfigValue(ConfigConstants::POSTBOX_FOLDER . 'ShareLink');
     $outboxFolder = $this->getConfigValue(ConfigConstants::OUTBOX_FOLDER);
 
+    $wopiCredentials = $this->di(ConnectorDatabaseCredentials::class)->load(ConnectorDatabaseCredentials::WOPI);
     $templateParameters = array_merge(
       $templateParameters,
       [
@@ -234,6 +236,7 @@ class OrchestraSettingsInitialState
         'importClubMembersAsCloudUsers' => $this->getConfigValue('importClubMembersAsCloudUsers', 'off') === 'on',
         'cloudUserViewsDatabase' => $this->getConfigValue('cloudUserViewsDatabase'),
         'cloudConnectorAccount' => $this->cloudUserService->getConnectorAccount(),
+        'wopiConnectorAccount' => array_intersect_key($wopiCredentials, array_flip(['user', 'accountHost'])),
         'musicianPersonalizedViews' => $this->getConfigValue('musicianPersonalizedViews'),
         'wopiCredentialsViewEnabled' => $this->getConfigValue(
           'wopiCredentialsViewEnabled',

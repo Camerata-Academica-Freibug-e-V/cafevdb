@@ -2361,13 +2361,34 @@ class OrchestraSettingsController extends Controller
   {
     if ($value !== null && (!is_array($value)
         || !is_string($value['user'] ?? null)
-        || !is_string($value['password'] ?? null))) {
+        || !is_string($value['password'] ?? null)
+        || (array_key_exists('accountHost', $value) && !is_string($value['accountHost'])))) {
       return self::grumble($this->l->t('Enter a database username and password.'));
     }
 
     $service = $this->di(ConnectorDatabaseCredentials::class);
     try {
-      $credentials = $value === null ? [] : $service->prepare($this->di(Connection::class), trim($value['user']), $value['password']);
+      $credentials = [];
+      if ($value !== null) {
+        $user = trim($value['user']);
+        $accountHost = isset($value['accountHost']) ? trim($value['accountHost']) : null;
+        if ($accountHost === '') {
+          return self::grumble($this->l->t('Enter a database username, account host and password.'));
+        }
+        $password = $value['password'];
+        if ($password === '' && $accountHost !== null) {
+          $previous = $service->load(ConnectorDatabaseCredentials::WOPI);
+          if (($previous['user'] ?? null) !== $user || ($previous['accountHost'] ?? null) !== $accountHost
+              || !is_string($previous['password'] ?? null)) {
+            return self::grumble($this->l->t('Enter the password for the views database account.'));
+          }
+          $password = $previous['password'];
+        }
+        $credentials = $service->prepare($this->di(Connection::class), $user, $password);
+        if ($accountHost !== null && $credentials['accountHost'] !== $accountHost) {
+          return self::grumble($this->l->t('The connected MariaDB account host does not match the specified account host.'));
+        }
+      }
       if ($this->wopiConnectorEnabled()) {
         $this->wopiCredentialsViewService()->updateWopiCredentialsView($this->wopiCredentialsViewDatabase(), $credentials, checkAccess: true);
       } else {
