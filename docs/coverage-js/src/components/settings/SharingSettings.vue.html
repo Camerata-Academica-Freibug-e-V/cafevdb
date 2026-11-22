@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">38.34% </span>
+                <span class="strong">37.77% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>51/133</span>
+                <span class='fraction'>51/135</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">26.76% </span>
+                <span class="strong">26.38% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>19/71</span>
+                <span class='fraction'>19/72</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">20% </span>
+                <span class="strong">19.04% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>8/40</span>
+                <span class='fraction'>8/42</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">39.51% </span>
+                <span class="strong">38.88% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>49/124</span>
+                <span class='fraction'>49/126</span>
             </div>
         
             
@@ -361,7 +361,15 @@
 <a name='L296'></a><a href='#L296'>296</a>
 <a name='L297'></a><a href='#L297'>297</a>
 <a name='L298'></a><a href='#L298'>298</a>
-<a name='L299'></a><a href='#L299'>299</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -383,6 +391,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
@@ -398,13 +410,16 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -447,6 +462,7 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -680,7 +696,11 @@
       &lt;/NcNoteCard&gt;
     &lt;/template&gt;
     &lt;template #members-as-cloud-users<span class="fstat-no" title="function not covered" >&gt;</span>
-<span class="cstat-no" title="statement not covered" >      &lt;NcNoteCard v-for="(requirement, index) in <span class="fstat-no" title="function not covered" >cloudUserRequirements"<span class="cstat-no" title="statement not covered" > </span>:key="index" type="info"&gt;</span></span>
+      &lt;ConnectorAccount :account="state?.cloudConnectorAccount" @error<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >e</span>mit('error', $event)" /&gt;<span class="cstat-no" title="statement not covered" ></span></span>
+      &lt;NcNoteCard type="info"&gt;
+<span class="fstat-no" title="function not covered" >        {{ t</span>(appId, 'Configure and verify the database connection separately in user_sql and the members app. The account host is the host part of the MariaDB account, not the database server address.') }}<span class="cstat-no" title="statement not covered" ></span>
+      &lt;/NcNoteCard&gt;
+<span class="cstat-no" title="statement not covered" >      &lt;NcNoteCard v-for="(requirement, index) in <span class="fstat-no" title="function not covered" >cloudUserRequirements" :k</span>ey="index" type="info"&gt;</span>
 <span class="fstat-no" title="function not covered" >        {{ r</span>equirement }}<span class="cstat-no" title="statement not covered" ></span>
       &lt;/NcNoteCard&gt;
       &lt;div class="admin-actions"&gt;
@@ -696,11 +716,12 @@
       &lt;/NcNoteCard&gt;
     &lt;/template&gt;
     &lt;template #wopi-credentials-view<span class="fstat-no" title="function not covered" >&gt;</span>
+      &lt;ConnectorCredentials setting="wopiConnectorCredentials" /&gt;<span class="cstat-no" title="statement not covered" ></span>
       &lt;div class="admin-actions"&gt;
-        &lt;NcButton v-if="wopiViewEnabled" :disabled="runningWopiAction" @click="recreateWopiView"&gt;
+<span class="branch-0 cbranch-no" title="branch not covered" >        &lt;NcButton v-if="wopiViewEnabled" :disabled="runningWopiAction" @click="recreateWopiView"&gt;</span>
 <span class="fstat-no" title="function not covered" >          {{ t</span>(appId, 'Regenerate WOPI access views') }}<span class="cstat-no" title="statement not covered" ></span>
         &lt;/NcButton&gt;
-      &lt;/div&gt;<span class="cstat-no" title="statement not covered" ></span>
+      &lt;/div&gt;
 <span class="branch-0 cbranch-no" title="branch not covered" >      &lt;NcNoteCard v-if="wopiActionMessage" :type="wopiActionError ? 'error' : 'success'"&gt;</span>
 <span class="fstat-no" title="function not covered" >        {{ w</span>opiActionMessage }}<span class="cstat-no" title="statement not covered" ></span>
       &lt;/NcNoteCard&gt;
@@ -716,6 +737,8 @@ import { translate as t } from '@nextcloud/l10n'
 import { NcButton, NcNoteCard, NcPasswordField } from '@nextcloud/vue'
 import { computed, ref } from 'vue'
 import AdminSettingsTab from './AdminSettingsTab.vue'
+import ConnectorAccount from './ConnectorAccount.vue'
+import ConnectorCredentials from './ConnectorCredentials.vue'
 import {
   BALANCES_FOLDER,
   CALENDAR_KEY_POSTFIX,
@@ -747,6 +770,7 @@ const emit = defineEmits&lt;{ error: [error: Error] }&gt;()
 const state = getInitialState&lt;{
   cloudUserRequirements?: { hints?: string[] }|string[]
   cloudUserViewsDatabase?: string
+  cloudConnectorAccount?: { user?: string, accountHost?: string }
   wopiCredentialsViewEnabled?: boolean|string
   wopiCredentialsViewDatabase?: string
 }&gt;({ section: 'adminSettings', defaults: {} })
@@ -964,7 +988,7 @@ const recreateWopiView = <span class="fstat-no" title="function not covered" >as
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-11-20T16:12:27.720Z
+                at 2026-11-22T16:07:45.270Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>
