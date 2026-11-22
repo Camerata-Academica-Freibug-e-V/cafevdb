@@ -48,13 +48,15 @@ trait MockEntityManagerTrait
    * Generate a mock for the EntityManager class with limited support for
    * persist, flush, contains.
    *
+   * @param bool $stub Use a stub when invocation expectations are not needed.
+   *
    * @return EntityManager
    */
-  public function getEntityManagerMock(): EntityManager
+  public function getEntityManagerMock(bool $stub = false): EntityManager
   {
-    $this->entityManager = $this->getMockBuilder(EntityManager::class)
-      ->disableOriginalConstructor()
-      ->getMock();
+    $this->entityManager = $stub
+      ? $this->createStub(EntityManager::class)
+      : $this->getMockBuilder(EntityManager::class)->disableOriginalConstructor()->getMock();
     $this->entityManager->method('getWrappedObject')->willReturn($this->entityManager);
     $this->entityManager->method('pushTransactionException')->willReturnCallback(
       function(Throwable $throwable) {

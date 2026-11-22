@@ -233,6 +233,7 @@ class OrchestraSettingsInitialState
         ),
         'importClubMembersAsCloudUsers' => $this->getConfigValue('importClubMembersAsCloudUsers', 'off') === 'on',
         'cloudUserViewsDatabase' => $this->getConfigValue('cloudUserViewsDatabase'),
+        'cloudConnectorAccount' => $this->cloudUserService->getConnectorAccount(),
         'musicianPersonalizedViews' => $this->getConfigValue('musicianPersonalizedViews'),
         'wopiCredentialsViewEnabled' => $this->getConfigValue(
           'wopiCredentialsViewEnabled',
@@ -435,6 +436,7 @@ class OrchestraSettingsInitialState
     $adminSettings['orchestraCurrencyCode'] = $this->currencyCode($this->appLocale());
     $adminSettings['orchestraCurrencySymbol'] = $this->currencySymbol($this->appLocale());
     $adminSettings['dateTimeZone'] = $this->getDateTimeZone()->getName();
+    $this->encryptionService()->publishConnectorDescriptor();
     return $adminSettings;
   }
 

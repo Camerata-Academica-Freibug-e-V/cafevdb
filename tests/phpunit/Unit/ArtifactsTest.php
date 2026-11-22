@@ -140,6 +140,7 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EmailAddressService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EncryptionService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialStore::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class)]
 #[Attributes\UsesClass(WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EventsService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\InstrumentationService::class)]
@@ -250,6 +251,7 @@ class ArtifactsTest extends TestCase
     $cloudConfig = $this->mockProvider->getCloudConfig();
     $cloudConfig->setSystemValue('dbhost', $dbConfig->databaseServer);
     $cloudConfig->setSystemValue('dbuser', DatabaseProvider::CLOUD_DB_USER);
+    $cloudConfig->setSystemValue('dbtype', 'mysql');
     $cloudConnectorDatabase = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
     $cloudUserConnectorService->updateUserSqlViews($cloudConnectorDatabase);
     $cloudUserConnectorService->updateMusicianPersonalizedViews($cloudConnectorDatabase);

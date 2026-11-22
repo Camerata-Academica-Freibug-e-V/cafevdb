@@ -13,6 +13,7 @@ namespace OCA\CAFEVDB\Service;
 
 use OCP\IConfig;
 use OCP\IL10N;
+use SensitiveParameter;
 use Throwable;
 
 use OCA\CAFEVDB\Constants;
@@ -31,6 +32,7 @@ class WopiCredentialsViewService
     private IL10N $l,
     private string $appName,
     private Connection $connection,
+    private ConnectorDatabaseCredentials $connectorCredentials,
   ) {
   }
   // phpcs:enable
@@ -39,27 +41,24 @@ class WopiCredentialsViewService
    * Expose a single unexpired WOPI credential to the Nextcloud database user.
    *
    * @param null|string $database Connector database; defaults to the app database.
+   * @param null|array $credentials Override, or null to use the saved credentials.
+   * @param bool $checkAccess Whether to verify the view using the connector connection.
    *
    * @return void
    */
-  public function updateWopiCredentialsView(?string $database): void
-  {
-    $cloudDbHost = $this->cloudConfig->getSystemValue('dbhost');
-    $appDbHost = $this->encryptionService->getConfigValue(ConfigConstants::APP_DB_SERVER);
-    if ($cloudDbHost !== $appDbHost) {
-      throw new DatabaseCloudConnectorViewException(
-        $this->l->t('Cloud database server "%s" and app database server "%s" must coincide.', [$cloudDbHost, $appDbHost]),
-      );
-    }
-
-    $cloudDbUser = $this->cloudConfig->getSystemValue(ConfigConstants::APP_DB_USER);
+  public function updateWopiCredentialsView(
+    ?string $database,
+    #[SensitiveParameter] ?array $credentials = null,
+    bool $checkAccess = false,
+  ):void {
+    $previousCredentials = $this->connectorCredentials->load(ConnectorDatabaseCredentials::WOPI);
+    $grantee = $this->grantee($credentials ?? $previousCredentials);
     $appDbName = $this->encryptionService->getConfigValue(ConfigConstants::APP_DB_NAME);
     $database = $database ?: $appDbName;
     $previousDatabase = $this->getConfiguredDatabase();
     $function = WopiCredentialStore::qualify($database, WopiCredentialStore::TOKEN_HASH_FUNCTION);
     $view = WopiCredentialStore::qualify($database, WopiCredentialStore::VIEW_NAME);
     $table = WopiCredentialStore::qualify($appDbName, WopiCredential::TABLE_NAME);
-    $grantee = $this->connection->quote($cloudDbUser) . "@'localhost'";
     try {
       $this->connection->executeStatement(
         'CREATE OR REPLACE FUNCTION ' . $function . '()
@@ -74,18 +73,80 @@ class WopiCredentialsViewService
       );
       $this->connection->executeStatement('GRANT EXECUTE ON FUNCTION ' . $function . ' TO ' . $grantee);
       $this->connection->executeStatement('GRANT SELECT ON ' . $view . ' TO ' . $grantee);
+      if ($checkAccess) {
+        $this->connectorCredentials->checkViews($credentials ?? $previousCredentials, $database, [WopiCredentialStore::VIEW_NAME]);
+      }
+      if ($credentials !== null) {
+        $this->connectorCredentials->save(ConnectorDatabaseCredentials::WOPI, $credentials);
+      }
       // Switch lookups to the new view before dropping the old one.
       $this->cloudConfig->setAppValue($this->appName, WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, $database);
       if ($previousDatabase !== '' && $previousDatabase !== $database) {
         $this->dropConnectorObjects($previousDatabase);
       }
     } catch (Throwable $exception) {
+      $this->rollbackNewConnectorAccess($database, $previousDatabase, $grantee);
+      if ($exception instanceof DatabaseCloudConnectorViewException) {
+        throw $exception;
+      }
       throw new DatabaseCloudConnectorViewException(
         $this->l->t('Unable to configure the WOPI credential view.'),
         $exception->getCode(),
         $exception,
       );
     }
+  }
+
+  /**
+   * Revoke provisional grants and remove provisional objects after a failed
+   * credential or view-validation change.
+   *
+   * @param string $database
+   * @param string $previousDatabase
+   * @param string $grantee
+   *
+   * @return void
+   */
+  private function rollbackNewConnectorAccess(string $database, string $previousDatabase, string $grantee): void
+  {
+    try {
+      $this->connection->executeStatement(
+        'REVOKE SELECT ON ' . WopiCredentialStore::qualify($database, WopiCredentialStore::VIEW_NAME) . ' FROM ' . $grantee,
+      );
+      $this->connection->executeStatement(
+        'REVOKE EXECUTE ON FUNCTION ' . WopiCredentialStore::qualify($database, WopiCredentialStore::TOKEN_HASH_FUNCTION) . ' FROM ' . $grantee,
+      );
+    } catch (Throwable) {
+      // A grant or object may not have been created before the failure.
+    }
+    if ($previousDatabase !== $database) {
+      try {
+        $this->dropConnectorObjects($database);
+      } catch (Throwable) {
+        // Keep the original provisioning or access-validation exception.
+      }
+    }
+  }
+
+  /**
+   * @param array $credentials
+   *
+   * @return string
+   */
+  private function grantee(#[SensitiveParameter] array $credentials): string
+  {
+    if ($credentials !== []) {
+      return $this->connection->quote($credentials['user']) . '@' . $this->connection->quote($credentials['accountHost']);
+    }
+
+    $cloudDbHost = $this->cloudConfig->getSystemValue('dbhost');
+    $appDbHost = $this->encryptionService->getConfigValue(ConfigConstants::APP_DB_SERVER);
+    if ($this->cloudConfig->getSystemValue('dbtype', 'sqlite') !== 'mysql' || $cloudDbHost !== $appDbHost) {
+      throw new DatabaseCloudConnectorViewException(
+        $this->l->t('Nextcloud must use MySQL or MariaDB on the orchestra database server, or you must configure separate connector credentials.'),
+      );
+    }
+    return $this->connection->quote($this->cloudConfig->getSystemValue(ConfigConstants::APP_DB_USER)) . "@'localhost'";
   }
 
   /**

@@ -89,11 +89,11 @@ trait SetupEventsServiceTrait
   private array $entities = [];
 
   /**
-   * {@inheritdoc}
+   * @param bool $stubEntityManager Use a stub when invocation expectations are not needed.
    *
    * @return void
    */
-  public function generateEventsService(): void
+  public function generateEventsService(bool $stubEntityManager = false): void
   {
     $this->generateProjectParticipant(persist: false);
     $this->generateCalendarBackend();
@@ -114,7 +114,7 @@ trait SetupEventsServiceTrait
     }
     self::addProjectEvents($this->project, $this->defaultCalendars);
 
-    $this->getEntityManagerMock();
+    $this->getEntityManagerMock(stub: $stubEntityManager);
 
     // Entities\ProjectEvent
     $repository = $this->getMockBuilder(Repositories\ProjectEventsRepository::class)

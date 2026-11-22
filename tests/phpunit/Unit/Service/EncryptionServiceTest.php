@@ -31,11 +31,76 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use ReflectionProperty;
 
 #[CoversClass(EncryptionService::class)]
 #[UsesClass(EncryptionServiceBound::class)]
 class EncryptionServiceTest extends TestCase
 {
+  public function testConnectorDescriptorPublishesEffectiveDatabaseWithoutSecrets(): void
+  {
+    $values = ['cloudUserViewsDatabase' => '', ConfigConstants::APP_DB_NAME => 'orchestra', 'musicianPersonalizedViews' => 'on'];
+    $config = $this->createStub(IConfig::class);
+    $config->method('getAppValue')->willReturn('{"user":"connector","accountHost":"%","password":"not-exported"}');
+    $published = [];
+    $config->method('setAppValue')->willReturnCallback(
+      static function(string $app, string $key, string $value) use (&$published): void {
+        $published[] = json_decode($value, true, flags: JSON_THROW_ON_ERROR);
+      },
+    );
+    $service = $this->getMockBuilder(EncryptionService::class)
+      ->disableOriginalConstructor()->onlyMethods(['getConfigValue'])->getMock();
+    $service->expects($this->atLeastOnce())->method('getConfigValue')->willReturnCallback(
+      static function(string $key) use (&$values) {
+        return $values[$key];
+      },
+    );
+    (new ReflectionProperty(EncryptionService::class, 'cloudConfig'))->setValue($service, $config);
+    (new ReflectionProperty(EncryptionService::class, 'appName'))->setValue($service, 'cafevdb');
+    $service->publishConnectorDescriptor();
+    self::assertSame('orchestra', $published[0]['database']);
+    self::assertSame(['user' => 'connector', 'accountHost' => '%'], $published[0]['account']);
+    self::assertTrue($published[0]['personalizedViewsEnabled']);
+    $values['cloudUserViewsDatabase'] = 'views';
+    $service->publishConnectorDescriptor();
+    self::assertSame('views', $published[1]['database']);
+    self::assertNotSame($published[0]['revision'], $published[1]['revision']);
+    $service->publishConnectorDescriptor();
+    self::assertSame($published[1]['revision'], $published[2]['revision']);
+  }
+
+  public function testDatabaseSettingWriteRefreshesConnectorDescriptor(): void
+  {
+    $config = $this->createStub(IConfig::class);
+    $config->method('getAppValue')->willReturnArgument(2);
+    $cryptor = $this->createStub(SymmetricCryptorInterface::class);
+    $cryptor->method('getEncryptionKey')->willReturn('');
+    $service = $this->getMockBuilder(EncryptionService::class)
+      ->disableOriginalConstructor()->onlyMethods(['publishConnectorDescriptor'])->getMock();
+    $service->expects($this->once())->method('publishConnectorDescriptor');
+    (new ReflectionProperty(EncryptionService::class, 'cloudConfig'))->setValue($service, $config);
+    (new ReflectionProperty(EncryptionService::class, 'appName'))->setValue($service, 'cafevdb');
+    (new ReflectionProperty(EncryptionService::class, 'appCryptor'))->setValue($service, $cryptor);
+    self::assertTrue($service->setConfigValue(ConfigConstants::APP_DB_NAME, 'updated'));
+  }
+
+  public function testConnectorMetadataRemainsUnencryptedDuringKeyRotation(): void
+  {
+    $config = $this->createMock(IConfig::class);
+    $config->method('getAppValue')->willReturnArgument(2);
+    $config->expects($this->once())->method('setAppValue')
+      ->with('cafevdb', ConfigConstants::CONNECTOR_DESCRIPTOR_KEY, '{"version":1}');
+    $cryptor = $this->createMock(SymmetricCryptorInterface::class);
+    $cryptor->expects($this->never())->method('encrypt');
+    $service = $this->getMockBuilder(EncryptionService::class)
+      ->disableOriginalConstructor()->onlyMethods(['publishConnectorDescriptor'])->getMock();
+    $service->expects($this->never())->method('publishConnectorDescriptor');
+    (new ReflectionProperty(EncryptionService::class, 'cloudConfig'))->setValue($service, $config);
+    (new ReflectionProperty(EncryptionService::class, 'appName'))->setValue($service, 'cafevdb');
+    (new ReflectionProperty(EncryptionService::class, 'appCryptor'))->setValue($service, $cryptor);
+    self::assertTrue($service->setConfigValue(ConfigConstants::CONNECTOR_DESCRIPTOR_KEY, '{"version":1}', ignoreLock: true));
+  }
+
   public function testWopiBindingUnlocksOnlyAppCredentials(): void
   {
     $credentials = $this->createMock(ICredentialsStore::class);

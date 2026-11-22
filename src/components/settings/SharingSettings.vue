@@ -19,6 +19,10 @@
       </NcNoteCard>
     </template>
     <template #members-as-cloud-users>
+      <ConnectorAccount :account="state?.cloudConnectorAccount" @error="emit('error', $event)" />
+      <NcNoteCard type="info">
+        {{ t(appId, 'Configure and verify the database connection separately in user_sql and the members app. The account host is the host part of the MariaDB account, not the database server address.') }}
+      </NcNoteCard>
       <NcNoteCard v-for="(requirement, index) in cloudUserRequirements" :key="index" type="info">
         {{ requirement }}
       </NcNoteCard>
@@ -35,6 +39,7 @@
       </NcNoteCard>
     </template>
     <template #wopi-credentials-view>
+      <ConnectorCredentials setting="wopiConnectorCredentials" />
       <div class="admin-actions">
         <NcButton v-if="wopiViewEnabled" :disabled="runningWopiAction" @click="recreateWopiView">
           {{ t(appId, 'Regenerate WOPI access views') }}
@@ -55,6 +60,8 @@ import { translate as t } from '@nextcloud/l10n'
 import { NcButton, NcNoteCard, NcPasswordField } from '@nextcloud/vue'
 import { computed, ref } from 'vue'
 import AdminSettingsTab from './AdminSettingsTab.vue'
+import ConnectorAccount from './ConnectorAccount.vue'
+import ConnectorCredentials from './ConnectorCredentials.vue'
 import {
   BALANCES_FOLDER,
   CALENDAR_KEY_POSTFIX,
@@ -86,6 +93,7 @@ const emit = defineEmits<{ error: [error: Error] }>()
 const state = getInitialState<{
   cloudUserRequirements?: { hints?: string[] }|string[]
   cloudUserViewsDatabase?: string
+  cloudConnectorAccount?: { user?: string, accountHost?: string }
   wopiCredentialsViewEnabled?: boolean|string
   wopiCredentialsViewDatabase?: string
 }>({ section: 'adminSettings', defaults: {} })

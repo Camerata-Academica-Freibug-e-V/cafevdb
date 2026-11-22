@@ -53,6 +53,43 @@ same, not guest or remote-user tokens.
 Protect WOPI tokens in storage and transport: someone who obtains both a token
 and its encrypted credential can recover the shared app key.
 
+Connector databases
+-------------------
+
+The views must be on the orchestra database server, but Nextcloud itself may use
+another database engine or server. The orchestra database account needs permission
+to create the views and grant access.
+
+Under **Members as Cloud-Users**, configure the username and host of the MariaDB
+account to which CafeVDB grants view access. The host is the host part of the
+MariaDB account (for example `localhost` or `%`), not the database server address.
+Configure and test the connection credentials independently in `user_sql` and
+cafevdb-members; CafeVDB cannot verify their logins. With an explicit account,
+CafeVDB leaves the `user_sql` connection settings unchanged when configuring
+the backend. The members app currently still uses Nextcloud's credentials, so it
+requires a MySQL/MariaDB Nextcloud
+database on the orchestra server until it supports independent credentials.
+Without an explicit views account, CafeVDB uses the Nextcloud database account
+as before. When replacing an account, revoke any grants it no longer needs.
+
+CafeVDB publishes `cloudConnectorDescriptor` as read-only, non-secret app
+configuration for consumer apps. Version 1 contains `database` (the effective
+views schema, falling back to the orchestra schema), `account` (`user` and
+`accountHost`), `personalizedViewsEnabled`, and a content-hash `revision`.
+It contains no password or orchestra connection credentials and remains readable
+without the orchestra app key. Saving the account, database or personalized-view
+setting refreshes it; opening orchestra settings initializes it on upgrades.
+Consumers should read it on each request, not maintain another synchronized copy.
+Members can inherit the schema while retaining an explicit local override and
+its own connection/access checks. Changing schemas still removes the old views;
+coordinate such changes with active consumers.
+
+For **WOPI access to DB-Storage**, configure a separate restricted account and
+its password. CafeVDB needs these credentials before its app key is unlocked.
+The fields are write-only, and CafeVDB encrypts the credentials with Nextcloud's
+system crypto. Saving checks the login and, when WOPI access is enabled, checks
+the view. Without an override, WOPI uses Nextcloud's database connection.
+
 Frontend builds
 ---------------
 

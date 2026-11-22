@@ -99,7 +99,7 @@ jobs:
 
       - name: Run PHPUnit unit suite
         working-directory: server/apps/${{ env.APP_NAME }}
-        run: make phpunit PHPCOVERAGE='-d xdebug.mode=coverage'
+        run: make phpunit PHPCOVERAGE='-d xdebug.mode=coverage' PHPUNIT_ARGS='--display-all-issues'
 
       - name: Upload PHPUnit coverage report
         uses: actions/upload-artifact@v4

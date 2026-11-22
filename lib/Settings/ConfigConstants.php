@@ -407,6 +407,7 @@ class ConfigConstants
 
   /** @var string */
   public const APP_DB_NAME = 'dbname';
+  public const CONNECTOR_DESCRIPTOR_KEY = 'cloudConnectorDescriptor';
 
   /** @var string */
   public const APP_DB_USER = 'dbuser';

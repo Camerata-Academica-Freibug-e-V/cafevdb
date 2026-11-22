@@ -24,9 +24,12 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
+use ArrayObject;
+use ErrorException;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 use OCP\App\IAppManager;
 use OCP\Http\Client\IClientService;
@@ -101,6 +104,8 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\RequestService;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261101120000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261118191044::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialStore::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EmailTemplateDefaultsService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalDavService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConfigService::class)]
@@ -202,6 +207,24 @@ class CloudUserConnectorServiceTest extends TestCase
     // nothing
   }
 
+  public function testGrantToRevokeStatementHandlesFieldAndFunctionGrants(): void
+  {
+    $method = new ReflectionMethod(CloudUserConnectorService::class, 'grantToRevokeStatement');
+    $invoke = fn(string $sql): ?string => $method->invoke(
+      $this->cloudUserConnectorService,
+      $sql,
+    );
+
+    self::assertSame(
+      "REVOKE UPDATE (password_hash) ON `db`.`View` FROM 'connector'@'%'",
+      $invoke("GRANT UPDATE (password_hash) ON `db`.`View` TO 'connector'@'%'"),
+    );
+    self::assertSame(
+      'REVOKE EXECUTE ON FUNCTION `db`.`Fn` FROM `connector`',
+      $invoke('GRANT EXECUTE ON FUNCTION `db`.`Fn` TO `connector`'),
+    );
+  }
+
   /** @return void */
   public function testCheckRequirements(): void
   {
@@ -285,11 +308,65 @@ class CloudUserConnectorServiceTest extends TestCase
   }
 
   /** @return void */
+  public function testWriteUserSqlConfigWithoutOrchestraName(): void
+  {
+    $keys = [ConfigConstants::ORCHESTRA_NAME_KEY, ConfigConstants::MUSICIANS_ADDRESS_BOOK_KEY];
+    $values = [];
+    foreach ($keys as $key) {
+      $values[$key] = $this->encryptionService->getAppValue($key);
+      $this->encryptionService->deleteAppValue($key);
+    }
+    try {
+      $this->assertNull($this->encryptionService->getConfigValue(ConfigConstants::ORCHESTRA_NAME_KEY));
+      $this->assertNull($this->encryptionService->getConfigValue(ConfigConstants::MUSICIANS_ADDRESS_BOOK_KEY));
+      set_error_handler(static function(int $severity, string $message, string $file, int $line): never {
+        throw new ErrorException($message, 0, $severity, $file, $line);
+      }, E_DEPRECATED);
+      try {
+        $this->cloudUserConnectorService->writeUserSqlConfig(dataBaseName: 'something');
+      } finally {
+        restore_error_handler();
+      }
+      $this->assertSame(
+        ' ' . $this->mockProvider->getL10N()->t('Musicians'),
+        $this->cloudConfig->getAppValue($this->appName, CloudUserConnectorService::CLOUD_USER_BACKEND . ':opt.default_group'),
+      );
+    } finally {
+      $this->cloudUserConnectorService->writeUserSqlConfig(dataBaseName: 'something', delete: true);
+      foreach ($values as $key => $value) {
+        if ($value === null) {
+          $this->encryptionService->deleteAppValue($key);
+        } else {
+          $this->encryptionService->setAppValue($key, $value);
+        }
+      }
+    }
+  }
+
+  /** @return void */
   public function testProjectGroupId(): void
   {
     $number = 47;
     $groupId = CloudUserConnectorService::getProjectGroupId($number);
     $this->assertEquals($this->appName . '_' .  $number, $groupId);
+  }
+
+  /** @return void */
+  public function testConnectorAccountContainsNoCredentials(): void
+  {
+    $account = $this->cloudUserConnectorService->normalizeConnectorAccount(' nextcloud ', ' % ');
+    self::assertSame(['user' => 'nextcloud', 'accountHost' => '%'], $account);
+    $this->cloudUserConnectorService->saveConnectorAccount($account);
+    try {
+      self::assertSame($account, $this->cloudUserConnectorService->getConnectorAccount());
+      self::assertSame(
+        $account,
+        json_decode($this->cloudConfig->getAppValue($this->appName, CloudUserConnectorService::CONNECTOR_ACCOUNT_CONFIG), true),
+      );
+    } finally {
+      $this->cloudUserConnectorService->saveConnectorAccount([]);
+    }
+    self::assertSame([], $this->cloudUserConnectorService->getConnectorAccount());
   }
 
   /** @return void */
@@ -300,6 +377,7 @@ class CloudUserConnectorServiceTest extends TestCase
     $dbConfig = $this->databaseProvider->getDatabaseConfig();
     $this->cloudConfig->setSystemValue('dbhost', $dbConfig->databaseServer);
     $this->cloudConfig->setSystemValue('dbuser', DatabaseProvider::CLOUD_DB_USER);
+    $this->cloudConfig->setSystemValue('dbtype', 'mysql');
 
     $this->cloudUserConnectorService->updateUserSqlViews($cloudConnectorDatabase);
     $this->cloudUserConnectorService->updateMusicianPersonalizedViews($cloudConnectorDatabase);
@@ -308,6 +386,75 @@ class CloudUserConnectorServiceTest extends TestCase
     $this->cloudUserConnectorService->removeUserSqlViews($cloudConnectorDatabase);
 
     $this->unapplyMigrations();
+  }
+
+  /** @return void */
+  public function testDedicatedAccountAccessesViewsWhenNextcloudUsesPostgres(): void
+  {
+    $this->applyMigrations('latest');
+    $database = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
+    $dbConfig = $this->databaseProvider->getDatabaseConfig();
+    $credentialService = $this->mockProvider->getAppContainer()->get(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $credentials = $credentialService->prepare(
+      $this->getEntityManager()->getConnection(),
+      DatabaseProvider::CLOUD_DB_USER,
+      $dbConfig->databasePassword,
+    );
+    $account = ['user' => $credentials['user'], 'accountHost' => $credentials['accountHost']];
+    $oldType = $this->cloudConfig->getSystemValue('dbtype', 'sqlite');
+    try {
+      $this->cloudConfig->setSystemValue('dbtype', 'pgsql');
+      $this->cloudUserConnectorService->saveConnectorAccount($account);
+      self::assertSame($account, $this->cloudUserConnectorService->getConnectorAccount());
+      $this->cloudUserConnectorService->updateUserSqlViews($database, checkAccess: true);
+      $this->cloudUserConnectorService->updateMusicianPersonalizedViews($database, checkAccess: true);
+      $credentialService->checkViews($credentials, $database, ['NextcloudUserView', 'PersonalizedMusiciansView']);
+    } finally {
+      $this->cloudUserConnectorService->saveConnectorAccount([]);
+      $this->cloudConfig->setSystemValue('dbtype', $oldType);
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testCustomAccountDoesNotOverwriteUserSqlConnectionSettings(): void
+  {
+    $account = ['user' => DatabaseProvider::CLOUD_DB_USER, 'accountHost' => '%'];
+    $connectionSettings = [
+      'db.hostname' => 'members-db',
+      'db.username' => 'members-user',
+      'db.password' => 'test-only',
+      'db.database' => 'members-views',
+      'db.driver' => 'mysql',
+      'db.ssl_ca' => 'ca.pem',
+      'opt.safe_store' => '1',
+    ];
+    $properties = new ArrayObject($connectionSettings);
+    $container = $this->mockProvider->getAppContainer();
+    $service = $this->getMockBuilder(CloudUserConnectorService::class)
+      ->setConstructorArgs([
+        $this->encryptionService, $this->appManager, $this->cloudConfig, $this->mockProvider->getL10N(),
+        $container->get(RequestService::class), $this->appName, $container, $this->mockProvider->getLoggerInterface(),
+      ])
+      ->onlyMethods(['userSqlProperties', 'requireBackendAdmin'])->getMock();
+    $service->expects($this->exactly(2))->method('userSqlProperties')->willReturn($properties);
+    $service->expects($this->exactly(2))->method('requireBackendAdmin');
+    $service->saveConnectorAccount($account);
+    try {
+      $service->writeUserSqlConfig('configured-views');
+      $service->configureCloudUserBackend();
+      foreach ($connectionSettings as $key => $expected) {
+        self::assertSame($expected, $properties[$key]);
+      }
+      self::assertSame('NextcloudUserView', $properties['db.table.user']);
+      $service->configureCloudUserBackend(erase: true);
+      foreach ($connectionSettings as $key => $expected) {
+        self::assertSame($expected, $properties[$key]);
+      }
+      self::assertFalse(isset($properties['db.table.user']));
+    } finally {
+      $service->saveConnectorAccount([]);
+    }
   }
 
   /**

@@ -33,6 +33,7 @@ class WopiCredentialStore
     private IDBConnection $cloudConnection,
     private ContainerInterface $appContainer,
     private ICrypto $crypto,
+    private ConnectorDatabaseCredentials $connectorCredentials,
   ) {
   }
 
@@ -42,7 +43,7 @@ class WopiCredentialStore
     int $expiry,
     #[SensitiveParameter] string $appKey,
   ): void {
-    $this->connectorView();
+    $this->connectorDatabase();
     $now = time();
     if ($token === '' || $expiry <= $now || $appKey === '') {
       throw new RuntimeException('Cannot store an expired or empty WOPI credential.');
@@ -67,23 +68,47 @@ class WopiCredentialStore
     if ($token === '' || $expiry <= time()) {
       throw new RuntimeException('Cannot recover an expired or empty WOPI credential.');
     }
-    $view = $this->connectorView();
+    $database = $this->connectorDatabase();
+    $view = self::qualify($database, self::VIEW_NAME);
+    $credentials = $this->connectorCredentials->load(ConnectorDatabaseCredentials::WOPI);
+    if ($credentials !== []) {
+      try {
+        $connection = $this->connectorCredentials->open($credentials, $database);
+        $connection->executeStatement('SET @' . Constants::SQL_WOPI_TOKEN_HASH . ' = ?', [hash('sha256', $token)]);
+        $encoded = $connection->fetchOne('SELECT encrypted_key FROM ' . $view . ' WHERE expires = ?', [$expiry]);
+      } catch (\Throwable) {
+        throw $this->connectorCredentials->accessError();
+      } finally {
+        // The dedicated connection must not keep the per-request session variable.
+        if (isset($connection)) {
+          $connection->close();
+        }
+      }
+    } else {
+      $encoded = $this->recoverUsingCloudConnection($view, $token, $expiry);
+    }
+
+    return $encoded === false ? null : $this->decryptCredential($encoded, $token, $userId, $expiry);
+  }
+
+  private function recoverUsingCloudConnection(string $view, #[SensitiveParameter] string $token, int $expiry): mixed
+  {
     $variable = '@' . Constants::SQL_WOPI_TOKEN_HASH;
     try {
       $this->cloudConnection->executeStatement('SET ' . $variable . ' = ?', [hash('sha256', $token)]);
       $result = $this->cloudConnection->executeQuery('SELECT encrypted_key FROM ' . $view . ' WHERE expires = ?', [$expiry]);
       try {
-        $encoded = $result->fetchOne();
+        return $result->fetchOne();
       } finally {
         $result->closeCursor();
       }
     } finally {
       $this->cloudConnection->executeStatement('SET ' . $variable . ' = NULL');
     }
+  }
 
-    if ($encoded === false) {
-      return null;
-    }
+  private function decryptCredential(string $encoded, #[SensitiveParameter] string $token, string $userId, int $expiry): string
+  {
     $credential = json_decode(
       $this->crypto->decrypt($encoded, $this->encryptionKey($token)),
       true,
@@ -107,13 +132,13 @@ class WopiCredentialStore
     return '`' . str_replace('`', '``', $database) . '`.`' . str_replace('`', '``', $name) . '`';
   }
 
-  private function connectorView(): string
+  private function connectorDatabase(): string
   {
     $database = $this->config->getAppValue($this->appName, self::CONNECTOR_DATABASE_CONFIG, '');
     if ($database === '') {
       throw new RuntimeException('WOPI connector view is not configured.');
     }
-    return self::qualify($database, self::VIEW_NAME);
+    return $database;
   }
 
   private function encryptionKey(#[SensitiveParameter] string $token): string

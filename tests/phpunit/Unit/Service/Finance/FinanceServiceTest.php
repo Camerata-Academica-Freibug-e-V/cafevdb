@@ -110,7 +110,7 @@ class FinanceServiceTest extends TestCase
   {
     self::enableDeprecations();
 
-    $this->generateEventsService();
+    $this->generateEventsService(stubEntityManager: true);
 
     $this->mockProvider = $this->mockProvider ?? MockProvider::create($this);
 
@@ -159,8 +159,6 @@ class FinanceServiceTest extends TestCase
         },
       );
 
-    $this->entityManager->expects($this->atLeastOnce())->method('getRepository');
-
     $appContainer = $this->mockProvider->getAppContainer();
 
     $this->financeService = new FinanceService(
@@ -175,7 +173,6 @@ class FinanceServiceTest extends TestCase
   /** @return void */
   public function testConstruction(): void
   {
-    // $this->expectNotToPerformAssertions();
   }
 
   /** @return void */
@@ -272,6 +269,9 @@ class FinanceServiceTest extends TestCase
   /** @return void */
   public function testGenerateInvoiceNumber(): void
   {
+    $repository = $this->createMock(EntityRepository::class);
+    $repository->expects($this->once())->method('findLike')->willReturn([]);
+    $this->entityRepositories[Entities\Invoice::class] = $repository;
     $yearMonth = '2030-12';
     $date = DateTimeImmutable::createFromFormat('Y-m', $yearMonth);
     $invoiceNumber = $this->financeService->generateInvoiceNumber($this->musician, $this->project, $date);
