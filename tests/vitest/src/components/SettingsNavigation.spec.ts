@@ -26,7 +26,6 @@ describe('settings page structure', () => {
     const tree = getAdminSettingsTree({ isSubAdmin: true, orchestraSettingsEnabled: true });
     expect(tree.map(({ key }) => key)).toEqual([
       'backend',
-      'configure-user-backend',
       'recryption',
       'access-control',
       'general',

@@ -78,4 +78,15 @@ describe('Connector account', () => {
     await host.setValue('client.example');
     expect(wrapper.get('.connector-account__preview code').text()).toBe("'o''brien'@'client.example'");
   });
+
+  it('uses the WOPI endpoint and displays the saved account', async () => {
+    vi.mocked(setAdminSetting).mockResolvedValue({ data: { messages: ['Saved'] } } as never);
+    const wrapper = mount(ConnectorAccount, {
+      props: { setting: 'wopiConnectorCredentials', account: { user: 'wopi', accountHost: '%' } },
+    });
+    expect(wrapper.get('.connector-account__preview code').text()).toBe("'wopi'@'%'");
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+    expect(setAdminSetting).toHaveBeenCalledWith('wopiConnectorCredentials', { user: 'wopi', accountHost: '%', password: '' });
+  });
 });

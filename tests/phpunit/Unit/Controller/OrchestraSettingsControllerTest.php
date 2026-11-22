@@ -214,6 +214,40 @@ class OrchestraSettingsControllerTest extends TestCase
     self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
   }
 
+  public function testWopiAccountKeepsPasswordAndValidatesHost(): void
+  {
+    $credentials = ['user' => 'restricted', 'accountHost' => '%', 'password' => 'private-password'];
+    $service = $this->createMock(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $service->method('load')->with(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::WOPI)->willReturn($credentials);
+    $service->expects($this->once())->method('prepare')->with(
+      $this->anything(),
+      'restricted',
+      'private-password',
+    )->willReturn($credentials);
+    $service->expects($this->once())->method('save')->with(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::WOPI, $credentials);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class, $service);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Database\Connection::class, $this->createStub(\OCA\CAFEVDB\Database\Connection::class));
+
+    $response = $this->controller->setApp('wopiConnectorCredentials', ['user' => 'restricted', 'accountHost' => '%', 'password' => '']);
+    self::assertSame(200, $response->getStatus());
+    self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
+  }
+
+  public function testWopiAccountRejectsWrongAuthenticatedHost(): void
+  {
+    restore_error_handler();
+    self::enableDeprecations('::grumble');
+    $service = $this->createMock(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $service->method('prepare')->willReturn(['accountHost' => 'localhost']);
+    $service->expects($this->never())->method('save');
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class, $service);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Database\Connection::class, $this->createStub(\OCA\CAFEVDB\Database\Connection::class));
+
+    $response = $this->controller->setApp('wopiConnectorCredentials', ['user' => 'restricted', 'accountHost' => '%', 'password' => 'private-password']);
+    self::assertSame(400, $response->getStatus());
+    self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
+  }
+
   public function testResetClearsSharedCredentialsAndMarksAccountManaged(): void
   {
     $connector = $this->createMock(CloudUserConnectorService::class);

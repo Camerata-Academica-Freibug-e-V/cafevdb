@@ -173,6 +173,7 @@ describe('Orchestra and sharing settings fields', () => {
     const wrapper = mount(SharingSettings, {
       props: { entry: { id: 'sharing', key: 'sharing', name: 'Sharing', children: [] } },
     });
+
     const groups = wrapper.getComponent(AdminSettingsTab).props('groups');
     expect(groups[1].fields.map(({ key }) => key)).toEqual([
       ...Object.values(CALENDARS).map(({ uri }) => uri + CALENDAR_KEY_POSTFIX),
@@ -182,6 +183,21 @@ describe('Orchestra and sharing settings fields', () => {
       key: EVENT_DURATION_KEY,
       label: 'Default event duration (minutes)',
       type: 'number',
+    });
+
+    it('groups cloud-user switches before the database and includes the backend action', () => {
+      const wrapper = mount(SharingSettings, {
+        props: { entry: { id: 'sharing', key: 'sharing', name: 'Sharing', children: [] } },
+        slots: { userBackend: '<button>Configure backend</button>' },
+        global: { stubs: { ConnectorAccount: true } },
+      });
+      const groups = wrapper.getComponent(AdminSettingsTab).props('groups');
+      expect(groups[4].fields.map(({ key }) => key)).toEqual([
+        'importClubMembersAsCloudUsers',
+        'musicianPersonalizedViews',
+        'cloudUserViewsDatabase',
+      ]);
+      expect(wrapper.text()).toContain('Configure backend');
     });
   });
 

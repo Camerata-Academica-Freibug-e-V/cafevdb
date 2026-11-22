@@ -36,7 +36,9 @@ import { appName as appId } from '../../config.ts'
 import { setAdminSetting } from '../../services/admin-settings.ts'
 import { showSettingError, showSettingFeedback } from '../../services/setting-feedback.ts'
 
-const props = defineProps<{ account?: { user?: string, accountHost?: string } }>()
+const props = withDefaults(defineProps<{ account?: { user?: string, accountHost?: string }, setting?: string }>(), {
+  setting: 'cloudConnectorAccount',
+})
 const emit = defineEmits<{ error: [error: Error] }>()
 const user = ref(props.account?.user ?? '')
 const accountHost = ref(props.account?.accountHost ?? 'localhost')
@@ -53,7 +55,7 @@ const save = async (reset: boolean) => {
   warnings.value = []
   try {
     const response = await setAdminSetting(
-      'cloudConnectorAccount',
+      props.setting,
       reset ? null : { user: user.value.trim(), accountHost: accountHost.value.trim(), password: password.value },
     )
     showSettingFeedback(response.data, t(appId, 'Views database account'))

@@ -74,7 +74,9 @@ export const getAdminSettingsTree = (permissions: {
     entry('backend', t(appId, 'Camerata DB')),
     ...(permissions.isSubAdmin
       ? [
-        entry('configure-user-backend', t(appId, 'Configure User Backend')),
+        ...(!permissions.orchestraSettingsEnabled
+          ? [entry('configure-user-backend', t(appId, 'Configure User Backend'))]
+          : []),
         entry('recryption', t(appId, 'Recryption Requests')),
         entry('access-control', t(appId, 'Access Control')),
       ]
