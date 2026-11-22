@@ -218,7 +218,7 @@ class OrchestraSettingsControllerTest extends TestCase
   {
     $credentials = ['user' => 'restricted', 'accountHost' => '%', 'password' => 'private-password'];
     $service = $this->createMock(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
-    $service->method('load')->with(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::WOPI)->willReturn($credentials);
+    $service->expects($this->once())->method('load')->with(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::WOPI)->willReturn($credentials);
     $service->expects($this->once())->method('prepare')->with(
       $this->anything(),
       'restricted',
