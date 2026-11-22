@@ -1332,7 +1332,7 @@ class OrchestraSettingsController extends Controller
             $userConnectorService->writeUserSqlConfig($cloudUserViewsDatabase);
             // following can fail
             try {
-              $userConnectorService->configureCloudUserBackend();
+              $hints = array_merge($hints, $userConnectorService->configureCloudUserBackend());
               $userConnectorService->setCloudUserSubAdmins();
             } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
               throw $t;
@@ -1379,17 +1379,14 @@ class OrchestraSettingsController extends Controller
 
           // also try to re-grant the sub-admin right and reconfigure user-sql
           try {
-            $userConnectorService->configureCloudUserBackend();
-            $userConnectorService->setCloudUserSubAdmins();
-          } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
-            throw $t;
+            $hints = array_merge($hints, $userConnectorService->configureCloudUserBackend());
           } catch (Throwable $t) {
-            throw new Exceptions\EnduserNotificationException(
-              // TRANSLATORS: Parameter is the name of a user backend.
-              message: $this->l->t('Unable to configure "%1$s".', CloudUserConnectorService::CLOUD_USER_BACKEND),
-              previous: $t,
+            $this->logException($t, 'Unable to configure "' . CloudUserConnectorService::CLOUD_USER_BACKEND . '" after recreating its views.');
+            $hints[] = $this->l->t(
+              'The user_sql settings could not be fully updated or verified. Check the configuration; access to its administrative settings may be required.',
             );
           }
+          $userConnectorService->setCloudUserSubAdmins();
         } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
           throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
@@ -1398,10 +1395,7 @@ class OrchestraSettingsController extends Controller
             previous: $t,
           );
         }
-        $messages = array_merge(
-          [ $this->l->t('Cloud-user-views have been regenerated successfully.'), ],
-          $hints,
-        );
+        $messages = [ $this->l->t('Cloud-user-views have been regenerated successfully.'), ];
         return (new DTO\MessagesResponse(messages: $messages, hints: $hints))->response();
 
       case EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value:
@@ -1421,7 +1415,7 @@ class OrchestraSettingsController extends Controller
             if ($importUsers) {
               $userConnectorService->updateUserSqlViews($newValue, checkAccess: true);
               $userConnectorService->writeUserSqlConfig($newValue);
-              $userConnectorService->configureCloudUserBackend();
+              $hints = array_merge($hints, $userConnectorService->configureCloudUserBackend());
             }
             if (($newValue ?: $this->getConfigValue(ConfigConstants::APP_DB_NAME))
                 !== ($oldValue ?: $this->getConfigValue(ConfigConstants::APP_DB_NAME))) {
@@ -2265,35 +2259,97 @@ class OrchestraSettingsController extends Controller
    *
    * @return Http\Response
    */
-  private function setCloudConnectorAccount(mixed $value): Http\Response
+  private function setCloudConnectorAccount(#[SensitiveParameter] mixed $value): Http\Response
   {
     if ($value !== null && (!is_array($value)
         || !is_string($value['user'] ?? null)
-        || !is_string($value['accountHost'] ?? null))) {
-      return self::grumble($this->l->t('Enter a database username and account host.'));
+        || !is_string($value['accountHost'] ?? null)
+        || !is_string($value['password'] ?? null))) {
+      return self::grumble($this->l->t('Enter a database username, account host and password.'));
     }
 
     try {
       $connector = $this->di(CloudUserConnectorService::class);
+      $credentialsService = $this->di(ConnectorDatabaseCredentials::class);
+      $previousAccount = $connector->getConnectorAccount();
       $account = $value === null ? [] : $connector->normalizeConnectorAccount($value['user'], $value['accountHost']);
+      $credentials = [];
+      if ($value !== null) {
+        $password = $value['password'];
+        if ($password === '') {
+          $previous = $credentialsService->load(ConnectorDatabaseCredentials::CLOUD);
+          if ($previousAccount !== $account || !is_string($previous['password'] ?? null)) {
+            return self::grumble($this->l->t('Enter the password for the views database account.'));
+          }
+          $password = $previous['password'];
+        }
+        $credentials = $credentialsService->prepare($this->di(Connection::class), $account['user'], $password);
+        if ($credentials['accountHost'] !== $account['accountHost']) {
+          return self::grumble($this->l->t('The connected MariaDB account host does not match the specified account host.'));
+        }
+      }
       $database = $this->getConfigValue(EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value, null);
+      $views = [];
       if ($this->getConfigValue(EnumSimpleSettingsKey::IMPORT_CLUB_MEMBERS_AS_CLOUD_USERS->value, 'off') === 'on') {
         $connector->updateUserSqlViews($database, $account, checkAccess: true);
+        $views = ['NextcloudUserView', 'NextcloudGroupView', 'NextcloudUserGroupView'];
       }
       if ($this->getConfigValue(EnumSimpleSettingsKey::MUSICIAN_PERSONALIZED_VIEWS->value, 'off') === 'on') {
         $connector->updateMusicianPersonalizedViews($database, $account, checkAccess: true);
+        $views[] = 'PersonalizedMusiciansView';
       }
-      $connector->saveConnectorAccount($account);
+      if ($credentials !== [] && $views !== []) {
+        $credentialsService->checkViews($credentials, $database ?: $this->getConfigValue(ConfigConstants::APP_DB_NAME), $views);
+      }
+      $snapshot = $credentialsService->snapshotCloud();
+      $accountWriteStarted = false;
+      try {
+        $credentialsService->save(ConnectorDatabaseCredentials::CLOUD, $credentials);
+        $credentialsService->markCloudManaged();
+        $accountWriteStarted = true;
+        $connector->saveConnectorAccount($account);
+      } catch (Throwable) {
+        $restored = true;
+        try {
+          $credentialsService->restoreCloud($snapshot);
+        } catch (Throwable) {
+          $restored = false;
+        }
+        if ($accountWriteStarted) {
+          try {
+            $connector->saveConnectorAccount($previousAccount);
+          } catch (Throwable) {
+            $restored = false;
+          }
+        }
+        if (!$restored) {
+          $this->logError('Unable to restore the previous connector account and credentials.');
+          throw new Exceptions\DatabaseCloudConnectorViewException(
+            $this->l->t('Unable to save or restore the connector account. Check the views account and consumer settings.'),
+          );
+        }
+        throw new Exceptions\DatabaseCloudConnectorViewException($this->l->t('Unable to save the connector database account.'));
+      }
     } catch (Exceptions\DatabaseCloudConnectorViewException $exception) {
       return self::grumble($exception->getMessage());
-    } catch (Throwable $exception) {
-      $this->logException($exception, 'Unable to save the connector database account.');
+    } catch (Throwable) {
+      $this->logError('Unable to save the connector database account.');
       return self::grumble($this->l->t('Unable to save the connector database account.'));
     }
 
+    $hints = [];
+    if ($this->getConfigValue(EnumSimpleSettingsKey::IMPORT_CLUB_MEMBERS_AS_CLOUD_USERS->value, 'off') === 'on') {
+      try {
+        $connector->writeUserSqlConfig($database);
+        $hints = $connector->configureCloudUserBackend();
+      } catch (Throwable) {
+        $this->logError('Unable to configure the user_sql backend after saving the connector account.');
+        $hints[] = $this->l->t('The user_sql settings could not be updated. Check the configuration; access to its administrative settings may be required.');
+      }
+    }
     return (new DTO\MessagesResponse([
-      $this->l->t('Connector database account saved. Configure and verify the consumer connections separately.'),
-    ]))->response();
+      $this->l->t('Connector database account saved.'),
+    ], hints: $hints))->response();
   }
 
   /**

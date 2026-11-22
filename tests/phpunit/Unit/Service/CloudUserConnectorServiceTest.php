@@ -30,16 +30,19 @@ use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use ReflectionProperty;
 
 use OCP\App\IAppManager;
 use OCP\Http\Client\IClientService;
 use OCP\IConfig;
+use Psr\Container\ContainerInterface;
 
 use OCA\RotDrop\Tests\DatabaseProvider;
 use OCA\RotDrop\Tests\EnumDatabasePurpose;
 
 use OCA\CAFEVDB\Constants;
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
+use OCA\CAFEVDB\Service\ConnectorDatabaseCredentials;
 use OCA\CAFEVDB\Service\EncryptionService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Tests\MockProvider;
@@ -303,8 +306,49 @@ class CloudUserConnectorServiceTest extends TestCase
   /** @return void */
   public function testConfigureCloudUserBackend(): void
   {
-    $this->testWriteUserSqlConfig();
-    $this->cloudUserConnectorService->configureCloudUserBackend(erase: false);
+    $values = [];
+    $config = $this->createStub(IConfig::class);
+    $config->method('getAppKeys')->willReturn(['user_sql:db.database', 'user_sql:db.driver']);
+    $config->method('getAppValue')->willReturnCallback(
+      static fn(string $app, string $key, mixed $default = '') => match ($key) {
+        'user_sql:db.database' => 'views',
+        'user_sql:db.driver' => 'mysql',
+        default => $default,
+      },
+    );
+    $config->method('getSystemValue')->willReturnCallback(
+      static fn(string $key, mixed $default = '') => match ($key) {
+        'dbhost' => 'cloud-db:3307',
+        'dbuser' => 'cloud-user',
+        'dbpassword' => 'cloud-secret',
+        default => $default,
+      },
+    );
+    $config->method('setAppValue')->willReturnCallback(
+      static function(string $app, string $key, mixed $value) use (&$values): void {
+        $values[$app . ':' . $key] = $value;
+      },
+    );
+    $service = $this->getMockBuilder(CloudUserConnectorService::class)
+      ->disableOriginalConstructor()
+      ->onlyMethods(['getConnectorAccount', 'userSqlProperties', 'requireUserSqlSettingsAccess'])
+      ->getMock();
+    $service->method('getConnectorAccount')->willReturn([]);
+    $service->method('userSqlProperties')->willReturn(new ArrayObject());
+    $service->expects($this->once())->method('requireUserSqlSettingsAccess');
+    foreach ([
+      'cloudConfig' => $config,
+      'appName' => 'cafevdb',
+      'l' => $this->mockProvider->getL10N(),
+      'logger' => $this->mockProvider->getLoggerInterface(),
+      'requestService' => $this->mockProvider->getAppContainer()->get(RequestService::class),
+    ] as $name => $value) {
+      (new ReflectionProperty(CloudUserConnectorService::class, $name))->setValue($service, $value);
+    }
+    self::assertSame([], $service->configureCloudUserBackend());
+    self::assertSame('cloud-db', $values['user_sql:db.hostname']);
+    self::assertSame('cloud-secret', $values['user_sql:db.password']);
+    self::assertSame('views', $values['user_sql:db.database']);
   }
 
   /** @return void */
@@ -436,9 +480,9 @@ class CloudUserConnectorServiceTest extends TestCase
         $this->encryptionService, $this->appManager, $this->cloudConfig, $this->mockProvider->getL10N(),
         $container->get(RequestService::class), $this->appName, $container, $this->mockProvider->getLoggerInterface(),
       ])
-      ->onlyMethods(['userSqlProperties', 'requireBackendAdmin'])->getMock();
+      ->onlyMethods(['userSqlProperties', 'requireUserSqlSettingsAccess'])->getMock();
     $service->expects($this->exactly(2))->method('userSqlProperties')->willReturn($properties);
-    $service->expects($this->exactly(2))->method('requireBackendAdmin');
+    $service->expects($this->exactly(2))->method('requireUserSqlSettingsAccess');
     $service->saveConnectorAccount($account);
     try {
       $service->writeUserSqlConfig('configured-views');
@@ -455,6 +499,92 @@ class CloudUserConnectorServiceTest extends TestCase
     } finally {
       $service->saveConnectorAccount([]);
     }
+  }
+
+  #[Attributes\DataProvider('userSqlEndpoints')]
+  public function testDedicatedCredentialsConfigureUserSqlWithoutChangingSafeStore(
+    array $credentials,
+    string $cloudHost,
+    string $safeStore,
+    ?string $expectedHost,
+  ): void {
+    $account = ['user' => 'restricted', 'accountHost' => '%'];
+    $credentials += $account + ['password' => 'private-password'];
+    $appValues = [];
+    $systemValues = [];
+    $config = $this->createStub(IConfig::class);
+    $config->method('getAppKeys')->willReturn(['user_sql:db.database', 'user_sql:db.table.user']);
+    $config->method('getAppValue')->willReturnCallback(
+      static fn(string $app, string $key, mixed $default = '') => match ([$app, $key]) {
+        ['cafevdb', 'user_sql:db.database'] => 'views',
+        ['cafevdb', 'user_sql:db.table.user'] => 'NextcloudUserView',
+        ['user_sql', 'opt.safe_store'] => $safeStore,
+        default => $default,
+      },
+    );
+    $config->method('getSystemValue')->willReturn($cloudHost);
+    $config->method('setAppValue')->willReturnCallback(
+      static function(string $app, string $key, mixed $value) use (&$appValues): void {
+        $appValues[$app . ':' . $key] = $value;
+      },
+    );
+    $config->method('setSystemValue')->willReturnCallback(
+      static function(string $key, mixed $value) use (&$systemValues): void {
+        $systemValues[$key] = $value;
+      },
+    );
+    $credentialService = $this->createStub(ConnectorDatabaseCredentials::class);
+    $credentialService->method('load')->willReturn($credentials);
+    $container = $this->createStub(ContainerInterface::class);
+    $container->method('get')->willReturn($credentialService);
+    $properties = new ArrayObject(['opt.safe_store' => $safeStore, 'db.ssl_ca' => 'ca.pem']);
+    $service = $this->getMockBuilder(CloudUserConnectorService::class)
+      ->disableOriginalConstructor()
+      ->onlyMethods(['getConnectorAccount', 'userSqlProperties', 'requireUserSqlSettingsAccess'])
+      ->getMock();
+    $service->method('getConnectorAccount')->willReturn($account);
+    $service->method('userSqlProperties')->willReturn($properties);
+    $service->expects($this->once())->method('requireUserSqlSettingsAccess');
+    foreach ([
+      'cloudConfig' => $config,
+      'appName' => 'cafevdb',
+      'appContainer' => $container,
+      'l' => $this->mockProvider->getL10N(),
+      'logger' => $this->mockProvider->getLoggerInterface(),
+      'requestService' => $this->mockProvider->getAppContainer()->get(RequestService::class),
+    ] as $name => $value) {
+      (new ReflectionProperty(CloudUserConnectorService::class, $name))->setValue($service, $value);
+    }
+
+    $warnings = $service->configureCloudUserBackend();
+    self::assertSame('NextcloudUserView', $properties['db.table.user']);
+    self::assertSame('ca.pem', $properties['db.ssl_ca']);
+    self::assertSame($safeStore, $properties['opt.safe_store']);
+    if ($expectedHost === null) {
+      self::assertNotEmpty($warnings);
+      self::assertSame([], $appValues);
+      self::assertSame([], $systemValues);
+      return;
+    }
+    self::assertSame([], $warnings);
+    $values = $safeStore === '1' ? $systemValues : $appValues;
+    $prefix = $safeStore === '1' ? 'user_sql.' : 'user_sql:';
+    self::assertSame($expectedHost, $values[$prefix . 'db.hostname']);
+    self::assertSame('views', $values[$prefix . 'db.database']);
+    self::assertSame('restricted', $values[$prefix . 'db.username']);
+    self::assertSame('private-password', $values[$prefix . 'db.password']);
+    self::assertSame('mysql', $appValues['user_sql:db.driver']);
+  }
+
+  /** @return iterable */
+  public static function userSqlEndpoints(): iterable
+  {
+    yield 'app store' => [['host' => 'mariadb'], 'cloud-db', '0', 'mariadb'];
+    yield 'system store with matching port' => [['host' => 'mariadb', 'port' => 3307], 'cloud-db:3307', '1', 'mariadb'];
+    yield 'different port' => [['host' => 'mariadb', 'port' => 3307], 'cloud-db:3306', '0', null];
+    yield 'matching socket' => [['unix_socket' => '/tmp/views.sock'], 'localhost:/tmp/views.sock', '1', 'localhost'];
+    yield 'different socket' => [['unix_socket' => '/tmp/views.sock'], 'localhost:/tmp/other.sock', '0', null];
+    yield 'tcp with inherited socket' => [['host' => 'mariadb'], 'localhost:/tmp/views.sock', '0', null];
   }
 
   /**

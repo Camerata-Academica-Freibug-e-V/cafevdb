@@ -46,6 +46,23 @@ class ConnectorDatabaseCredentialsTest extends TestCase
     $service->save(ConnectorDatabaseCredentials::WOPI, $credentials);
   }
 
+  public function testCloudSnapshotRestoresEncryptedCredentialsAndAbsentMarker(): void
+  {
+    $config = $this->createMock(IConfig::class);
+    $config->method('getAppValue')->willReturnMap([
+      ['cafevdb', ConnectorDatabaseCredentials::CLOUD, '', 'encrypted-old'],
+      ['cafevdb', ConnectorDatabaseCredentials::CLOUD_MANAGED, '', ''],
+    ]);
+    $config->expects($this->once())->method('setAppValue')
+      ->with('cafevdb', ConnectorDatabaseCredentials::CLOUD, 'encrypted-old');
+    $config->expects($this->once())->method('deleteAppValue')
+      ->with('cafevdb', ConnectorDatabaseCredentials::CLOUD_MANAGED);
+    $service = new ConnectorDatabaseCredentials(
+      $config, $this->createStub(ICrypto::class), $this->createStub(IDBConnection::class), $this->createStub(IL10N::class), 'cafevdb',
+    );
+    $service->restoreCloud($service->snapshotCloud());
+  }
+
   public function testPreparationIdentifiesTheActualAccountAndUsesTheAppServer(): void
   {
     $appConnection = $this->createStub(Connection::class);

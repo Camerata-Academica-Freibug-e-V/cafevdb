@@ -27,12 +27,15 @@ namespace OCA\CAFEVDB\Tests\Unit\Controller;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 use OCP\IDateTimeFormatter;
 use OCP\IRequest;
 
 use OCA\CAFEVDB\Controller;
+use OCA\CAFEVDB\Exceptions;
 use OCA\CAFEVDB\Service\CalDavService;
+use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\ConfigCheckService;
 use OCA\CAFEVDB\Service\EmailAddressService;
 use OCA\CAFEVDB\Service\Finance\FinanceService;
@@ -48,10 +51,16 @@ use OCA\RotDrop\Tests\DeprecationException;
 
 /** Test aspects of the OrchestraSettingsController. */
 #[Attributes\CoversClass(Controller\OrchestraSettingsController::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Crypto\HaliteCryptoFactory::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Crypto\HaliteSymmetricStreamCryptor::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConfigService::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\EncryptionService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\L10N\L10NFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\Registration::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Controller\DTO\MessagesResponse::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\AppInfo\AbstractApplication::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions\EnduserNotificationException::class)]
 class OrchestraSettingsControllerTest extends TestCase
 {
   use TestRoutesAreDefinedTrait;
@@ -103,5 +112,156 @@ class OrchestraSettingsControllerTest extends TestCase
       webPagesRPC: $this->createStub(WebPagesRPC::class),
       wikiRPC: $this->createStub(WikiRPC::class),
     );
+  }
+
+  #[Attributes\DataProvider('userSqlConfigurationResults')]
+  public function testRecreateViewsReportsConfigurationFailureAsWarning(bool $configurationFails): void
+  {
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->expects($this->once())->method('checkRequirements')->willReturn(['hints' => []]);
+    $connector->expects($this->once())->method('updateUserSqlViews')->with(null, null, true);
+    $connector->expects($this->once())->method('writeUserSqlConfig')->with(null);
+    $configuration = $connector->expects($this->once())->method('configureCloudUserBackend');
+    if ($configurationFails) {
+      $configuration->willThrowException(new RuntimeException('user_sql settings unavailable'));
+    } else {
+      $configuration->willReturn([]);
+    }
+    $connector->expects($this->once())->method('setCloudUserSubAdmins');
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+
+    $response = $this->controller->setApp('userSqlBackendRecreateViews');
+    $data = $response->getData();
+    self::assertInstanceOf(Controller\DTO\MessagesResponse::class, $data);
+    self::assertNotEmpty($data->messages);
+    self::assertCount($configurationFails ? 1 : 0, $data->hints);
+    if ($configurationFails) {
+      self::assertStringContainsString('user_sql', $data->hints[0]);
+    }
+  }
+
+  public static function userSqlConfigurationResults(): array
+  {
+    return ['configured' => [false], 'unavailable' => [true]];
+  }
+
+  public function testRecreateViewsReportsEndpointWarning(): void
+  {
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->method('checkRequirements')->willReturn(['hints' => []]);
+    $connector->expects($this->once())->method('updateUserSqlViews');
+    $connector->expects($this->once())->method('writeUserSqlConfig');
+    $connector->expects($this->once())->method('configureCloudUserBackend')->willReturn(['Check user_sql endpoint']);
+    $connector->expects($this->once())->method('setCloudUserSubAdmins');
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+
+    $data = $this->controller->setApp('userSqlBackendRecreateViews')->getData();
+    self::assertSame(['Check user_sql endpoint'], $data->hints);
+  }
+
+  public function testRecreateViewsStillReportsDatabaseErrors(): void
+  {
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->method('checkRequirements')->willReturn(['hints' => []]);
+    $connector->expects($this->once())->method('updateUserSqlViews')
+      ->willThrowException(new Exceptions\DatabaseCloudConnectorViewException('View creation failed'));
+    $connector->expects($this->never())->method('configureCloudUserBackend');
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+
+    $this->expectException(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions\EnduserNotificationException::class);
+    $this->controller->setApp('userSqlBackendRecreateViews');
+  }
+
+  public function testConnectorAccountStoresValidatedCredentialsWithoutReturningPassword(): void
+  {
+    $account = ['user' => 'restricted', 'accountHost' => '%'];
+    $credentials = ['host' => 'db', 'user' => 'restricted', 'accountHost' => '%', 'password' => 'private-password'];
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->method('normalizeConnectorAccount')->willReturn($account);
+    $connector->expects($this->once())->method('saveConnectorAccount')->with($account);
+    $credentialService = $this->createMock(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $credentialService->expects($this->once())->method('prepare')->willReturn($credentials);
+    $credentialService->expects($this->once())->method('save')->with(
+      \OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::CLOUD,
+      $credentials,
+    );
+    $credentialService->expects($this->once())->method('markCloudManaged');
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class, $credentialService);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Database\Connection::class, $this->createStub(\OCA\CAFEVDB\Database\Connection::class));
+
+    $response = $this->controller->setApp('cloudConnectorAccount', $account + ['password' => 'private-password']);
+    self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
+  }
+
+  public function testConnectorAccountRejectsWrongAuthenticatedHost(): void
+  {
+    restore_error_handler();
+    self::enableDeprecations('::grumble');
+    $account = ['user' => 'restricted', 'accountHost' => '%'];
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->method('normalizeConnectorAccount')->willReturn($account);
+    $connector->expects($this->never())->method('saveConnectorAccount');
+    $credentialService = $this->createMock(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $credentialService->method('prepare')->willReturn(['accountHost' => 'localhost']);
+    $credentialService->expects($this->never())->method('save');
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class, $credentialService);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Database\Connection::class, $this->createStub(\OCA\CAFEVDB\Database\Connection::class));
+
+    $response = $this->controller->setApp('cloudConnectorAccount', $account + ['password' => 'private-password']);
+    self::assertSame(400, $response->getStatus());
+    self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
+  }
+
+  public function testResetClearsSharedCredentialsAndMarksAccountManaged(): void
+  {
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->expects($this->once())->method('saveConnectorAccount')->with([]);
+    $credentialService = $this->createMock(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $credentialService->expects($this->never())->method('prepare');
+    $credentialService->expects($this->once())->method('save')->with(
+      \OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::CLOUD,
+      [],
+    );
+    $credentialService->expects($this->once())->method('markCloudManaged');
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class, $credentialService);
+
+    $response = $this->controller->setApp('cloudConnectorAccount', null);
+    self::assertSame(200, $response->getStatus());
+  }
+
+  public function testFailedAccountSaveRestoresCredentialsAndAccount(): void
+  {
+    restore_error_handler();
+    self::enableDeprecations('::grumble');
+    $previous = ['user' => 'previous', 'accountHost' => '%'];
+    $account = ['user' => 'restricted', 'accountHost' => '%'];
+    $credentials = ['user' => 'restricted', 'accountHost' => '%', 'password' => 'private-password'];
+    $snapshot = ['cloudConnectorCredentials' => 'encrypted-old', 'cloudConnectorCredentialsManaged' => '1'];
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->method('getConnectorAccount')->willReturn($previous);
+    $connector->method('normalizeConnectorAccount')->willReturn($account);
+    $attempt = 0;
+    $connector->expects($this->exactly(2))->method('saveConnectorAccount')
+      ->willReturnCallback(static function(array $saved) use (&$attempt, $account, $previous): void {
+        if ($attempt++ === 0) {
+          self::assertSame($account, $saved);
+          throw new RuntimeException('private-password');
+        }
+        self::assertSame($previous, $saved);
+      });
+    $credentialService = $this->createMock(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $credentialService->method('prepare')->willReturn($credentials);
+    $credentialService->method('snapshotCloud')->willReturn($snapshot);
+    $credentialService->expects($this->once())->method('restoreCloud')->with($snapshot);
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class, $credentialService);
+    $this->mockProvider->registerClassInstance(\OCA\CAFEVDB\Database\Connection::class, $this->createStub(\OCA\CAFEVDB\Database\Connection::class));
+
+    $response = $this->controller->setApp('cloudConnectorAccount', $account + ['password' => 'private-password']);
+    self::assertSame(400, $response->getStatus());
+    self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
   }
 }

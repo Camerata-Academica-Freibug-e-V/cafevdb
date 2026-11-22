@@ -12,6 +12,7 @@ import { getUrl, setAppUrl } from '../app/settings-urls.ts';
 export type AdminSettingResponse = PersonalSettingResponse & {
   message?: string|string[];
   number?: string;
+  hints?: string[]|null;
 };
 
 // Pure actions (no value) are sent without a request body, like the legacy code did.
