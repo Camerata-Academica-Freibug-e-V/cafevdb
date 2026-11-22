@@ -25,28 +25,28 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">33.2% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>176/530</span>
+                <span class='fraction'>177/533</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">31.56% </span>
+                <span class="strong">32.2% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>101/320</span>
+                <span class='fraction'>105/326</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">25% </span>
+                <span class="strong">24.64% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>35/140</span>
+                <span class='fraction'>35/142</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">33.26% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>169/508</span>
+                <span class='fraction'>170/511</span>
             </div>
         
             
@@ -1699,7 +1699,23 @@
 <a name='L1634'></a><a href='#L1634'>1634</a>
 <a name='L1635'></a><a href='#L1635'>1635</a>
 <a name='L1636'></a><a href='#L1636'>1636</a>
-<a name='L1637'></a><a href='#L1637'>1637</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L1637'></a><a href='#L1637'>1637</a>
+<a name='L1638'></a><a href='#L1638'>1638</a>
+<a name='L1639'></a><a href='#L1639'>1639</a>
+<a name='L1640'></a><a href='#L1640'>1640</a>
+<a name='L1641'></a><a href='#L1641'>1641</a>
+<a name='L1642'></a><a href='#L1642'>1642</a>
+<a name='L1643'></a><a href='#L1643'>1643</a>
+<a name='L1644'></a><a href='#L1644'>1644</a>
+<a name='L1645'></a><a href='#L1645'>1645</a>
+<a name='L1646'></a><a href='#L1646'>1646</a>
+<a name='L1647'></a><a href='#L1647'>1647</a>
+<a name='L1648'></a><a href='#L1648'>1648</a>
+<a name='L1649'></a><a href='#L1649'>1649</a>
+<a name='L1650'></a><a href='#L1650'>1650</a>
+<a name='L1651'></a><a href='#L1651'>1651</a>
+<a name='L1652'></a><a href='#L1652'>1652</a>
+<a name='L1653'></a><a href='#L1653'>1653</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1849,7 +1865,7 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1984,6 +2000,22 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -2456,7 +2488,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">27x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -3472,7 +3504,7 @@
           /&gt;
         &lt;/div&gt;
       &lt;/NcSettingsSection&gt;
-      &lt;NcSettingsSection v-if="config.isSubAdmin" id="admin-settings-configure-user-backend" :name="t(appId, 'Configure User Backend')"&gt;
+      &lt;NcSettingsSection v-if="config.isSubAdmin &amp;&amp; !orchestraState?.enabled" id="admin-settings-configure-user-backend" :name="t(appId, 'Configure User Backend')"&gt;
         &lt;div&gt;
           &lt;button type="button"
                   name="cloudUserBackendConfig"
@@ -3621,7 +3653,23 @@
                  :key="tab.key"
                  :entry="tab"
                  @error="handleSettingsError"
-      /&gt;
+      &gt;
+        &lt;template v-if="tab.key === 'sharing' &amp;&amp; config.isSubAdmin" #userBackend&gt;
+<span class="fstat-no" title="function not covered" >          &lt;div&gt;</span>
+            &lt;button type="button"
+                    name="cloudUserBackendConfig"
+                    value="update"
+                    :disabled="!config.haveCloudUserBackendConfig"
+                    @click<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >s</span>aveSetting('haveCloudUserBackendConfig')"</span>
+            &gt;
+              {{ t(appId, 'Autoconfigure "{cloudUserBackend}" app', { cloudUserBackend: config.cloudUserBackend }) }}
+            &lt;/button&gt;
+            &lt;p class="hint"&gt;
+              {{ hints['settings:admin:cloud-user-backend-conf'] }}
+            &lt;/p&gt;
+          &lt;/div&gt;<span class="cstat-no" title="statement not covered" ></span>
+        &lt;/template&gt;
+      &lt;/component&gt;
       &lt;NcSettingsSection v-if="config.isSubAdmin"
                          id="admin-settings-finance"
                          class="sub-admin finance"
@@ -4978,7 +5026,7 @@ onUnmounted(() =&gt; {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-11-22T21:52:41.228Z
+                at 2026-11-22T23:11:27.868Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
