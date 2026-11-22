@@ -34,7 +34,7 @@ import type { AnyPromise } from '../types/promise.d.ts';
 
 import axios from '@nextcloud/axios';
 import { confirmPassword } from '@nextcloud/password-confirmation';
-import { generateOcsUrl } from '@nextcloud/router';
+import { generateAppUrl, generateOcsUrl } from '@nextcloud/router';
 import { defineStore } from 'pinia';
 
 const storeId = 'cloud-user-groups';
@@ -55,19 +55,20 @@ export type CloudUser = {
 export type CloudGroup = {
   id: string;
   displayname: string;
-  usercount: number;
-  disabled: boolean;
+  usercount: number|boolean;
+  disabled: number|boolean;
   canAdd: boolean;
   canRemove: boolean;
   backends: string[];
   users?: string[];
-  usersDetails: Record<string, CloudUser>;
+  usersDetails?: Record<string, CloudUser>;
   getUsers: (errorHandler: null|ErrorHandler) => AnyPromise;
   getUsersDetails: (errorHandler: null|ErrorHandler) => AnyPromise;
 };
 
 type GroupUsersDetailsResponse = AxiosResponse<OCSResponse<{ users: Record<string, CloudUser> }>>;
-type GroupDetailsResponse = AxiosResponse<OCSResponse<{ groups: CloudGroup[] }>>;
+type GroupDetails = Omit<CloudGroup, 'users'|'usersDetails'|'getUsers'|'getUsersDetails'>;
+type GroupDetailsResponse = AxiosResponse<{ groups: GroupDetails[] }>;
 
 export const useCloudUsersGroupsStore = defineStore(storeId, {
   state: () => {
@@ -153,7 +154,7 @@ export const useCloudUsersGroupsStore = defineStore(storeId, {
         return this.groups[gid].users;
       }
       try {
-        const response = await (this.loadingPromise = axios.get(generateOcsUrl(`cloud/groups/${gid}/users`)));
+        const response = await (this.loadingPromise = axios.get(generateOcsUrl(`cloud/groups/${encodeURIComponent(gid)}/users`)));
         const uids: null|string[] = response?.data?.ocs?.data?.users;
         if (Array.isArray(uids) && this.groups[gid]) {
           this.groups[gid].users = uids;
@@ -189,7 +190,7 @@ export const useCloudUsersGroupsStore = defineStore(storeId, {
         }
       }
       try {
-        const response: GroupUsersDetailsResponse = await (this.loadingPromise = axios.get(generateOcsUrl(`cloud/groups/${gid}/users/details`)));
+        const response: GroupUsersDetailsResponse = await (this.loadingPromise = axios.get(generateOcsUrl(`cloud/groups/${encodeURIComponent(gid)}/users/details`)));
         const usersDetails = response?.data?.ocs?.data?.users;
         if (usersDetails) {
           for (const [uid, user] of Object.entries(usersDetails)) {
@@ -205,43 +206,32 @@ export const useCloudUsersGroupsStore = defineStore(storeId, {
       }
     },
     async findGroups(query: null|string, errorHandler: null|ErrorHandler) {
-      query = typeof query === 'string' ? encodeURI(query) : '';
+      query = typeof query === 'string' ? query : '';
       try {
         const limit = 10;
         let count = 0;
         let offset = 0;
         while (count < limit) {
-          const response: GroupDetailsResponse = await (this.loadingPromise = axios.get(generateOcsUrl(`cloud/groups/details?search=${query}&limit=${limit}&offset=${offset}`)));
+          const response: GroupDetailsResponse = await (this.loadingPromise = axios.get(
+            generateAppUrl('settings/cloud-groups'),
+            { params: { search: query, limit, offset } },
+          ));
 
-          for (const group of response.data.ocs.data.groups) {
-            if (!group.id) {
-              // if we were not a group admin, an empty entry is returned in order to enable paging
-              continue;
-            }
+          for (const group of response.data.groups) {
             ++count;
             const gid = group.id;
             const oldGroup = this.groups[gid];
             if (!oldGroup) {
-              group.getUsers = (errorHandler: null|ErrorHandler) => this.getGroupUsers(group.id, errorHandler);
-              group.getUsersDetails = (errorHandler: null|ErrorHandler) => this.getGroupUsersDetails(group.id, errorHandler);
-              // this.groups[gid] = group;
-              this.groups[gid] = group;
-            } else if (JSON.stringify(this.groups[gid]) !== JSON.stringify(group)) {
-              // replace in order to keep the references from groups to user-details
-              for (const [key, value] of Object.entries(group) as ObjectEntries<typeof group>) {
-                if (oldGroup?.[key] !== value) {
-                  // @ts-expect-error 2322 What is this, why?????
-                  oldGroup[key] = value;
-                }
-                for (const key of Object.keys(oldGroup) as ObjectKeys<typeof oldGroup>) {
-                  if (group?.[key] === undefined) {
-                    delete group[key];
-                  }
-                }
-              }
+              this.groups[gid] = {
+                ...group,
+                getUsers: (errorHandler: null|ErrorHandler) => this.getGroupUsers(gid, errorHandler),
+                getUsersDetails: (errorHandler: null|ErrorHandler) => this.getGroupUsersDetails(gid, errorHandler),
+              };
+            } else {
+              Object.assign(oldGroup, group);
             }
           }
-          if (Object.keys(response.data.ocs.data.groups).length < limit) {
+          if (response.data.groups.length < limit) {
             break;
           }
           offset += limit;

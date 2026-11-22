@@ -47,7 +47,7 @@ class SubAdminEventListener implements IEventListener
 {
   use \OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Traits\LoggerTrait;
 
-  const EVENT = [ AddedEvent::class, RemoteEvent::class ];
+  const EVENT = [ AddedEvent::class, RemovedEvent::class ];
 
   // phpcs:disable Squiz.Commenting.FunctionComment.Missing
   public function __construct(

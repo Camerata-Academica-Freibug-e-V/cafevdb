@@ -86,7 +86,7 @@
                         :bold="true"
                         :forceDisplayActions="true"
                         :details="group.backends.join(', ')"
-                        :counterNumber="group.usercount"
+                        :counterNumber="typeof group.usercount === 'number' ? group.usercount : undefined"
                         counterType="highlighted"
             >
               <template #icon>
