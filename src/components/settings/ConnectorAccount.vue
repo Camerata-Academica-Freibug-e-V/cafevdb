@@ -1,7 +1,16 @@
 <template>
   <form class="connector-account" @submit.prevent="save(false)">
-    <NcTextField v-model="user" :label="t(appId, 'Views database username')" />
-    <NcTextField v-model="accountHost" :label="t(appId, 'MariaDB account host')" />
+    <fieldset class="connector-account__identity">
+      <legend>{{ t(appId, 'Views database account') }}</legend>
+      <div class="connector-account__fields">
+        <NcTextField v-model="user" :label="t(appId, 'Account username')" :placeholder="t(appId, 'e.g. connector')" />
+        <span class="connector-account__separator" aria-hidden="true">@</span>
+        <NcTextField v-model="accountHost" :label="t(appId, 'Account host')" :placeholder="t(appId, 'e.g. localhost or %')" />
+      </div>
+      <p v-if="user.trim() && accountHost.trim()" class="connector-account__preview">
+        {{ t(appId, 'MariaDB account:') }} <code>{{ accountPreview }}</code>
+      </p>
+    </fieldset>
     <NcButton type="submit" variant="primary" :disabled="running || !user.trim() || !accountHost.trim()">
       {{ t(appId, 'Save views database account') }}
     </NcButton>
@@ -14,7 +23,7 @@
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
 import { NcButton, NcTextField } from '@nextcloud/vue'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { appName as appId } from '../../config.ts'
 import { setAdminSetting } from '../../services/admin-settings.ts'
 import { handleSettingError, showSettingFeedback } from '../../services/setting-feedback.ts'
@@ -24,6 +33,10 @@ const emit = defineEmits<{ error: [error: Error] }>()
 const user = ref(props.account?.user ?? '')
 const accountHost = ref(props.account?.accountHost ?? 'localhost')
 const running = ref(false)
+const accountPreview = computed(() => {
+  const quote = (value: string) => `'${value.trim().replaceAll("'", "''")}'`
+  return `${quote(user.value)}@${quote(accountHost.value)}`
+})
 
 const save = async (reset: boolean) => {
   running.value = true
@@ -51,5 +64,34 @@ const save = async (reset: boolean) => {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: calc(var(--default-grid-baseline) * 2);
+}
+
+.connector-account__identity {
+  flex: 1 1 24rem;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.connector-account__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--default-grid-baseline);
+}
+
+.connector-account__preview {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .connector-account__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .connector-account__separator {
+    text-align: center;
+  }
 }
 </style>

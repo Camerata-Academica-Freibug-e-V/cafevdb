@@ -6,9 +6,9 @@ import { setAdminSetting } from '../../../../src/services/admin-settings.ts';
 vi.mock('@nextcloud/l10n', () => ({ translate: (_app: string, text: string) => text }));
 vi.mock('@nextcloud/vue', () => ({
   NcTextField: {
-    props: ['modelValue', 'label'],
+    props: ['modelValue', 'label', 'placeholder'],
     emits: ['update:modelValue'],
-    template: '<input :aria-label="label" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
+    template: '<input :aria-label="label" :placeholder="placeholder" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
   },
   NcButton: { template: '<button><slot /></button>' },
 }));
@@ -25,8 +25,9 @@ describe('Connector account', () => {
   it('saves only the username and MariaDB account host', async () => {
     vi.mocked(setAdminSetting).mockResolvedValue({ data: { messages: ['Saved'] } } as never);
     const wrapper = mount(ConnectorAccount, { props: { account: { user: 'previous', accountHost: 'localhost' } } });
-    await wrapper.get('input[aria-label="Views database username"]').setValue(' restricted ');
-    await wrapper.get('input[aria-label="MariaDB account host"]').setValue(' % ');
+    await wrapper.get('input[aria-label="Account username"]').setValue(' restricted ');
+    await wrapper.get('input[aria-label="Account host"]').setValue(' % ');
+    expect(wrapper.get('.connector-account__preview code').text()).toBe("'restricted'@'%'");
     await wrapper.get('form').trigger('submit');
     await flushPromises();
 
@@ -41,6 +42,21 @@ describe('Connector account', () => {
     await flushPromises();
 
     expect(setAdminSetting).toHaveBeenCalledWith('cloudConnectorAccount', null);
-    expect((wrapper.get('input[aria-label="Views database username"]').element as HTMLInputElement).value).toBe('');
+    expect((wrapper.get('input[aria-label="Account username"]').element as HTMLInputElement).value).toBe('');
+    expect(wrapper.find('.connector-account__preview').exists()).toBe(false);
+  });
+
+  it('shows examples and updates the account preview as the fields change', async () => {
+    const wrapper = mount(ConnectorAccount);
+    const user = wrapper.get('input[aria-label="Account username"]');
+    const host = wrapper.get('input[aria-label="Account host"]');
+    expect(user.attributes('placeholder')).toBe('e.g. connector');
+    expect(host.attributes('placeholder')).toBe('e.g. localhost or %');
+    expect(wrapper.find('.connector-account__preview').exists()).toBe(false);
+
+    await user.setValue("o'brien");
+    expect(wrapper.get('.connector-account__preview code').text()).toBe("'o''brien'@'localhost'");
+    await host.setValue('client.example');
+    expect(wrapper.get('.connector-account__preview code').text()).toBe("'o''brien'@'client.example'");
   });
 });
