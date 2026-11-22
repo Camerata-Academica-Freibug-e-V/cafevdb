@@ -186,6 +186,13 @@ If orchestra configuration cannot be loaded, those sections are hidden and an
 error notice is shown. The existing administration controls remain available;
 the server log contains the failure details.
 
+Group metadata, including backend names, is loaded from the app's
+`GET /apps/cafevdb/settings/cloud-groups` endpoint. Instance administrators can
+search all groups; orchestra sub-admins can search only the configured
+orchestra group and its authorization suffix groups. Group membership and
+account details continue to use Nextcloud's provisioning API and its existing
+per-group permission checks.
+
 Testing problem reports
 -----------------------
 
