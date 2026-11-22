@@ -335,6 +335,7 @@ class CloudUserConnectorServiceTest extends TestCase
       ->getMock();
     $service->method('getConnectorAccount')->willReturn([]);
     $service->method('userSqlProperties')->willReturn(new ArrayObject());
+    $service->expects($this->once())->method('requireUserSqlSettingsAccess');
     foreach ([
       'cloudConfig' => $config,
       'appName' => 'cafevdb',
@@ -543,6 +544,7 @@ class CloudUserConnectorServiceTest extends TestCase
       ->getMock();
     $service->method('getConnectorAccount')->willReturn($account);
     $service->method('userSqlProperties')->willReturn($properties);
+    $service->expects($this->once())->method('requireUserSqlSettingsAccess');
     foreach ([
       'cloudConfig' => $config,
       'appName' => 'cafevdb',

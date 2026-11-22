@@ -196,6 +196,8 @@ class OrchestraSettingsControllerTest extends TestCase
 
   public function testConnectorAccountRejectsWrongAuthenticatedHost(): void
   {
+    restore_error_handler();
+    self::enableDeprecations('::grumble');
     $account = ['user' => 'restricted', 'accountHost' => '%'];
     $connector = $this->createMock(CloudUserConnectorService::class);
     $connector->method('normalizeConnectorAccount')->willReturn($account);
@@ -232,6 +234,8 @@ class OrchestraSettingsControllerTest extends TestCase
 
   public function testFailedAccountSaveRestoresCredentialsAndAccount(): void
   {
+    restore_error_handler();
+    self::enableDeprecations('::grumble');
     $previous = ['user' => 'previous', 'accountHost' => '%'];
     $account = ['user' => 'restricted', 'accountHost' => '%'];
     $credentials = ['user' => 'restricted', 'accountHost' => '%', 'password' => 'private-password'];
