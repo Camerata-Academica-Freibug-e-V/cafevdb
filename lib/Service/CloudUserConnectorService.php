@@ -333,6 +333,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
     } else {
       $this->cloudConfig->setAppValue($this->appName, self::CONNECTOR_ACCOUNT_CONFIG, json_encode($account, JSON_THROW_ON_ERROR));
     }
+    $this->encryptionService->publishConnectorDescriptor();
   }
 
   /**

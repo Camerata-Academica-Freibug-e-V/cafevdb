@@ -86,6 +86,8 @@ class EncryptionService
     ConfigConstants::ORCHESTRA_NAME_KEY, // used in the member's app for the front-page announcement
     ConfigConstants::ORCHESTRA_LOCALE_KEY, // used in the member's app for consistent currencies etc.
     ConfigConstants::APP_ENCRYPTION_KEY_HASH_KEY,
+    ConfigConstants::CONNECTOR_DESCRIPTOR_KEY,
+    CloudUserConnectorService::CONNECTOR_ACCOUNT_CONFIG,
   ];
 
   /** @var Crypto\SymmetricCryptorInterface */
@@ -653,7 +655,51 @@ class EncryptionService
       $value = $this->appCryptor->encrypt($value);
     }
     $this->setAppValue($key, $value);
+    if (!$ignoreLock && in_array($key, [ConfigConstants::APP_DB_NAME, 'cloudUserViewsDatabase', 'musicianPersonalizedViews'], true)) {
+      $this->publishConnectorDescriptor();
+    }
     return true;
+  }
+
+  /**
+   * Publish non-secret connector metadata for consumers without the app key.
+   *
+   * @return void
+   */
+  public function publishConnectorDescriptor(): void
+  {
+    $database = $this->getConfigValue('cloudUserViewsDatabase', null, ignoreLock: true);
+    if ($database === false) {
+      throw new Exceptions\EncryptionKeyException('Cannot publish connector metadata before unlocking the orchestra configuration.');
+    }
+    $database = $database ?: $this->getConfigValue(ConfigConstants::APP_DB_NAME, null, ignoreLock: true);
+    if ($database === false) {
+      throw new Exceptions\EncryptionKeyException('Cannot publish connector metadata before unlocking the orchestra configuration.');
+    }
+    if (!is_string($database) || $database === '') {
+      $this->cloudConfig->deleteAppValue($this->appName, ConfigConstants::CONNECTOR_DESCRIPTOR_KEY);
+      return;
+    }
+    $storedAccount = $this->cloudConfig->getAppValue($this->appName, CloudUserConnectorService::CONNECTOR_ACCOUNT_CONFIG, '');
+    $account = $storedAccount === ''
+      ? ['user' => $this->cloudConfig->getSystemValue('dbuser', ''), 'accountHost' => 'localhost']
+      : json_decode($storedAccount, true, flags: JSON_THROW_ON_ERROR);
+    $personalizedViews = $this->getConfigValue('musicianPersonalizedViews', 'off', ignoreLock: true);
+    if ($personalizedViews === false) {
+      throw new Exceptions\EncryptionKeyException('Cannot publish connector metadata before unlocking the orchestra configuration.');
+    }
+    $descriptor = [
+      'version' => 1,
+      'database' => $database,
+      'account' => ['user' => $account['user'], 'accountHost' => $account['accountHost']],
+      'personalizedViewsEnabled' => $personalizedViews === 'on',
+    ];
+    $descriptor['revision'] = hash('sha256', json_encode($descriptor, JSON_THROW_ON_ERROR));
+    $this->cloudConfig->setAppValue(
+      $this->appName,
+      ConfigConstants::CONNECTOR_DESCRIPTOR_KEY,
+      json_encode($descriptor, JSON_THROW_ON_ERROR),
+    );
   }
 
   /**

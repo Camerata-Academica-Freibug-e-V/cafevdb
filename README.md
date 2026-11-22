@@ -72,6 +72,18 @@ database on the orchestra server until it supports independent credentials.
 Without an explicit views account, CafeVDB uses the Nextcloud database account
 as before. When replacing an account, revoke any grants it no longer needs.
 
+CafeVDB publishes `cloudConnectorDescriptor` as read-only, non-secret app
+configuration for consumer apps. Version 1 contains `database` (the effective
+views schema, falling back to the orchestra schema), `account` (`user` and
+`accountHost`), `personalizedViewsEnabled`, and a content-hash `revision`.
+It contains no password or orchestra connection credentials and remains readable
+without the orchestra app key. Saving the account, database or personalized-view
+setting refreshes it; opening orchestra settings initializes it on upgrades.
+Consumers should read it on each request, not maintain another synchronized copy.
+Members can inherit the schema while retaining an explicit local override and
+its own connection/access checks. Changing schemas still removes the old views;
+coordinate such changes with active consumers.
+
 For **WOPI access to DB-Storage**, configure a separate restricted account and
 its password. CafeVDB needs these credentials before its app key is unlocked.
 The fields are write-only, and CafeVDB encrypts the credentials with Nextcloud's

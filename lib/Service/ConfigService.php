@@ -606,6 +606,9 @@ class ConfigService
   {
     unset($this->encryptionCache[$key]);
     $this->deleteAppValue($key);
+    if (in_array($key, [ConfigConstants::APP_DB_NAME, 'cloudUserViewsDatabase', 'musicianPersonalizedViews'], true)) {
+      $this->getEncryptionService()->publishConnectorDescriptor();
+    }
   }
 
   /** @return array All config keys for the app. */
@@ -664,6 +667,7 @@ class ConfigService
     foreach ($cacheKeys as $key) {
       $this->setConfigValue($key, $this->encryptionCache[$key], ignoreLock: true);
     }
+    $this->getEncryptionService()->publishConnectorDescriptor();
   }
 
   /*
