@@ -25,6 +25,7 @@
 namespace OCA\CAFEVDB\Service;
 
 use ReflectionClass;
+use SensitiveParameter;
 use Throwable;
 use UnexpectedValueException;
 
@@ -641,9 +642,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
 
   /**
    * Hijack the user-sql backend by flushing pre-computed values into its
-   * config-space. This variant uses the routes of the user_sql app. Hence it
-   * will only work if the logged-in user is allowed to write to the user-sql
-   * config space.
+   * config-space when the logged-in user may manage its settings.
    *
    * @param bool $erase
    *
@@ -662,62 +661,121 @@ WHERE m.email IS NOT NULL AND m.email <> ""
 
     $this->logDebug('USER SQL KEYS ' . print_r($cloudUserBackendKeys, true));
 
-    if ($this->getConnectorAccount() !== []) {
-      $this->requireUserSqlSettingsAccess();
-      try {
-        $properties = $this->userSqlProperties();
-        foreach ($cloudUserBackendKeys as $key) {
-          if ($key === 'opt.safe_store' || (str_starts_with($key, 'db.') && !str_starts_with($key, 'db.table.'))) {
-            continue;
-          }
-          $value = $erase ? null : $this->cloudConfig->getAppValue($this->appName, $prefix . $key);
-          if ($value === null) {
-            unset($properties[$key]);
+    $account = $this->getConnectorAccount();
+    $this->requireUserSqlSettingsAccess();
+    try {
+      $properties = $this->userSqlProperties();
+      foreach ($cloudUserBackendKeys as $key) {
+        if ($key === 'opt.safe_store' || (str_starts_with($key, 'db.') && !str_starts_with($key, 'db.table.'))) {
+          continue;
+        }
+        $value = $erase ? null : $this->cloudConfig->getAppValue($this->appName, $prefix . $key);
+        if ($value === null) {
+          unset($properties[$key]);
+        } else {
+          $properties[$key] = $value;
+        }
+      }
+      $warnings = [];
+      $connectionSettings = null;
+      if (!$erase) {
+        if ($account !== []) {
+          $credentials = $this->appContainer->get(ConnectorDatabaseCredentials::class)->load(ConnectorDatabaseCredentials::CLOUD);
+          if ($credentials === []) {
+            $warnings[] = $this->l->t('Configure the views database password in CafeVDB and check the user_sql database connection.');
           } else {
-            $properties[$key] = $value;
+            $host = $this->userSqlConnectionHost($credentials);
+            if ($host === null) {
+              $warnings[] = $this->l->t('The user_sql database connection cannot use the configured port or socket. Configure it separately.');
+            } else {
+              $connectionSettings = [
+                'db.hostname' => $host,
+                'db.database' => $this->cloudConfig->getAppValue($this->appName, $prefix . 'db.database'),
+                'db.username' => $credentials['user'],
+                'db.password' => $credentials['password'],
+                'db.driver' => 'mysql',
+              ];
+            }
+          }
+        } else {
+          $cloudHost = $this->cloudConfig->getSystemValue('dbhost', '');
+          $matches = [];
+          if (preg_match('/^(.*):([^\]:]+)$/', $cloudHost, $matches)) {
+            $cloudHost = $matches[1];
+          }
+          $connectionSettings = [
+            'db.hostname' => $cloudHost,
+            'db.database' => $this->cloudConfig->getAppValue($this->appName, $prefix . 'db.database'),
+            'db.username' => $this->cloudConfig->getSystemValue('dbuser'),
+            'db.password' => $this->cloudConfig->getSystemValue('dbpassword'),
+            'db.driver' => $this->cloudConfig->getAppValue($this->appName, $prefix . 'db.driver'),
+          ];
+        }
+      } elseif ($account === []) {
+        $connectionSettings = array_fill_keys(['db.hostname', 'db.database', 'db.username', 'db.password', 'db.driver'], null);
+      }
+      if ($connectionSettings !== null) {
+        $safeStore = $this->cloudConfig->getAppValue(self::CLOUD_USER_BACKEND, 'opt.safe_store', '0') === '1';
+        foreach ($connectionSettings as $key => $value) {
+          if ($safeStore && $key !== 'db.driver') {
+            if ($value === null) {
+              $this->cloudConfig->deleteSystemValue(self::CLOUD_USER_BACKEND . '.' . $key);
+            } else {
+              $this->cloudConfig->setSystemValue(self::CLOUD_USER_BACKEND . '.' . $key, $value);
+            }
+          } elseif ($value === null) {
+            $this->cloudConfig->deleteAppValue(self::CLOUD_USER_BACKEND, $key);
+          } else {
+            $this->cloudConfig->setAppValue(self::CLOUD_USER_BACKEND, $key, $value);
           }
         }
-        $this->clearUserBackendCache();
-      } catch (Throwable $exception) {
-        $this->logException($exception, 'Unable to configure the user_sql backend.');
-        throw new Exceptions\DatabaseCloudConnectorViewException($this->l->t('Unable to configure the user_sql backend.'), 0, $exception);
       }
-      return [$this->l->t('Configure the user_sql database connection separately.')];
+      $this->clearUserBackendCache();
+    } catch (Throwable) {
+      $this->logError('Unable to configure the user_sql backend.');
+      throw new Exceptions\DatabaseCloudConnectorViewException($this->l->t('Unable to configure the user_sql backend.'));
     }
+    return $warnings;
+  }
 
-    $cloudUserBackendParams = [];
-    foreach ($cloudUserBackendKeys as $cloudUserBackendKey) {
-      $cloudUserBackendValue = $erase ? '' : $this->cloudConfig->getAppValue($this->appName, $prefix . $cloudUserBackendKey);
-      $systemKey = match ($cloudUserBackendKey) {
-        'db.hostname' => 'dbhost',
-        'db.username' => 'dbuser',
-        'db.password' => 'dbpassword',
-        default => null,
-      };
-      if ($systemKey !== null && $cloudUserBackendValue === '%system:' . $systemKey . '%') {
-        $cloudUserBackendValue = $this->cloudConfig->getSystemValue($systemKey);
+  /**
+   * User_sql supplies only a host; ConnectionFactory inherits port/socket from Nextcloud.
+   *
+   * @param array $credentials Connector credentials.
+   *
+   * @return null|string Host, or null if user_sql cannot represent the endpoint.
+   */
+  private function userSqlConnectionHost(#[SensitiveParameter] array $credentials): ?string
+  {
+    $account = $this->getConnectorAccount();
+    if (!is_string($credentials['user'] ?? null) || !is_string($credentials['password'] ?? null)
+        || $credentials['user'] !== $account['user'] || ($credentials['accountHost'] ?? null) !== $account['accountHost']) {
+      throw new Exceptions\DatabaseCloudConnectorViewException($this->l->t('The connector database credentials are invalid.'));
+    }
+    $cloudHost = $this->cloudConfig->getSystemValue('dbhost', '');
+    $matches = [];
+    $cloudPort = 3306;
+    $cloudSocket = null;
+    if (preg_match('/^(.*):([^\]:]+)$/', $cloudHost, $matches)) {
+      if (is_numeric($matches[2])) {
+        $cloudPort = (int)$matches[2];
+      } else {
+        $cloudSocket = $matches[2];
       }
-      // $this->cloudConfig->setAppValue(self::CLOUD_USER_BACKEND, $cloudUserBackendKey, $cloudUserBackendValue);
-      $cloudUserBackendParams[str_replace('.', '-', $cloudUserBackendKey)] = $cloudUserBackendValue;
     }
-
-    // try also to clear the cache after and before changing the configuration
-    $this->clearUserBackendCache();
-
-    $messages = [];
-
-    $route = implode('.', [
-      self::CLOUD_USER_BACKEND,
-      'Settings',
-      'saveProperties',
-    ]);
-    $result = $this->requestService->postToRoute($route, requestData: $cloudUserBackendParams, postType: RequestService::URL_ENCODED);
-    $messages[] = $result['message'] ?? $this->l->t('"%s" configuration may have succeeded.', self::CLOUD_USER_BACKEND);
-
-    // try also to clear the cache after and before changing the configuration
-    $this->clearUserBackendCache();
-
-    return $messages;
+    if (isset($credentials['unix_socket'])) {
+      return is_string($credentials['unix_socket']) && $credentials['unix_socket'] !== ''
+        && $credentials['unix_socket'] === $cloudSocket ? 'localhost' : null;
+    }
+    if (!is_string($credentials['host'] ?? null) || $credentials['host'] === ''
+        || (isset($credentials['port']) && (!is_numeric($credentials['port']) || (int)$credentials['port'] < 1
+          || (int)$credentials['port'] > 65535))) {
+      throw new Exceptions\DatabaseCloudConnectorViewException($this->l->t('The connector database credentials are invalid.'));
+    }
+    if ($cloudSocket !== null || (int)($credentials['port'] ?? 3306) !== $cloudPort) {
+      return null;
+    }
+    return $credentials['host'];
   }
 
   /**

@@ -21,7 +21,7 @@
     <template #members-as-cloud-users>
       <ConnectorAccount :account="state?.cloudConnectorAccount" @error="emit('error', $event)" />
       <NcNoteCard type="info">
-        {{ t(appId, 'Configure and verify the database connection separately in user_sql and the members app. The account host is the host part of the MariaDB account, not the database server address.') }}
+        {{ t(appId, 'The views account and password are shared with the members app and, when permitted, configured in user_sql. The account host is the host part of the MariaDB account, not the database server address.') }}
       </NcNoteCard>
       <NcNoteCard v-for="(requirement, index) in cloudUserRequirements" :key="index" type="info">
         {{ requirement }}

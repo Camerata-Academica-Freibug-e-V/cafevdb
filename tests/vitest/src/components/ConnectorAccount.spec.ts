@@ -10,29 +10,48 @@ vi.mock('@nextcloud/vue', () => ({
     emits: ['update:modelValue'],
     template: '<input :aria-label="label" :placeholder="placeholder" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
   },
+  NcPasswordField: {
+    props: ['modelValue', 'label'],
+    emits: ['update:modelValue'],
+    template: '<input type="password" :aria-label="label" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
+  },
+  NcNoteCard: { template: '<aside><slot /></aside>' },
   NcButton: { template: '<button><slot /></button>' },
 }));
 vi.mock('../../../../src/config.ts', () => ({ appName: 'cafevdb' }));
 vi.mock('../../../../src/services/admin-settings.ts', () => ({ setAdminSetting: vi.fn() }));
 vi.mock('../../../../src/services/setting-feedback.ts', () => ({
-  handleSettingError: vi.fn(),
+  showSettingError: vi.fn(() => false),
   showSettingFeedback: vi.fn(),
 }));
 
 describe('Connector account', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('saves only the username and MariaDB account host', async () => {
-    vi.mocked(setAdminSetting).mockResolvedValue({ data: { messages: ['Saved'] } } as never);
+  it('saves the password write-only and displays configuration warnings', async () => {
+    vi.mocked(setAdminSetting).mockResolvedValue({ data: { messages: ['Saved'], hints: ['Check user_sql'] } } as never);
     const wrapper = mount(ConnectorAccount, { props: { account: { user: 'previous', accountHost: 'localhost' } } });
     await wrapper.get('input[aria-label="Account username"]').setValue(' restricted ');
     await wrapper.get('input[aria-label="Account host"]').setValue(' % ');
+    await wrapper.get('input[aria-label="Views database password"]').setValue('private password');
     expect(wrapper.get('.connector-account__preview code').text()).toBe("'restricted'@'%'");
     await wrapper.get('form').trigger('submit');
     await flushPromises();
 
-    expect(setAdminSetting).toHaveBeenCalledWith('cloudConnectorAccount', { user: 'restricted', accountHost: '%' });
-    expect(wrapper.find('input[type="password"]').exists()).toBe(false);
+    expect(setAdminSetting).toHaveBeenCalledWith('cloudConnectorAccount', { user: 'restricted', accountHost: '%', password: 'private password' });
+    expect((wrapper.get('input[type="password"]').element as HTMLInputElement).value).toBe('');
+    expect(wrapper.text()).toContain('Check user_sql');
+  });
+
+  it('does not forward request errors containing credentials', async () => {
+    vi.mocked(setAdminSetting).mockRejectedValue(new Error('private password'));
+    const wrapper = mount(ConnectorAccount);
+    await wrapper.get('input[aria-label="Account username"]').setValue('restricted');
+    await wrapper.get('input[type="password"]').setValue('private password');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+    expect((wrapper.emitted('error')?.[0]?.[0] as Error).message).not.toContain('private password');
+    expect((wrapper.get('input[type="password"]').element as HTMLInputElement).value).toBe('');
   });
 
   it('can restore the Nextcloud account', async () => {

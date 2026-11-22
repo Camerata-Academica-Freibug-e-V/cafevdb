@@ -27,6 +27,8 @@ use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\DriverManager;
 class ConnectorDatabaseCredentials
 {
   public const WOPI = 'wopiConnectorCredentials';
+  public const CLOUD = 'cloudConnectorCredentials';
+  public const CLOUD_MANAGED = 'cloudConnectorCredentialsManaged';
 
   // phpcs:disable Squiz.Commenting.FunctionComment.Missing
   public function __construct(
@@ -50,6 +52,30 @@ class ConnectorDatabaseCredentials
       $this->config->deleteAppValue($this->appName, $key);
     } else {
       $this->config->setAppValue($this->appName, $key, $this->crypto->encrypt(json_encode($credentials, JSON_THROW_ON_ERROR)));
+    }
+  }
+
+  public function markCloudManaged(): void
+  {
+    $this->config->setAppValue($this->appName, self::CLOUD_MANAGED, '1');
+  }
+
+  public function snapshotCloud(): array
+  {
+    return [
+      self::CLOUD => $this->config->getAppValue($this->appName, self::CLOUD, ''),
+      self::CLOUD_MANAGED => $this->config->getAppValue($this->appName, self::CLOUD_MANAGED, ''),
+    ];
+  }
+
+  public function restoreCloud(#[SensitiveParameter] array $snapshot): void
+  {
+    foreach ([self::CLOUD, self::CLOUD_MANAGED] as $key) {
+      if ($snapshot[$key] === '') {
+        $this->config->deleteAppValue($this->appName, $key);
+      } else {
+        $this->config->setAppValue($this->appName, $key, $snapshot[$key]);
+      }
     }
   }
 

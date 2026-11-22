@@ -88,6 +88,8 @@ class EncryptionService
     ConfigConstants::APP_ENCRYPTION_KEY_HASH_KEY,
     ConfigConstants::CONNECTOR_DESCRIPTOR_KEY,
     CloudUserConnectorService::CONNECTOR_ACCOUNT_CONFIG,
+    ConnectorDatabaseCredentials::CLOUD,
+    ConnectorDatabaseCredentials::CLOUD_MANAGED,
   ];
 
   /** @var Crypto\SymmetricCryptorInterface */

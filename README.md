@@ -60,17 +60,23 @@ The views must be on the orchestra database server, but Nextcloud itself may use
 another database engine or server. The orchestra database account needs permission
 to create the views and grant access.
 
-Under **Members as Cloud-Users**, configure the username and host of the MariaDB
-account to which CafeVDB grants view access. The host is the host part of the
-MariaDB account (for example `localhost` or `%`), not the database server address.
-Configure and test the connection credentials independently in `user_sql` and
-cafevdb-members; CafeVDB cannot verify their logins. With an explicit account,
-CafeVDB leaves the `user_sql` connection settings unchanged when configuring
-the backend. The members app currently still uses Nextcloud's credentials, so it
-requires a MySQL/MariaDB Nextcloud
-database on the orchestra server until it supports independent credentials.
-Without an explicit views account, CafeVDB uses the Nextcloud database account
-as before. When replacing an account, revoke any grants it no longer needs.
+Under **Members as Cloud-Users**, configure the username, account host and
+password of the MariaDB account to which CafeVDB grants view access. The host is
+the host part of the account (for example `localhost` or `%`), not the database
+server address. CafeVDB checks the login and verifies enabled views, stores the
+credentials encrypted with Nextcloud's system crypto, and shares them with the
+members app. The password is write-only; leave it blank to retain the saved
+password when the account is unchanged. Restoring the Nextcloud account clears
+the shared credentials and prevents an older members-local password from being
+reused. When replacing an account, revoke any grants it no longer needs.
+
+With permission to manage `user_sql` settings, CafeVDB also configures its
+database, server and credentials while preserving its safe-store and TLS
+settings. `user_sql` stores its own password according to its safe-store setting;
+enable safe-store in `user_sql` if it should use Nextcloud's system config.
+The installed `user_sql` inherits the port or socket from Nextcloud's database
+configuration. If that does not match the orchestra server, CafeVDB leaves the
+`user_sql` connection unchanged and reports a warning.
 Recreating cloud-user views is available to orchestra sub-admins. If CafeVDB
 cannot update `user_sql` settings afterwards, the views remain in place and a
 warning asks for the settings to be checked; access may require delegated
@@ -84,6 +90,8 @@ It contains no password or orchestra connection credentials and remains readable
 without the orchestra app key. Saving the account, database or personalized-view
 setting refreshes it; opening orchestra settings initializes it on upgrades.
 Consumers should read it on each request, not maintain another synchronized copy.
+The separate `cloudConnectorCredentials` value is encrypted with Nextcloud's
+system crypto and is not included in the descriptor or settings responses.
 Members can inherit the schema while retaining an explicit local override and
 its own connection/access checks. Changing schemas still removes the old views;
 coordinate such changes with active consumers.

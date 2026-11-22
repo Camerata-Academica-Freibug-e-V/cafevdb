@@ -11,27 +11,37 @@
         {{ t(appId, 'MariaDB account:') }} <code>{{ accountPreview }}</code>
       </p>
     </fieldset>
+    <NcPasswordField v-model="password"
+                     :label="t(appId, 'Views database password')"
+                     :hint="t(appId, 'Leave blank to keep the current password.')"
+                     autocomplete="new-password"
+    />
     <NcButton type="submit" variant="primary" :disabled="running || !user.trim() || !accountHost.trim()">
       {{ t(appId, 'Save views database account') }}
     </NcButton>
     <NcButton type="button" :disabled="running" @click="save(true)">
       {{ t(appId, 'Use Nextcloud database account') }}
     </NcButton>
+    <NcNoteCard v-for="warning in warnings" :key="warning" type="warning">
+      {{ warning }}
+    </NcNoteCard>
   </form>
 </template>
 
 <script setup lang="ts">
 import { translate as t } from '@nextcloud/l10n'
-import { NcButton, NcTextField } from '@nextcloud/vue'
+import { NcButton, NcNoteCard, NcPasswordField, NcTextField } from '@nextcloud/vue'
 import { computed, ref } from 'vue'
 import { appName as appId } from '../../config.ts'
 import { setAdminSetting } from '../../services/admin-settings.ts'
-import { handleSettingError, showSettingFeedback } from '../../services/setting-feedback.ts'
+import { showSettingError, showSettingFeedback } from '../../services/setting-feedback.ts'
 
 const props = defineProps<{ account?: { user?: string, accountHost?: string } }>()
 const emit = defineEmits<{ error: [error: Error] }>()
 const user = ref(props.account?.user ?? '')
 const accountHost = ref(props.account?.accountHost ?? 'localhost')
+const password = ref('')
+const warnings = ref<string[]>([])
 const running = ref(false)
 const accountPreview = computed(() => {
   const quote = (value: string) => `'${value.trim().replaceAll("'", "''")}'`
@@ -40,19 +50,24 @@ const accountPreview = computed(() => {
 
 const save = async (reset: boolean) => {
   running.value = true
+  warnings.value = []
   try {
     const response = await setAdminSetting(
       'cloudConnectorAccount',
-      reset ? null : { user: user.value.trim(), accountHost: accountHost.value.trim() },
+      reset ? null : { user: user.value.trim(), accountHost: accountHost.value.trim(), password: password.value },
     )
     showSettingFeedback(response.data, t(appId, 'Views database account'))
+    warnings.value = response.data.hints ?? []
     if (reset) {
       user.value = ''
       accountHost.value = 'localhost'
     }
   } catch (error) {
-    handleSettingError(error, (forwarded) => emit('error', forwarded))
+    if (!showSettingError(error)) {
+      emit('error', new Error(t(appId, 'Unable to save the connector database account.')))
+    }
   } finally {
+    password.value = ''
     running.value = false
   }
 }
