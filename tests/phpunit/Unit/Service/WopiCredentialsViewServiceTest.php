@@ -62,8 +62,12 @@ class WopiCredentialsViewServiceTest extends TestCase
       $service->updateWopiCredentialsView('next');
       self::fail('Expected view provisioning to fail.');
     } catch (DatabaseCloudConnectorViewException) {
-      self::assertCount(4, $events);
+      self::assertCount(8, $events);
       self::assertStringStartsWith('GRANT SELECT ON', $events[3]);
+      self::assertStringStartsWith('REVOKE SELECT ON', $events[4]);
+      self::assertStringStartsWith('REVOKE EXECUTE ON FUNCTION', $events[5]);
+      self::assertStringStartsWith('DROP VIEW IF EXISTS', $events[6]);
+      self::assertStringStartsWith('DROP FUNCTION IF EXISTS', $events[7]);
     }
   }
 
@@ -118,8 +122,13 @@ class WopiCredentialsViewServiceTest extends TestCase
       $service->updateWopiCredentialsView('next', checkAccess: true);
       self::fail('Expected view validation to fail.');
     } catch (DatabaseCloudConnectorViewException) {
-      self::assertCount(4, $events);
+      self::assertCount(8, $events);
       self::assertStringStartsWith('GRANT SELECT ON', $events[3]);
+      self::assertStringStartsWith('REVOKE SELECT ON', $events[4]);
+      self::assertStringStartsWith('REVOKE EXECUTE ON FUNCTION', $events[5]);
+      self::assertStringStartsWith('DROP VIEW IF EXISTS', $events[6]);
+      self::assertStringStartsWith('DROP FUNCTION IF EXISTS', $events[7]);
+      self::assertNotContains('cafevdb|wopiConnectorDatabase|next', $events);
     }
   }
 

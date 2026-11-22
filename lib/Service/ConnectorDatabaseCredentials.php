@@ -63,8 +63,16 @@ class ConnectorDatabaseCredentials
     if ($user === '' || $user === ($params['user'] ?? null)) {
       throw new DatabaseCloudConnectorViewException($this->l->t('Enter a dedicated database username, not the orchestra database username.'));
     }
-    $credentials = array_intersect_key($params, array_flip(['host', 'port', 'unix_socket']))
-      + ['host' => 'localhost', 'user' => $user, 'password' => $password];
+    $credentials = [];
+    if (isset($params['unix_socket']) && is_string($params['unix_socket']) && $params['unix_socket'] !== '') {
+      $credentials['unix_socket'] = $params['unix_socket'];
+    } else {
+      $credentials = array_intersect_key($params, array_flip(['host', 'port']));
+      if (!isset($credentials['host'])) {
+        $credentials['host'] = 'localhost';
+      }
+    }
+    $credentials += ['user' => $user, 'password' => $password];
     try {
       // Do not select the schema yet: the new user may not have any grants.
       $connection = $this->open($credentials);

@@ -72,6 +72,42 @@ class ConnectorDatabaseCredentialsTest extends TestCase
     );
   }
 
+  public function testUnixSocketTakesPrecedenceOverHost(): void
+  {
+    $appConnection = $this->createStub(Connection::class);
+    $appConnection->method('getParams')->willReturn([
+      'host' => 'mariadb',
+      'port' => 3307,
+      'unix_socket' => '/run/mysqld/mysqld.sock',
+      'user' => 'orchestra',
+    ]);
+    $connection = $this->createMock(DbalConnection::class);
+    $connection->expects($this->once())->method('fetchOne')
+      ->with('SELECT CURRENT_USER()')->willReturn('restricted@localhost');
+    $connection->expects($this->once())->method('close');
+    $service = $this->getMockBuilder(ConnectorDatabaseCredentials::class)
+      ->setConstructorArgs([
+        $this->createStub(IConfig::class), $this->createStub(ICrypto::class),
+        $this->createStub(IDBConnection::class), $this->createStub(IL10N::class), 'cafevdb',
+      ])
+      ->onlyMethods(['open'])->getMock();
+    $service->expects($this->once())->method('open')->with([
+      'unix_socket' => '/run/mysqld/mysqld.sock',
+      'user' => 'restricted',
+      'password' => 'test-only',
+    ])->willReturn($connection);
+
+    self::assertSame(
+      [
+        'unix_socket' => '/run/mysqld/mysqld.sock',
+        'user' => 'restricted',
+        'password' => 'test-only',
+        'accountHost' => 'localhost',
+      ],
+      $service->prepare($appConnection, 'restricted', 'test-only'),
+    );
+  }
+
   public function testConnectionErrorsNeverExposeDriverDetails(): void
   {
     $appConnection = $this->createStub(Connection::class);

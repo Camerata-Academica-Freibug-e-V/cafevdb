@@ -206,6 +206,24 @@ class CloudUserConnectorServiceTest extends TestCase
     // nothing
   }
 
+  public function testGrantToRevokeStatementHandlesFieldAndFunctionGrants(): void
+  {
+    $method = new \ReflectionMethod(CloudUserConnectorService::class, 'grantToRevokeStatement');
+    $invoke = fn(string $sql): ?string => $method->invoke(
+      $this->cloudUserConnectorService,
+      $sql,
+    );
+
+    self::assertSame(
+      "REVOKE UPDATE (password_hash) ON `db`.`View` FROM 'connector'@'%'",
+      $invoke("GRANT UPDATE (password_hash) ON `db`.`View` TO 'connector'@'%'"),
+    );
+    self::assertSame(
+      'REVOKE EXECUTE ON FUNCTION `db`.`Fn` FROM `connector`',
+      $invoke('GRANT EXECUTE ON FUNCTION `db`.`Fn` TO `connector`'),
+    );
+  }
+
   /** @return void */
   public function testCheckRequirements(): void
   {

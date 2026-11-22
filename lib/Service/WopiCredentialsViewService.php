@@ -73,23 +73,52 @@ class WopiCredentialsViewService
       );
       $this->connection->executeStatement('GRANT EXECUTE ON FUNCTION ' . $function . ' TO ' . $grantee);
       $this->connection->executeStatement('GRANT SELECT ON ' . $view . ' TO ' . $grantee);
+      if ($checkAccess) {
+        $this->connectorCredentials->checkViews($credentials ?? $previousCredentials, $database, [WopiCredentialStore::VIEW_NAME]);
+      }
+      if ($credentials !== null) {
+        $this->connectorCredentials->save(ConnectorDatabaseCredentials::WOPI, $credentials);
+      }
+      // Switch lookups to the new view before dropping the old one.
+      $this->cloudConfig->setAppValue($this->appName, WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, $database);
+      if ($previousDatabase !== '' && $previousDatabase !== $database) {
+        $this->dropConnectorObjects($previousDatabase);
+      }
     } catch (Throwable $exception) {
+      $this->rollbackNewConnectorAccess($database, $previousDatabase, $grantee);
+      if ($exception instanceof DatabaseCloudConnectorViewException) {
+        throw $exception;
+      }
       throw new DatabaseCloudConnectorViewException(
         $this->l->t('Unable to configure the WOPI credential view.'),
         $exception->getCode(),
         $exception,
       );
     }
-    if ($checkAccess) {
-      $this->connectorCredentials->checkViews($credentials ?? $previousCredentials, $database, [WopiCredentialStore::VIEW_NAME]);
+  }
+
+  /**
+   * Revoke provisional grants and remove provisional objects after a failed
+   * credential or view-validation change.
+   */
+  private function rollbackNewConnectorAccess(string $database, string $previousDatabase, string $grantee): void
+  {
+    try {
+      $this->connection->executeStatement(
+        'REVOKE SELECT ON ' . WopiCredentialStore::qualify($database, WopiCredentialStore::VIEW_NAME) . ' FROM ' . $grantee,
+      );
+      $this->connection->executeStatement(
+        'REVOKE EXECUTE ON FUNCTION ' . WopiCredentialStore::qualify($database, WopiCredentialStore::TOKEN_HASH_FUNCTION) . ' FROM ' . $grantee,
+      );
+    } catch (Throwable) {
+      // A grant or object may not have been created before the failure.
     }
-    if ($credentials !== null) {
-      $this->connectorCredentials->save(ConnectorDatabaseCredentials::WOPI, $credentials);
-    }
-    // Switch lookups to the new view before dropping the old one.
-    $this->cloudConfig->setAppValue($this->appName, WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, $database);
-    if ($previousDatabase !== '' && $previousDatabase !== $database) {
-      $this->dropConnectorObjects($previousDatabase);
+    if ($previousDatabase !== $database) {
+      try {
+        $this->dropConnectorObjects($database);
+      } catch (Throwable) {
+        // Keep the original provisioning or access-validation exception.
+      }
     }
   }
 

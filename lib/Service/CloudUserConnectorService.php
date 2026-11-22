@@ -1248,6 +1248,19 @@ SELECT t.* FROM " . $table . " t";
     }
   }
 
+  private function grantToRevokeStatement(string $sql): ?string
+  {
+    $matches = null;
+    if (preg_match('/^GRANT\s+(UPDATE\s*\([^)]+\))\s+ON\s+(.+?)\s+TO\s+(.+)$/', $sql, $matches)
+        || preg_match('/^GRANT\s+(SELECT|INSERT)\s+ON\s+(.+?)\s+TO\s+(.+)$/', $sql, $matches)) {
+      return sprintf('REVOKE %1$s ON %2$s FROM %3$s', $matches[1], $matches[2], $matches[3]);
+    }
+    if (preg_match('/^GRANT\s+EXECUTE\s+ON\s+FUNCTION\s+(.+?)\s+TO\s+(.+)$/', $sql, $matches)) {
+      return sprintf('REVOKE EXECUTE ON FUNCTION %1$s FROM %2$s', $matches[1], $matches[2]);
+    }
+    return null;
+  }
+
   /**
    * Delete the personalized one-row views which give individual orchestra
    * members access to just their own data.
@@ -1294,10 +1307,9 @@ SELECT t.* FROM " . $table . " t";
           }
           $currentStatement = sprintf('DROP VIEW IF EXISTS %1$s', $key);
         } else {
-          $matches = null;
-          if (preg_match('/^GRANT (.+) ON (.+) TO (.+)$/', $sql, $matches)) {
-            array_shift($matches);
-            $currentStatement = sprintf('REVOKE %1$s ON %2$s FROM %3$s', ...$matches);
+          $revokeStatement = $this->grantToRevokeStatement($sql);
+          if ($revokeStatement !== null) {
+            $currentStatement = $revokeStatement;
             $this->logDebug('SQL ' . $currentStatement);
             try {
               $this->connection->prepare($currentStatement)->executeQuery();
