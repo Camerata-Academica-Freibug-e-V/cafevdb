@@ -34,8 +34,9 @@ import type { AnyPromise } from '../types/promise.d.ts';
 
 import axios from '@nextcloud/axios';
 import { confirmPassword } from '@nextcloud/password-confirmation';
-import { generateAppUrl, generateOcsUrl } from '@nextcloud/router';
+import { generateOcsUrl } from '@nextcloud/router';
 import { defineStore } from 'pinia';
+import generateAppUrl from '../toolkit/util/generate-url.ts';
 
 const storeId = 'cloud-user-groups';
 

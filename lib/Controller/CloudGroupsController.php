@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra management application.
  *
+ * @author Claus-Justus Heine
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -43,6 +44,7 @@ class CloudGroupsController extends Controller
    * @param string $search Group ID or display name to search for.
    * @param int $limit Maximum number of groups.
    * @param int $offset Number of matching groups to skip.
+   *
    * @return DataResponse
    */
   #[CoreAttributes\NoAdminRequired]

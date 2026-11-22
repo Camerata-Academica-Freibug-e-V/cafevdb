@@ -12,8 +12,9 @@ import { useCloudUsersGroupsStore } from '~/src/stores/cloud-users-groups.ts';
 const { get } = vi.hoisted(() => ({ get: vi.fn() }));
 vi.mock('@nextcloud/axios', () => ({ default: { get } }));
 vi.mock('@nextcloud/password-confirmation', () => ({ confirmPassword: vi.fn() }));
+vi.mock('~/src/config.ts', () => ({ appName: 'cafevdb' }));
 vi.mock('@nextcloud/router', () => ({
-  generateAppUrl: (path: string) => `/apps/cafevdb/${path}`,
+  generateUrl: (path: string) => path,
   generateOcsUrl: (path: string) => `/ocs/${path}`,
 }));
 

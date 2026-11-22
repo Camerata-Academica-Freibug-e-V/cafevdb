@@ -23,7 +23,6 @@ use ReflectionMethod;
 use OCA\CAFEVDB\Attributes\NoGroupMemberRequired;
 use OCA\CAFEVDB\Controller\CloudGroupsController;
 use OCA\CAFEVDB\Service\ConfigService;
-use OCA\CAFEVDB\Settings\ConfigConstants;
 
 #[CoversClass(CloudGroupsController::class)]
 final class CloudGroupsControllerTest extends TestCase
@@ -46,9 +45,7 @@ final class CloudGroupsControllerTest extends TestCase
     $session = $this->createStub(IUserSession::class);
     $session->method('getUser')->willReturn($user);
     $cloudConfig = $this->createStub(IConfig::class);
-    $cloudConfig->method('getAppValue')
-      ->with('cafevdb', ConfigConstants::USER_GROUP_KEY)
-      ->willReturn('orchestra');
+    $cloudConfig->method('getAppValue')->willReturn('orchestra');
     return new CloudGroupsController('cafevdb', $this->createStub(IRequest::class), $groups, $session, $cloudConfig, $config);
   }
 
@@ -70,7 +67,7 @@ final class CloudGroupsControllerTest extends TestCase
     );
 
     $groups = $this->createMock(IGroupManager::class);
-    $groups->method('isAdmin')->with('alice')->willReturn(false);
+    $groups->expects(self::once())->method('isAdmin')->with('alice')->willReturn(false);
     $groups->expects(self::never())->method('search');
     $groups->expects(self::never())->method('get');
     $config = $this->createStub(ConfigService::class);
@@ -82,7 +79,7 @@ final class CloudGroupsControllerTest extends TestCase
   public function testAdminSearchReturnsBackendDetails(): void
   {
     $groups = $this->createMock(IGroupManager::class);
-    $groups->method('isAdmin')->with('alice')->willReturn(true);
+    $groups->expects(self::once())->method('isAdmin')->with('alice')->willReturn(true);
     $groups->expects(self::once())->method('search')->with('other & team', 10, 20)
       ->willReturn([$this->group('other', 'Other team')]);
     $config = $this->createMock(ConfigService::class);
