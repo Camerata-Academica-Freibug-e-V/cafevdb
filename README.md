@@ -193,7 +193,9 @@ In the admin settings, open **Configure Problem Report Handling** and click
 **Generate Test Error**. Use **report error** in the resulting dialog to preview
 and submit the artificial error through the configured reporting methods.
 Generating the error alone sends no report. Submission uses the real reporting
-destinations, including a public GitHub issue when configured.
+destinations, including the configured GitHub repository.
+For GitHub token setup, including a private repository, see
+[GitHub problem reports](doc/github-problem-reports.md).
 
 App-local word splitter
 -----------------------
