@@ -27,12 +27,15 @@ namespace OCA\CAFEVDB\Tests\Unit\Controller;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 use OCP\IDateTimeFormatter;
 use OCP\IRequest;
 
 use OCA\CAFEVDB\Controller;
+use OCA\CAFEVDB\Exceptions;
 use OCA\CAFEVDB\Service\CalDavService;
+use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\ConfigCheckService;
 use OCA\CAFEVDB\Service\EmailAddressService;
 use OCA\CAFEVDB\Service\Finance\FinanceService;
@@ -51,6 +54,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConfigService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\L10N\L10NFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\Registration::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Controller\DTO\MessagesResponse::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\AppInfo\AbstractApplication::class)]
 class OrchestraSettingsControllerTest extends TestCase
 {
@@ -103,5 +107,49 @@ class OrchestraSettingsControllerTest extends TestCase
       webPagesRPC: $this->createStub(WebPagesRPC::class),
       wikiRPC: $this->createStub(WikiRPC::class),
     );
+  }
+
+  #[Attributes\DataProvider('userSqlConfigurationResults')]
+  public function testRecreateViewsReportsConfigurationFailureAsWarning(bool $configurationFails): void
+  {
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->expects($this->once())->method('checkRequirements')->willReturn(['hints' => []]);
+    $connector->expects($this->once())->method('updateUserSqlViews')->with(null, null, true);
+    $connector->expects($this->once())->method('writeUserSqlConfig')->with(null);
+    $configuration = $connector->expects($this->once())->method('configureCloudUserBackend');
+    if ($configurationFails) {
+      $configuration->willThrowException(new RuntimeException('user_sql settings unavailable'));
+    } else {
+      $configuration->willReturn([]);
+    }
+    $connector->expects($this->once())->method('setCloudUserSubAdmins');
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+
+    $response = $this->controller->setApp('userSqlBackendRecreateViews');
+    $data = $response->getData();
+    self::assertInstanceOf(Controller\DTO\MessagesResponse::class, $data);
+    self::assertNotEmpty($data->messages);
+    self::assertCount($configurationFails ? 1 : 0, $data->hints);
+    if ($configurationFails) {
+      self::assertStringContainsString('user_sql', $data->hints[0]);
+    }
+  }
+
+  public static function userSqlConfigurationResults(): array
+  {
+    return ['configured' => [false], 'unavailable' => [true]];
+  }
+
+  public function testRecreateViewsStillReportsDatabaseErrors(): void
+  {
+    $connector = $this->createMock(CloudUserConnectorService::class);
+    $connector->method('checkRequirements')->willReturn(['hints' => []]);
+    $connector->expects($this->once())->method('updateUserSqlViews')
+      ->willThrowException(new Exceptions\DatabaseCloudConnectorViewException('View creation failed'));
+    $connector->expects($this->never())->method('configureCloudUserBackend');
+    $this->mockProvider->registerClassInstance(CloudUserConnectorService::class, $connector);
+
+    $this->expectException(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions\EnduserNotificationException::class);
+    $this->controller->setApp('userSqlBackendRecreateViews');
   }
 }

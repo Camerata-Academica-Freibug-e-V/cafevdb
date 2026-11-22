@@ -72,7 +72,7 @@ vi.mock('@nextcloud/files/upload', () => ({
 }));
 vi.mock('@nextcloud/l10n', () => ({ translate: (_app: string, text: string) => text }));
 vi.mock('@nextcloud/vue', () => ({
-  NcButton: { template: '<button><slot name="icon" /></button>' },
+  NcButton: { template: '<button><slot name="icon" /><slot /></button>' },
   NcSettingsSection: { template: '<section><slot /></section>' },
   NcTextField: { template: '<input :value="$attrs.modelValue" />' },
   NcCheckboxRadioSwitch: {},
@@ -86,7 +86,7 @@ vi.mock('@nextcloud/vue', () => ({
                </select>`,
   },
   NcTextArea: {},
-  NcNoteCard: {},
+  NcNoteCard: { props: ['type'], template: '<div :data-type="type"><slot /></div>' },
 }));
 vi.mock('../../../../src/components/settings/WysiwygField.vue', () => ({ default: {} }));
 vi.mock('../../../../src/config.ts', () => ({ appName: 'cafevdb' }));
@@ -107,7 +107,7 @@ vi.mock('../../../../src/components/settings/AdminSettingsTab.vue', async () => 
   return {
     default: defineComponent({
       props: ['entry', 'groups'],
-      setup: (_props, { slots }) => () => h('div', ['standardLetter', 'logo', 'invoice'].map((key) =>
+      setup: (_props, { slots }) => () => h('div', [...['standardLetter', 'logo', 'invoice'].map((key) =>
         h('div', { 'data-template': key }, [
           slots[`control-${key}`]?.({
             field: { label: key },
@@ -121,7 +121,7 @@ vi.mock('../../../../src/components/settings/AdminSettingsTab.vue', async () => 
             settings: mocks.settings,
             setValue: mocks.setValue,
           }),
-        ]))),
+        ])), slots['members-as-cloud-users']?.()]),
     }),
   };
 });
@@ -183,6 +183,24 @@ describe('Orchestra and sharing settings fields', () => {
       label: 'Default event duration (minutes)',
       type: 'number',
     });
+  });
+
+  it('shows a warning when views were recreated but user_sql settings were inaccessible', async () => {
+    mocks.settings.cloudUserViewsDatabase = 'views';
+    mocks.setAdminSetting.mockResolvedValue({
+      data: { messages: ['Views recreated'], hints: ['user_sql settings may require admin rights'] },
+    });
+    const wrapper = mount(SharingSettings, {
+      props: { entry: { id: 'sharing', key: 'sharing', name: 'Sharing', children: [] } },
+      global: { stubs: { ConnectorAccount: true } },
+    });
+    const button = wrapper.findAll('button').find((item) => item.text() === 'Recreate cloud-user views');
+    expect(button).toBeDefined();
+    await button!.trigger('click');
+    await flushPromises();
+    expect(mocks.setAdminSetting).toHaveBeenCalledWith('userSqlBackendRecreateViews');
+    expect(wrapper.get('[data-type="success"]').text()).toBe('Views recreated');
+    expect(wrapper.get('[data-type="warning"]').text()).toBe('user_sql settings may require admin rights');
   });
 });
 

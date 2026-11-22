@@ -37,6 +37,9 @@
       <NcNoteCard v-if="actionMessage" :type="actionError ? 'error' : 'success'">
         {{ actionMessage }}
       </NcNoteCard>
+      <NcNoteCard v-if="actionHints.length" type="warning">
+        {{ actionHints.join(' ') }}
+      </NcNoteCard>
     </template>
     <template #wopi-credentials-view>
       <ConnectorCredentials setting="wopiConnectorCredentials" />
@@ -207,6 +210,7 @@ const groups: AdminSettingGroup[] = [
 
 const runningAction = ref(false)
 const actionMessage = ref('')
+const actionHints = ref<string[]>([])
 const actionError = ref(false)
 const runningWopiAction = ref(false)
 const wopiActionMessage = ref('')
@@ -256,10 +260,12 @@ const changeShareOwnerPassword = async () => {
 const runAction = async (endpoint: string) => {
   runningAction.value = true
   actionMessage.value = ''
+  actionHints.value = []
   actionError.value = false
   try {
     const response = await setAdminSetting(endpoint)
     actionMessage.value = (response.data.messages ?? []).join(' ')
+    actionHints.value = response.data.hints ?? []
     if (actionMessage.value) {
       showSuccess(actionMessage.value)
     }

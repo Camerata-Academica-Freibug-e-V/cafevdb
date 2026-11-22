@@ -32,7 +32,11 @@ use Psr\Container\ContainerInterface;
 use OCP\App\IAppManager;
 use OCP\AppFramework\App;
 use OCP\IConfig;
+use OCP\IGroupManager;
 use OCP\IL10N;
+use OCP\IUserSession;
+use OCP\Security\Ip\IRemoteAddress;
+use OCP\Settings\IManager as SettingsManager;
 use Psr\Log\LoggerInterface as ILogger;
 
 use OCA\CAFEVDB\AppInfo\Application;
@@ -49,6 +53,7 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\RequestService;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Exception\DriverException as DBALDriverException;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Platforms;
 use OCA\UserSQL\Properties as UserSqlProperties;
+use OCA\UserSQL\Settings\Admin as UserSqlAdminSettings;
 
 /**
  * Manage database-views and grants in order to selectively provide only the
@@ -658,7 +663,7 @@ WHERE m.email IS NOT NULL AND m.email <> ""
     $this->logDebug('USER SQL KEYS ' . print_r($cloudUserBackendKeys, true));
 
     if ($this->getConnectorAccount() !== []) {
-      $this->requireBackendAdmin();
+      $this->requireUserSqlSettingsAccess();
       try {
         $properties = $this->userSqlProperties();
         foreach ($cloudUserBackendKeys as $key) {
@@ -732,12 +737,22 @@ WHERE m.email IS NOT NULL AND m.email <> ""
   }
 
   /** @return void */
-  public function requireBackendAdmin(): void
+  public function requireUserSqlSettingsAccess(): void
   {
-    $uid = $this->appContainer->get(\OCP\IUserSession::class)->getUser()?->getUID();
-    if ($uid === null || !$this->appContainer->get(\OCP\IGroupManager::class)->isAdmin($uid)) {
+    $user = $this->appContainer->get(IUserSession::class)->getUser();
+    $allowed = $user !== null && $this->appContainer->get(IGroupManager::class)->isAdmin($user->getUID());
+    if ($user !== null && !$allowed) {
+      foreach ($this->appContainer->get(SettingsManager::class)->getAllAllowedAdminSettings($user) as $settings) {
+        if (get_class($settings) === UserSqlAdminSettings::class) {
+          $allowed = true;
+          break;
+        }
+      }
+    }
+    if (!$allowed || !$this->appContainer->get(IRemoteAddress::class)->allowsAdminActions()
+        || !$this->appManager->isEnabledForUser(self::CLOUD_USER_BACKEND, $user)) {
       throw new Exceptions\DatabaseCloudConnectorViewException(
-        $this->l->t('Only a Nextcloud administrator can configure the user_sql backend.'),
+        $this->l->t('Access to the user_sql administrative settings is required to configure the backend.'),
       );
     }
   }

@@ -71,6 +71,10 @@ requires a MySQL/MariaDB Nextcloud
 database on the orchestra server until it supports independent credentials.
 Without an explicit views account, CafeVDB uses the Nextcloud database account
 as before. When replacing an account, revoke any grants it no longer needs.
+Recreating cloud-user views is available to orchestra sub-admins. If CafeVDB
+cannot update `user_sql` settings afterwards, the views remain in place and a
+warning asks for the settings to be checked; access may require delegated
+`user_sql` settings rights or a Nextcloud administrator.
 
 CafeVDB publishes `cloudConnectorDescriptor` as read-only, non-secret app
 configuration for consumer apps. Version 1 contains `database` (the effective

@@ -1380,16 +1380,13 @@ class OrchestraSettingsController extends Controller
           // also try to re-grant the sub-admin right and reconfigure user-sql
           try {
             $userConnectorService->configureCloudUserBackend();
-            $userConnectorService->setCloudUserSubAdmins();
-          } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
-            throw $t;
           } catch (Throwable $t) {
-            throw new Exceptions\EnduserNotificationException(
-              // TRANSLATORS: Parameter is the name of a user backend.
-              message: $this->l->t('Unable to configure "%1$s".', CloudUserConnectorService::CLOUD_USER_BACKEND),
-              previous: $t,
+            $this->logException($t, 'Unable to configure "' . CloudUserConnectorService::CLOUD_USER_BACKEND . '" after recreating its views.');
+            $hints[] = $this->l->t(
+              'The user_sql settings could not be fully updated or verified. Check the configuration; access to its administrative settings may be required.',
             );
           }
+          $userConnectorService->setCloudUserSubAdmins();
         } catch (Exceptions\DatabaseCloudConnectorViewException $t) {
           throw new Exceptions\EnduserNotificationException($t->getMessage(), previous: $t);
         } catch (Throwable $t) {
@@ -1398,10 +1395,7 @@ class OrchestraSettingsController extends Controller
             previous: $t,
           );
         }
-        $messages = array_merge(
-          [ $this->l->t('Cloud-user-views have been regenerated successfully.'), ],
-          $hints,
-        );
+        $messages = [ $this->l->t('Cloud-user-views have been regenerated successfully.'), ];
         return (new DTO\MessagesResponse(messages: $messages, hints: $hints))->response();
 
       case EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value:

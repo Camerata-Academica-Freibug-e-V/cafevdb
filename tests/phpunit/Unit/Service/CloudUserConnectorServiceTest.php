@@ -436,9 +436,9 @@ class CloudUserConnectorServiceTest extends TestCase
         $this->encryptionService, $this->appManager, $this->cloudConfig, $this->mockProvider->getL10N(),
         $container->get(RequestService::class), $this->appName, $container, $this->mockProvider->getLoggerInterface(),
       ])
-      ->onlyMethods(['userSqlProperties', 'requireBackendAdmin'])->getMock();
+      ->onlyMethods(['userSqlProperties', 'requireUserSqlSettingsAccess'])->getMock();
     $service->expects($this->exactly(2))->method('userSqlProperties')->willReturn($properties);
-    $service->expects($this->exactly(2))->method('requireBackendAdmin');
+    $service->expects($this->exactly(2))->method('requireUserSqlSettingsAccess');
     $service->saveConnectorAccount($account);
     try {
       $service->writeUserSqlConfig('configured-views');
