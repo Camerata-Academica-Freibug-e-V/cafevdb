@@ -309,6 +309,42 @@ class MountProvider implements IMountProvider
           return MountProvider::MOUNT_TYPE;
         }
       };
+
+      $storage = $this->storageFactory->getDebitMandatesStorage();
+      try {
+        $storage->synchronize();
+      } catch (Throwable $t) {
+        throw new StorageNotAvailableException(
+          'Unable to synchronize debit-mandate storage.',
+          StorageNotAvailableException::STATUS_ERROR,
+          $t instanceof \Exception ? $t : null,
+        );
+      }
+      $bulkLoadStorageIds[] = $storage->getId();
+      $mounts[] = new class(
+        storage: $storage,
+        mountpoint: UserStorage::PATH_SEP . implode(
+          UserStorage::PATH_SEP,
+          [ $userId, 'files', $this->getDebitMandatesPath(), ],
+        ),
+        mountId: null,
+        loader: $loader,
+        mountProvider: MountProvider::class,
+        mountOptions: [
+          'filesystem_check_changes' => 1,
+          'readonly' => true,
+          'previews' => true,
+          'enable_sharing' => false,
+          'authenticated' => true,
+        ],
+      ) extends MountPoint
+      {
+        /** {@inheritdoc} */
+        public function getMountType()
+        {
+          return MountProvider::MOUNT_TYPE;
+        }
+      };
     }
 
     try {
@@ -525,6 +561,7 @@ class MountProvider implements IMountProvider
       $this->getTaxExemptionNoticesPath(),
       $this->getDonationReceiptsPath(),
       $this->getInvoicesPath(),
+      $this->getDebitMandatesPath(),
       $this->getProjectBalancesPath(),
     ];
 

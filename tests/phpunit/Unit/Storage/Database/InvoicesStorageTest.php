@@ -40,6 +40,7 @@ use OCA\CAFEVDB\Tests\MockProvider;
 /** Test aspects of the invoices storage. */
 #[Attributes\CoversClass(DatabaseStorage\InvoicesStorage::class)]
 #[Attributes\CoversClass(DatabaseStorage\DonationReceiptsStorage::class)]
+#[Attributes\CoversClass(DatabaseStorage\DebitMandatesStorage::class)]
 #[Attributes\CoversMethod(DocumentStorageUploadController::class, 'addDocument')]
 #[Attributes\CoversMethod(DatabaseStorage\ProjectParticipantsStorage::class, 'synchronizeFinancialDocument')]
 #[Attributes\UsesClass(DocumentStorageUploadController::class)]
@@ -53,6 +54,7 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\EncryptedFileData::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\File::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\FileData::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\SepaDebitMandate::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Storage\Database\ProjectParticipantsStorage::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Storage\Database\DatabaseStorageNodeNameTrait::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\AbstractUndoable::class)]
@@ -157,8 +159,12 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\EnumOrderByOptions::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\ArrayTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\CreatedAt::class)]
+#[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\DateTimeTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\EncryptionContextTrait::class)]
+#[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\FactoryTrait::class)]
+#[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\SoftDeleteableEntity::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\TranslatableTrait::class)]
+#[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\UnusedTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\UpdatedAt::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\UuidTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\FindLikeTrait::class)]
@@ -422,6 +428,89 @@ class InvoicesStorageTest extends TestCase
     }
   }
 
+  /** @return void */
+  #[Attributes\Depends('testApplyMigrations')]
+  public function testDebitMandateFinanceStorage(): void
+  {
+    $entityManager = $this->getEntityManager();
+    $participant = $entityManager->find(Entities\ProjectParticipant::class, [
+      'project' => self::$projectId,
+      'musician' => self::$musicianId,
+    ]);
+    $musician = $participant->getMusician();
+    $project = $participant->getProject();
+    $participantStorage = new DatabaseStorage\ProjectParticipantsStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+      'participant' => $participant,
+    ]);
+    $financeStorage = new DatabaseStorage\DebitMandatesStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+    ]);
+    $mandate = new Entities\SepaDebitMandate()
+      ->setMusician($musician)
+      ->setProject($project)
+      ->setSepaBankAccount($musician->getSepaBankAccounts()->first())
+      ->setMandateReference('MANDATE-1')
+      ->setSequence(1)
+      ->setNonRecurring(false)
+      ->setMandateDate('2099-01-01');
+    $file = new Entities\EncryptedFile('mandate', 'signed', 'application/octet-stream', $musician);
+
+    $entityManager->beginTransaction();
+    try {
+      $entityManager->persist($file);
+      $participantLink = $participantStorage->addDebitMandate($mandate, $file, flush: false);
+      $mandate->setWrittenMandate($participantLink);
+      $entityManager->persist($mandate);
+      $entityManager->flush();
+      self::assertSame('MANDATE-1', $participantLink->getName());
+
+      $financeStorage->synchronize();
+      $root = $entityManager->getRepository(Entities\DatabaseStorage::class)
+        ->findOneBy(['storageId' => $financeStorage->getShortId()])->getRoot();
+      $musicianFolder = $root->getFolderByName($musician->getUserIdSlug());
+      $projectFolder = $musicianFolder->getFolderByName($project->getName());
+      self::assertSame($file, $projectFolder->getFileByName('MANDATE-1')->getFile());
+      self::assertSame($file, $participantLink->getFile());
+
+      $mandate->setDeleted(new DateTimeImmutable('+1 day'));
+      $entityManager->flush();
+      $financeStorage->synchronize();
+      self::assertNotNull($projectFolder->getFileByName('MANDATE-1'));
+
+      $mandate->setDeleted(new DateTimeImmutable('-1 minute'));
+      $entityManager->flush();
+      $financeStorage->synchronize();
+      $revokedName = $this->mockProvider->getConfigService()->getAppL10n()->t('Revoked');
+      self::assertNull($projectFolder->getFileByName('MANDATE-1'));
+      self::assertSame($file, $projectFolder->getFolderByName($revokedName)->getFileByName('MANDATE-1')->getFile());
+      self::assertSame($file, $participantLink->getFile());
+
+      $mandate->setDeleted(null);
+      $entityManager->flush();
+      $financeStorage->synchronize();
+      self::assertSame($file, $projectFolder->getFileByName('MANDATE-1')->getFile());
+      self::assertNull($projectFolder->getFolderByName($revokedName));
+      $financeStorage->synchronize();
+      self::assertSame($file, $projectFolder->getFileByName('MANDATE-1')->getFile());
+
+      $replacement = new Entities\EncryptedFile('replacement', 'new', 'application/octet-stream', $musician);
+      $entityManager->persist($replacement);
+      $participantLink->setFile($replacement);
+      $entityManager->flush();
+      $financeStorage->synchronize();
+      self::assertSame($replacement, $projectFolder->getFileByName('MANDATE-1')->getFile());
+
+      $mandate->setWrittenMandate(null);
+      $entityManager->flush();
+      $financeStorage->synchronize();
+      self::assertNull($root->getFolderByName($musician->getUserIdSlug()));
+    } finally {
+      $entityManager->rollBack();
+      $entityManager->clear();
+    }
+  }
+
   /**
    * This is quas a tearDownAfterClass() but we need some mocked / stubbed
    * classes for the entity-manager.
@@ -431,6 +520,7 @@ class InvoicesStorageTest extends TestCase
   #[Attributes\Depends('testApplyMigrations')]
   #[Attributes\Depends('testParticipantFinancialDocumentLinks')]
   #[Attributes\Depends('testDedicatedAndParticipantLinks')]
+  #[Attributes\Depends('testDebitMandateFinanceStorage')]
   public function testUnapplyMigrations(): void
   {
     $this->unapplyMigrations();
