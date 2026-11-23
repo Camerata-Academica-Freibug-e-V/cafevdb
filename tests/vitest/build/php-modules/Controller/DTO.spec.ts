@@ -22,7 +22,6 @@
  */
 
 // ... because mocks have to come top level.
-/* eslint-disable perfectionist/sort-imports */
 
 import type { DownloadsShareResponse } from '~/build/ts-types/php-modules/Controller/DTO.ts';
 

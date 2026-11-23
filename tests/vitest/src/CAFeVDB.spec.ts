@@ -22,7 +22,6 @@
  */
 
 // ... because mocks have to come top level.
-/* eslint-disable perfectionist/sort-imports */
 
 import type { AppError } from '~/src/toolkit/types/errors.ts';
 

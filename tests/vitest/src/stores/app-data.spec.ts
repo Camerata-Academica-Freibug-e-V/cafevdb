@@ -37,7 +37,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { entities } from '../toolkit/services/entity-repository-setup.ts';
 import useAppDataStore from '~/src/stores/app-data.ts';
 
-
 const projectKeys = [
   'created',
   'deleted',

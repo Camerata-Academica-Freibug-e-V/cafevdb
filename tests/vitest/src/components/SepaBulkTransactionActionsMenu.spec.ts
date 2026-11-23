@@ -199,7 +199,7 @@ describe('SepaBulkTransactionActionsMenu component', () => {
       mountComponent();
       expect(provideTooltipsMock).toHaveBeenCalledTimes(1);
       const keys = provideTooltipsMock.mock.calls[0][0] as string[];
-      expect([ ...keys ].sort()).toStrictEqual([ ...TOOLTIP_KEYS ].sort());
+      expect([...keys].sort()).toStrictEqual([...TOOLTIP_KEYS].sort());
     });
 
     it('should pass its props through to the legacy page actions menu', () => {
@@ -261,7 +261,7 @@ describe('SepaBulkTransactionActionsMenu component', () => {
       );
     });
 
-    it.each([ 'Bank Transaction Data', 'SEPA-XML Data', 'GnuCash Balance Data' ])(
+    it.each(['Bank Transaction Data', 'SEPA-XML Data', 'GnuCash Balance Data'])(
       'should push and pop the busy state around a successful download for "%s"',
       async (name) => {
         const wrapper = mountComponent();
@@ -275,7 +275,7 @@ describe('SepaBulkTransactionActionsMenu component', () => {
       },
     );
 
-    it.each([ 'Bank Transaction Data', 'SEPA-XML Data', 'GnuCash Balance Data' ])(
+    it.each(['Bank Transaction Data', 'SEPA-XML Data', 'GnuCash Balance Data'])(
       'should pop the busy state and report an error if the download for "%s" fails',
       async (name) => {
         const cause = new Error('download failed');
@@ -324,9 +324,9 @@ describe('SepaBulkTransactionActionsMenu component', () => {
     it('should delegate isOpen(), openMenu() and closeMenu() to the legacy page actions menu', () => {
       const wrapper = mountComponent();
       const vm = wrapper.vm as unknown as {
-        isOpen: () => boolean
-        openMenu: (x?: number, y?: number) => void
-        closeMenu: () => void
+        isOpen: () => boolean;
+        openMenu: (x?: number, y?: number) => void;
+        closeMenu: () => void;
       };
 
       expect(vm.isOpen()).toBe(true);
