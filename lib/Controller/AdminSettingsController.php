@@ -487,10 +487,12 @@ Please enter the confirmation code contained in the email into the admin-setting
           $responses = $cloudUserConnector->configureCloudUserBackend(erase: false);
           $cloudUserConnector->setCloudUserSubAdmins(delete: false);
         }
-        $messages[] = $this->l->t('"%1$s" controller answered with "%2$s".', [
-          CloudUserConnectorService::CLOUD_USER_BACKEND,
-          implode('", "', $responses)
-        ]);
+        if (!empty($responses)) {
+          $messages[] = $this->l->t('"%1$s" controller answered with "%2$s".', [
+            CloudUserConnectorService::CLOUD_USER_BACKEND,
+            implode('", "', $responses)
+          ]);
+        }
 
         // Get front-end link to user-sql config
         //
