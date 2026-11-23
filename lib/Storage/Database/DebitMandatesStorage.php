@@ -139,7 +139,7 @@ class DebitMandatesStorage extends Storage
   private function lockRootFolder():Entities\DatabaseStorageFolder
   {
     $connection = $this->entityManager->getConnection();
-    $table = $connection->quoteIdentifier(DatabaseTables::DATABASE_STORAGES_TABLE);
+    $table = $connection->getDatabasePlatform()->quoteSingleIdentifier(DatabaseTables::DATABASE_STORAGES_TABLE);
     $id = $this->getShortId();
 
     $connection->executeStatement(

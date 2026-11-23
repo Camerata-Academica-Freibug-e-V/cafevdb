@@ -26,6 +26,7 @@ namespace OCA\CAFEVDB\Tests\Unit;
 
 use DateTimeImmutable;
 use ReflectionMethod;
+use RuntimeException;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes;
@@ -478,6 +479,95 @@ class InvoicesStorageTest extends TestCase
 
   /** @return void */
   #[Attributes\Depends('testApplyMigrations')]
+  public function testDebitMandateFirstAccessWaitsForConcurrentRootCreation(): void
+  {
+    $entityManager = $this->getEntityManager();
+    $storage = new DatabaseStorage\DebitMandatesStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+    ]);
+    $connection = $entityManager->getConnection();
+    self::assertFalse($connection->fetchOne(
+      'SELECT id FROM DatabaseStorages WHERE storage_id = ?',
+      [$storage->getShortId()],
+    ));
+
+    $worker = <<<'PHP'
+      $params = json_decode(fgets(STDIN), true, 512, JSON_THROW_ON_ERROR);
+      $dsn = 'mysql:dbname=' . $params['dbname'];
+      if (!empty($params['unix_socket'])) {
+        $dsn .= ';unix_socket=' . $params['unix_socket'];
+      } else {
+        $dsn .= ';host=' . $params['host'];
+        if (!empty($params['port'])) {
+          $dsn .= ';port=' . $params['port'];
+        }
+      }
+      $db = new PDO($dsn, $params['user'], $params['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+      $db->beginTransaction();
+      $db->exec("INSERT INTO DatabaseStorageDirEntries (name, type) VALUES ('', 'folder')");
+      $root = $db->lastInsertId();
+      $statement = $db->prepare('INSERT INTO DatabaseStorages (storage_id, root_id) VALUES (?, ?)');
+      $statement->execute([$params['storage_id'], $root]);
+      fwrite(STDOUT, $root . "\n");
+      fflush(STDOUT);
+      if (trim(fgets(STDIN)) !== 'commit') {
+        throw new RuntimeException('Unexpected worker command.');
+      }
+      usleep(1500000);
+      $db->commit();
+      PHP;
+    $process = proc_open([PHP_BINARY, '-d', 'xdebug.mode=off', '-r', $worker], [
+      0 => ['pipe', 'r'],
+      1 => ['pipe', 'w'],
+      2 => ['pipe', 'w'],
+    ], $pipes);
+    self::assertIsResource($process);
+    $rootId = null;
+    $transactionStarted = false;
+    try {
+      $params = array_intersect_key($connection->getParams(), array_flip(['dbname', 'host', 'port', 'unix_socket', 'user', 'password']));
+      $params['storage_id'] = $storage->getShortId();
+      fwrite($pipes[0], json_encode($params, JSON_THROW_ON_ERROR) . "\n");
+      stream_set_timeout($pipes[1], 15);
+      $root = fgets($pipes[1]);
+      if ($root === false || !ctype_digit(trim($root))) {
+        throw new RuntimeException('Unable to prepare concurrent storage root.');
+      }
+      $rootId = (int)trim($root);
+      $entityManager->beginTransaction();
+      $transactionStarted = true;
+      fwrite($pipes[0], "commit\n");
+      $started = microtime(true);
+      $storage->synchronize();
+      self::assertGreaterThan(0.5, microtime(true) - $started);
+      self::assertSame($rootId, (int)$connection->fetchOne(
+        'SELECT root_id FROM DatabaseStorages WHERE storage_id = ?',
+        [$storage->getShortId()],
+      ));
+    } finally {
+      if ($transactionStarted && $entityManager->isTransactionActive()) {
+        $entityManager->rollBack();
+      }
+      $entityManager->clear();
+      fclose($pipes[0]);
+      fclose($pipes[1]);
+      $errors = stream_get_contents($pipes[2]);
+      fclose($pipes[2]);
+      $status = proc_close($process);
+      if ($rootId !== null) {
+        $connection = $entityManager->getConnection();
+        $connection->executeStatement(
+          'DELETE FROM DatabaseStorages WHERE storage_id = ? AND root_id = ?',
+          [$storage->getShortId(), $rootId],
+        );
+        $connection->executeStatement('DELETE FROM DatabaseStorageDirEntries WHERE id = ?', [$rootId]);
+      }
+      self::assertSame(0, $status, $errors);
+    }
+  }
+
+  /** @return void */
+  #[Attributes\Depends('testApplyMigrations')]
   public function testDebitMandateFinanceStorage(): void
   {
     $entityManager = $this->getEntityManager();
@@ -570,6 +660,7 @@ class InvoicesStorageTest extends TestCase
   #[Attributes\Depends('testParticipantFinancialDocumentLinks')]
   #[Attributes\Depends('testDedicatedAndParticipantLinks')]
   #[Attributes\Depends('testDebitMandateRootInitializationFromLockedStorageRow')]
+  #[Attributes\Depends('testDebitMandateFirstAccessWaitsForConcurrentRootCreation')]
   #[Attributes\Depends('testDebitMandateFinanceStorage')]
   public function testUnapplyMigrations(): void
   {
