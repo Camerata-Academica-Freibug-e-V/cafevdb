@@ -19,7 +19,7 @@ vi.mock('@nextcloud/vue/components/NcDialog', async () => {
       props: ['name', 'message', 'buttons', 'dialogClasses'],
       emits: ['update:open'],
       setup(props, { slots, emit }) {
-        return () => h('div', { class: 'modal-container' }, [
+        return () => h('div', { class: 'modal-mask' }, [
           h('div', { class: ['dialog', props.dialogClasses] }, [
             h('h2', props.name),
             slots.default?.(),
@@ -39,7 +39,7 @@ vi.mock('@nextcloud/vue/components/NcNoteCard', async () => {
     default: defineComponent({
       props: ['type'],
       setup(props, { slots }) {
-        return () => h('section', { 'data-severity': props.type }, slots.default?.());
+        return () => h('section', { 'data-severity': props.type }, props.type === 'error' ? undefined : slots.default?.());
       },
     }),
   };
@@ -54,7 +54,7 @@ const button = (container: Element, label: string): HTMLButtonElement => {
 };
 
 afterEach(() => {
-  expect(document.querySelectorAll('.modal-container')).toHaveLength(0);
+  expect(document.querySelectorAll('.modal-mask')).toHaveLength(0);
 });
 
 describe('custom dialog', () => {
@@ -66,7 +66,7 @@ describe('custom dialog', () => {
       severity,
       buttons: [{ label: 'OK', callback: clicked }],
     }).show();
-    const container = document.querySelector('.modal-container')!;
+    const container = document.querySelector('.modal-mask')!;
     expect(container.textContent).toContain('<strong>plain text</strong>');
     expect(container.querySelector('strong')).toBeNull();
     if (severity) {
@@ -94,8 +94,12 @@ describe('custom dialog', () => {
       dialogClasses: ['other-dialog'],
       buttons: [{ label: 'OK', callback() {} }],
     }).show();
-    const [firstContainer, secondContainer] = document.querySelectorAll<HTMLElement>('.modal-container');
-    expect(ready).toHaveBeenCalledExactlyOnceWith(firstContainer);
+    const [firstContainer, secondContainer] = document.querySelectorAll<HTMLElement>('.modal-mask');
+    await nextTick();
+    expect(ready).toHaveBeenCalledOnce();
+    expect(firstContainer.contains(ready.mock.calls[0][0])).toBe(true);
+    expect(ready.mock.calls[0][0].querySelector('input')).not.toBeNull();
+    expect(document.querySelector('.modal-container')).toBeNull();
     expect(firstContainer.classList.contains('fit-content-width')).toBe(true);
     expect(secondContainer.classList.contains('fit-content-width')).toBe(false);
     expect(firstContainer.querySelector<HTMLInputElement>('input')?.checked).toBe(true);
@@ -112,7 +116,7 @@ describe('custom dialog', () => {
       html: '<a href="/example">link</a>',
       buttons: [],
     }).show();
-    const container = document.querySelector('.modal-container')!;
+    const container = document.querySelector('.modal-mask')!;
     expect(container.querySelector('a')?.getAttribute('href')).toBe('/example');
     button(container, 'Dismiss').click();
     await expect(result).rejects.toThrow('Dialog closed');
@@ -126,7 +130,7 @@ describe('custom dialog', () => {
       severity: 'info',
       buttons: [{ label: 'OK', callback() {} }],
     }).show();
-    const container = document.querySelector('.modal-container')!;
+    const container = document.querySelector('.modal-mask')!;
     expect(container.querySelector('[data-severity="info"]')?.textContent).toBe('');
     button(container, 'OK').click();
     await result;
@@ -134,24 +138,70 @@ describe('custom dialog', () => {
 
   it('renders HTML in toolkit alerts and respects confirmation choices', async () => {
     const alert = dialogAlert({ title: 'Alert', text: '<a href="/projects">Projects</a>', allowHtml: true });
-    const alertContainer = document.querySelector('.modal-container')!;
+    const alertContainer = document.querySelector('.modal-mask')!;
     expect(alertContainer.querySelector('a')?.textContent).toBe('Projects');
     button(alertContainer, 'close').click();
     await alert;
 
     const confirmation = dialogConfirm({ title: 'Confirm', text: '<b>Question</b>', allowHtml: true, defaultNo: true });
-    const confirmContainer = document.querySelector('.modal-container')!;
+    const confirmContainer = document.querySelector('.modal-mask')!;
     expect(confirmContainer.querySelector('b')?.textContent).toBe('Question');
     button(confirmContainer, 'No').click();
     await expect(confirmation).resolves.toBe(false);
 
     const yes = dialogConfirm({ title: 'Confirm', text: 'Question' });
-    button(document.querySelector('.modal-container')!, 'Yes').click();
+    button(document.querySelector('.modal-mask')!, 'Yes').click();
     await expect(yes).resolves.toBe(true);
 
     const dismissed = dialogConfirm({ title: 'Confirm', text: 'Question' });
-    button(document.querySelector('.modal-container')!, 'Dismiss').click();
+    button(document.querySelector('.modal-mask')!, 'Dismiss').click();
     await expect(dismissed).rejects.toThrow('Dialog closed');
     await nextTick();
+  });
+
+  it('rejects with the initialization error and removes the dialog', async () => {
+    const failure = new Error('Tooltip initialization failed');
+    const result = new Dialog({
+      name: 'Title',
+      text: 'Text',
+      buttons: [],
+      onReady() { throw failure; },
+    }).show();
+    await expect(result).rejects.toMatchObject({
+      message: 'Custom dialog initialization failed',
+      cause: failure,
+    });
+    expect(document.querySelector('.modal-mask')).toBeNull();
+  });
+
+  it('rejects and cleans up if the content element is missing', async () => {
+    const ready = vi.fn();
+    const result = new Dialog({
+      name: 'Title',
+      text: 'Text',
+      severity: 'error',
+      buttons: [],
+      onReady: ready,
+    }).show();
+    await expect(result).rejects.toMatchObject({
+      message: 'Custom dialog initialization failed',
+      cause: expect.objectContaining({ message: 'Custom dialog content not found' }),
+    });
+    expect(ready).not.toHaveBeenCalled();
+    expect(document.querySelector('.modal-mask')).toBeNull();
+  });
+
+  it('does not initialize content after the dialog is closed', async () => {
+    const ready = vi.fn();
+    const result = new Dialog({
+      name: 'Title',
+      text: 'Text',
+      buttons: [{ label: 'OK', callback() {} }],
+      onReady: ready,
+    }).show();
+    button(document.querySelector('.modal-mask')!, 'OK').click();
+    await result;
+    await nextTick();
+    expect(ready).not.toHaveBeenCalled();
   });
 });

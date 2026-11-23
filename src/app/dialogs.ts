@@ -43,9 +43,8 @@ import { hasProperty } from '../toolkit/types/type-traits.ts';
 import { Dialog } from '../toolkit/util/custom-dialog.ts';
 import $ from './jquery.js';
 
+import 'dialogs.scss';
 import { appNameTag } from 'variables.module.scss';
-
-require('dialogs.scss');
 
 export const YES_NO_BUTTONS = 70;
 export const OK_BUTTONS = 71;
@@ -113,7 +112,7 @@ export interface LegacyMessageParameters {
   modal: boolean;
   allowHtml: boolean;
   dialogClasses?: string|string[];
-  onReady?: (container: HTMLElement) => void;
+  onReady?: (content: HTMLElement) => void;
 }
 export type LegacyDialogParameters = Omit<LegacyMessageParameters, 'dialogType'>;
 const isLegacyMessageParameters = <T extends Partial<LegacyDialogParameters> = LegacyMessageParameters>(arg: unknown): arg is T =>
@@ -422,7 +421,7 @@ const attachDialogHandlers = () => {
 
   $container.data(appName + 'DialogHandlersAttached', true);
 
-  const dialogContainerSelector = '.modal-container.legacy-dialog.' + appNameTag;
+  const dialogContainerSelector = '.modal-mask.legacy-dialog.' + appNameTag;
 
   $container
     .off('dblclick', dialogContainerSelector + ' .dialog__name')

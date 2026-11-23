@@ -3,7 +3,8 @@
   - SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
-  <NcDialog :dialogClasses="['nc-generic-dialog', ...dialogClasses]"
+  <NcDialog :class="dialogClasses"
+            :dialogClasses="['nc-generic-dialog', ...dialogClasses]"
             :buttons="dialogButtons"
             :name="name"
             :message="text"
@@ -27,8 +28,9 @@
 
 <script setup lang="ts">
 import type { IDialogButton, IDialogSeverity } from '@nextcloud/dialogs'
+import type { CustomDialogResult } from '../util/custom-dialog.ts'
 
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 
@@ -39,13 +41,14 @@ const props = withDefaults(defineProps<{
   buttons: IDialogButton[]
   severity?: IDialogSeverity
   dialogClasses?: string[]
-  onReady?: (container: HTMLElement) => void
+  onReady?: (content: HTMLElement) => void
 }>(), {
   dialogClasses: () => [],
 })
 
-const emit = defineEmits<{ close: [buttonClick: boolean] }>()
+const emit = defineEmits<{ close: [result: CustomDialogResult] }>()
 const content = ref<HTMLElement>()
+let unmounted = false
 const dialogButtons = computed(() => props.buttons.map((button) => ({
   ...button,
   callback() {
@@ -54,13 +57,27 @@ const dialogButtons = computed(() => props.buttons.map((button) => ({
   },
 })))
 
-onMounted(() => {
-  const container = content.value?.closest<HTMLElement>('.modal-container')
-  if (!container) {
-    throw new Error('Custom dialog modal container not found')
+onBeforeUnmount(() => {
+  unmounted = true
+})
+
+onMounted(async () => {
+  if (!props.onReady) {
+    return
   }
-  container.classList.add(...props.dialogClasses)
-  props.onReady?.(container)
+  // Wait until spawnDialog has completed mounting before emitting a failure.
+  await nextTick()
+  if (unmounted) {
+    return
+  }
+  try {
+    if (!content.value) {
+      throw new Error('Custom dialog content not found')
+    }
+    props.onReady(content.value)
+  } catch (error) {
+    emit('close', { error })
+  }
 })
 </script>
 

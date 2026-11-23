@@ -8,6 +8,8 @@ import type { IDialogButton, IDialogSeverity } from '@nextcloud/dialogs';
 import { spawnDialog } from '@nextcloud/vue/functions/dialog';
 import CustomDialog from '../components/CustomDialog.vue';
 
+export type CustomDialogResult = boolean | { error: unknown };
+
 export interface CustomDialogOptions {
   name: string;
   text: string;
@@ -16,7 +18,8 @@ export interface CustomDialogOptions {
   buttons: IDialogButton[];
   severity?: IDialogSeverity;
   dialogClasses?: string[];
-  onReady?: (container: HTMLElement) => void;
+  /** Called after mounting with this dialog's content element. */
+  onReady?: (content: HTMLElement) => void;
 }
 
 export class Dialog {
@@ -24,8 +27,11 @@ export class Dialog {
 
   async show(): Promise<void> {
     // The repository's Vue shim exposes the close event but not component props.
-    const props: CustomDialogOptions & { onClose?: (buttonClick: boolean) => void } = this.options;
+    const props: CustomDialogOptions & { onClose?: (result: CustomDialogResult) => void } = this.options;
     const result = await spawnDialog(CustomDialog, props);
+    if (typeof result === 'object') {
+      throw new Error('Custom dialog initialization failed', { cause: result.error });
+    }
     if (!result) {
       throw new Error('Dialog closed');
     }

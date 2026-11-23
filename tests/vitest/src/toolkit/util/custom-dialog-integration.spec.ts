@@ -9,12 +9,15 @@ import { Dialog } from '~/src/toolkit/util/custom-dialog.ts';
 
 describe('custom dialog with Nextcloud Vue', () => {
   it('mounts content and classes in the real modal and closes through its button', async () => {
-    const ready = vi.fn();
+    const initialized = vi.fn();
+    const ready = vi.fn((content: HTMLElement) => {
+      content.querySelectorAll('.cloud-file-system-operations-wrapper .tooltip-auto').forEach(initialized);
+    });
     const callback = vi.fn();
     const result = new Dialog({
       name: 'Title',
       text: '',
-      html: '<label><input type="radio" checked>Choice</label>',
+      html: '<div class="cloud-file-system-operations-wrapper"><label class="tooltip-auto"><input type="radio" checked>Choice</label></div>',
       severity: 'info',
       dialogClasses: ['legacy-dialog', 'fit-content-width'],
       onReady: ready,
@@ -22,15 +25,30 @@ describe('custom dialog with Nextcloud Vue', () => {
     }).show();
     await nextTick();
 
-    const container = document.querySelector<HTMLElement>('.modal-container.legacy-dialog.fit-content-width');
-    expect(container).not.toBeNull();
-    expect(ready).toHaveBeenCalledExactlyOnceWith(container);
-    expect(container?.querySelector<HTMLInputElement>('input')?.checked).toBe(true);
+    const mask = document.querySelector<HTMLElement>('.modal-mask.legacy-dialog.fit-content-width');
+    const container = mask?.querySelector('.modal-container');
+    expect(container).toBeTruthy();
+    expect(ready).toHaveBeenCalledOnce();
+    expect(container?.contains(ready.mock.calls[0][0])).toBe(true);
+    expect(ready.mock.calls[0][0].querySelector('input')?.checked).toBe(true);
+    expect(initialized).toHaveBeenCalledOnce();
     const apply = Array.from(container!.querySelectorAll('button')).find((element) => element.textContent?.includes('Apply'));
     expect(apply).toBeDefined();
     apply!.click();
     await expect(result).resolves.toBeUndefined();
     expect(callback).toHaveBeenCalledOnce();
-    expect(document.querySelector('.modal-container.legacy-dialog')).toBeNull();
+    expect(document.querySelector('.modal-mask.legacy-dialog')).toBeNull();
+  });
+
+  it('unmounts the real modal when initialization fails', async () => {
+    const cause = new Error('Initialization failed');
+    const result = new Dialog({
+      name: 'Title',
+      text: 'Text',
+      buttons: [],
+      onReady() { throw cause; },
+    }).show();
+    await expect(result).rejects.toMatchObject({ cause });
+    expect(document.querySelector('.modal-mask')).toBeNull();
   });
 });

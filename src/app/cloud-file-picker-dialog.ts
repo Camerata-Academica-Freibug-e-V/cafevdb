@@ -193,11 +193,15 @@ const cloudFilePickerDialog = function(options: CloudFilePickerParameters) {
               modal: true,
               allowHtml: true,
               dialogClasses: 'fit-content-width',
-              onReady(container) {
-                $(container).find('.cloud-file-system-operations-wrapper .tooltip-auto').cafevTooltip();
+              onReady(content) {
+                $(content).find('.cloud-file-system-operations-wrapper .tooltip-auto').cafevTooltip();
               },
             },
-          );
+          ).catch((error: unknown) => {
+            console.error('Unable to initialize the file operation dialog.', error);
+            parameters.cleanup();
+            Notification.show(t(appName, 'Something went wrong.'));
+          });
 
         });
     },
