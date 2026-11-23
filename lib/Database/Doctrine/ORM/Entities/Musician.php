@@ -1375,7 +1375,7 @@ class Musician implements \ArrayAccess, \JsonSerializable
       $key = $this->encryptedFiles->indexOf($file);
       if ($fileId === null) {
         if ($key === false) {
-          $this->encryptedFiles->add($file);
+          $this->encryptedFiles->set('new-' . spl_object_id($file), $file);
         }
       } else {
         if ($key !== false) {
