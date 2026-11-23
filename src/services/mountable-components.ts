@@ -159,11 +159,11 @@ export const provideMountableComponents = <T extends App>(vueApp: T) => {
             if (vNode.component!.exposeProxy) {
               return Reflect.get(vNode.component!.exposeProxy, property);
             }
-            console.debug('NO EXPOSE PROXY???', {
-              event,
-              property,
-              vNode,
-            });
+            // console.debug('NO EXPOSE PROXY???', {
+            //   event,
+            //   property,
+            //   vNode,
+            // });
             const exposed = vNode.component!.exposed![property as string];
             if (typeof exposed === 'function') {
               return exposed;
