@@ -109,6 +109,8 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerBoundEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerClosedEvent::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Exceptions\DatabaseEntityExistsException::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions\DatabaseEntityException::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\DatabaseStorageFileEntityListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\MusicianEmailEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
@@ -628,6 +630,7 @@ class InvoicesStorageTest extends TestCase
         self::fail('A file occupying the revoked folder must prevent reconciliation.');
       } catch (DatabaseEntityExistsException $exception) {
         self::assertStringContainsString('not a directory', $exception->getMessage());
+        self::assertSame($blocker, $exception->existingEntity);
       }
       self::assertSame($file, $projectFolder->getFileByName('MANDATE-1')->getFile());
       self::assertSame($file, $participantLink->getFile());
