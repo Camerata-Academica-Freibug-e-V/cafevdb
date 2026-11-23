@@ -25,7 +25,7 @@
  * @module
  */
 
-import type { ComponentProps } from '../mountable-component-names.ts';
+import type { ComponentProps, MountableComponentRequest } from '../mountable-component-names.ts';
 import type { MountableComponent } from '../services/mountable-components.ts';
 
 import {
@@ -51,10 +51,11 @@ const actionMenu = async function<K extends keyof ComponentProps>(
   const generateVueMenu = async ($actionMenu: JQuery) => {
     const propsData = { template, ...$actionMenu.data('actionMenu') };
     propsData.enableOverviewItem = $container.find(pmeFormSelector).hasClass(pmeToken('list'));
-    const vueMenu = await awaitEmit(GET_VUE_COMPONENT, {
+    const request = {
       name: vueMenuName,
       propsData,
-    });
+    } as MountableComponentRequest;
+    const vueMenu = await awaitEmit(GET_VUE_COMPONENT, request);
     const vueComponents = $container.data('vueComponents') || [];
     if (vueComponents.length === 0) {
       $container.data('vueComponents', vueComponents);

@@ -71,7 +71,7 @@ import type {
   TOGGLE_TOOLTIPS,
   WIKI_POPUP,
 } from '../event-bus-events.ts';
-import type { ComponentProps, PropsData } from '../mountable-component-names.ts';
+import type { MountableComponentRequest } from '../mountable-component-names.ts';
 import type { MountableComponent } from '../services/mountable-components.ts';
 import type { search as searchEntities, SearchArguments as SearchEntitiesArguments } from '../toolkit/services/entity-repository.ts';
 import type { EmailFormCommand, EmailFormEvent } from './email-form-envelope.ts';
@@ -102,10 +102,7 @@ declare module '@rotdrop/async-nextcloud-event-bus' {
     [EMAIL_POPUP]: { projectId?: number; projectName?: string; reopen?: boolean; singleRecipient?: boolean; post?: Record<string, any> };
     [EMAIL_FORM_COMMAND]: EmailFormCommand;
     [EMAIL_FORM_EVENT]: EmailFormEvent;
-    [GET_VUE_COMPONENT]: {
-      name: keyof ComponentProps;
-      propsData: PropsData<keyof ComponentProps>;
-    }; // { name: keyof ComponentProps, propsData: ComponentProps[typeof name] },
+    [GET_VUE_COMPONENT]: MountableComponentRequest;
     [GLOBAL_STATE_INITIALIZED]: GlobalState;
     [HISTORY_GO_REQUEST]: { level: number };
     [LEGACY_AJAX_ERROR]: { xhr: jqXHR; message: string; html?: string; closeDetailsLabel?: string };
