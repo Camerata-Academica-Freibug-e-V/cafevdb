@@ -212,7 +212,7 @@ class DocumentStorageUploadController extends Controller
           }
           $originalFilePath = $file['original_name'] ?? null;
           if ($file['upload_mode']) {
-            $uploadMode = $file['upload_mode'];
+            $uploadMode = EnumFileUploadMode::get($file['upload_mode']);
           }
         } else {
           $originalFilePath = $cloudFile;
@@ -640,18 +640,14 @@ class DocumentStorageUploadController extends Controller
         }
         return $fileNodeEntity;
       case ($entity instanceof Entities\DonationReceipt):
-        /** @var Entities\DonationReceipt $entity */
-        if (!empty($fileNodeEntity)) {
-          $fileNodeEntity->setFile($fileEntity);
-        } else {
-          $fileNodeEntity = $storage->addDocument($entity, $fileEntity, flush: false, conflictAction: $conflict);
-          $entity->setSupportingDocument($fileNodeEntity);
-        }
-        return $fileNodeEntity;
       case ($entity instanceof Entities\Invoice):
-        /** @var Entities\Invoice $entity */
+        /** @var Entities\Invoice|Entities\DonationReceipt $entity */
         $document = $storage->addDocument($entity, $fileEntity, flush: false, conflictAction: $conflict);
-        $entity->setWrittenInvoice($document);
+        if ($entity instanceof Entities\Invoice) {
+          $entity->setWrittenInvoice($document);
+        } else {
+          $entity->setSupportingDocument($document);
+        }
         if ($fileNodeEntity !== null && $document !== $fileNodeEntity && $conflict === EnumAddDocumentConflictAction::REPLACE) {
           $fileNodeEntity->setFile(null);
           $fileNodeEntity->setParent(null);
