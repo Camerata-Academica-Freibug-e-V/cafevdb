@@ -134,13 +134,27 @@ $full-screen-zindex: 9000;
   box-sizing:border-box;
 }
 
-.modal-container.#{$appNameTag}.legacy-dialog {
+.modal-mask.#{$appNameTag}.legacy-dialog {
 
-  @include errorDialogs($appNameTag);
+  .modal-container {
+    @include errorDialogs($appNameTag);
 
-  @include cloudFileSystemOperations;
+    @include cloudFileSystemOperations;
 
-  &.maximize-width, &.fit-content-width {
+    .exception.error {
+      &.name, ul.technical, .trace.visible {
+        &, * {
+          cursor:pointer;
+        }
+      }
+    }
+
+    .font-monospace {
+      font-family: monospace;
+    }
+  }
+
+  &.maximize-width .modal-container, &.fit-content-width .modal-container {
     width:unset;
 
     .error-wide {
@@ -160,17 +174,6 @@ $full-screen-zindex: 9000;
     }
   }
 
-  .exception.error {
-    &.name, ul.technical, .trace.visible {
-      &, * {
-        cursor:pointer;
-      }
-    }
-  }
-
-  .font-monospace {
-    font-family: monospace;
-  }
 }
 
 /*

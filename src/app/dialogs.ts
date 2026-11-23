@@ -34,17 +34,17 @@ import type { INode } from '@nextcloud/files';
 
 import IconMove from '@mdi/svg/svg/folder-move.svg';
 import IconCopy from '@mdi/svg/svg/folder-multiple.svg';
-import { DialogBuilder, getFilePickerBuilder } from '@nextcloud/dialogs';
+import { getFilePickerBuilder } from '@nextcloud/dialogs';
 import { FileType } from '@nextcloud/files';
 import { translatePlural as n, translate as t } from '@nextcloud/l10n';
 import { basename } from 'path';
 import { appName } from '../config.ts';
 import { hasProperty } from '../toolkit/types/type-traits.ts';
+import { Dialog } from '../toolkit/util/custom-dialog.ts';
 import $ from './jquery.js';
 
+import 'dialogs.scss';
 import { appNameTag } from 'variables.module.scss';
-
-require('dialogs.scss');
 
 export const YES_NO_BUTTONS = 70;
 export const OK_BUTTONS = 71;
@@ -112,6 +112,7 @@ export interface LegacyMessageParameters {
   modal: boolean;
   allowHtml: boolean;
   dialogClasses?: string|string[];
+  onReady?: (content: HTMLElement) => void;
 }
 export type LegacyDialogParameters = Omit<LegacyMessageParameters, 'dialogType'>;
 const isLegacyMessageParameters = <T extends Partial<LegacyDialogParameters> = LegacyMessageParameters>(arg: unknown): arg is T =>
@@ -126,41 +127,28 @@ const message = ({
   modal,
   allowHtml,
   dialogClasses,
+  onReady,
 }: LegacyMessageParameters) => {
 
   console.trace('MESSAGE', { content, title, dialogType, buttons, callback, modal, allowHtml, dialogClasses });
 
-  const cssClasses = [appNameTag, 'legacy-dialog', dialogType];
-  if (dialogClasses) {
-    if (Array.isArray(dialogClasses)) {
-      cssClasses.splice(0, 0, ...dialogClasses);
-    } else {
-      cssClasses.push(dialogClasses);
-    }
-  }
+  const cssClasses = [
+    appNameTag,
+    'legacy-dialog',
+    dialogType,
+    ...(Array.isArray(dialogClasses) ? dialogClasses : [dialogClasses ?? ''])
+      .flatMap((classes) => classes.split(/\s+/).filter(Boolean)),
+  ];
 
-  const builder = (new DialogBuilder())
-    .setName(title)
-    .setText(allowHtml ? '' : content)
-    .setButtons(getLegacyButtons(buttons, callback))
-    .setDialogClasses(cssClasses);
-
-  switch (dialogType) {
-    case DIALOG_TYPE_ALERT:
-      builder.setSeverity('warning');
-      break;
-    case DIALOG_TYPE_NOTICE:
-      builder.setSeverity('info');
-      break;
-    default:
-      break;
-  }
-
-  const dialog = builder.build();
-
-  if (allowHtml) {
-    dialog.setHTML(content);
-  }
+  const dialog = new Dialog({
+    name: title,
+    text: allowHtml ? '' : content,
+    html: allowHtml ? content : undefined,
+    buttons: getLegacyButtons(buttons, callback),
+    severity: dialogType === DIALOG_TYPE_ALERT ? 'warning' : dialogType === DIALOG_TYPE_NOTICE ? 'info' : undefined,
+    dialogClasses: cssClasses,
+    onReady,
+  });
 
   const promise = dialog.show()
     .then(() => {
@@ -175,10 +163,6 @@ const message = ({
         throw error;
       }
     });
-
-  $('body').find('.legacy-dialog.' + appNameTag)
-    .closest('.modal-container')
-    .addClass(cssClasses);
 
   return promise;
 };
@@ -259,7 +243,7 @@ const confirm = (content: string, title: string, options?: LegacyCallback|Legacy
 
   console.debug('CONFIRM CONTENT', { content, title, parameters, modal, allowHtml });
 
-  return new Promise<boolean>((resolve, _reject) =>
+  return new Promise<boolean>((resolve, reject) =>
     message({
       content,
       title,
@@ -273,6 +257,7 @@ const confirm = (content: string, title: string, options?: LegacyCallback|Legacy
       modal: parameters.modal,
       allowHtml: parameters.allowHtml,
       dialogClasses: parameters.dialogClasses,
+      onReady: parameters.onReady,
     }).then(() => {
       $('body').find('.oc-dialog-buttonrow.twobuttons').each(function() {
         const $buttonRow = $(this);
@@ -283,7 +268,7 @@ const confirm = (content: string, title: string, options?: LegacyCallback|Legacy
           $cancelButton.addClass('primary');
         }
       });
-    }));
+    }).catch(reject));
 };
 
 /**
@@ -436,7 +421,7 @@ const attachDialogHandlers = () => {
 
   $container.data(appName + 'DialogHandlersAttached', true);
 
-  const dialogContainerSelector = '.modal-container.legacy-dialog.' + appNameTag;
+  const dialogContainerSelector = '.modal-mask.legacy-dialog.' + appNameTag;
 
   $container
     .off('dblclick', dialogContainerSelector + ' .dialog__name')

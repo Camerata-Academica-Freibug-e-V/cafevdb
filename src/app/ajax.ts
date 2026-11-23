@@ -33,6 +33,7 @@ import l10nHttpStatus from '@http-util/status-i18n';
 import { getLanguage, translate as t } from '@nextcloud/l10n';
 import { getRootUrl as getCloudRootUrl } from '@nextcloud/router';
 import { emit as asyncEmit, hasSubscriptions } from '@rotdrop/async-nextcloud-event-bus';
+import escapeHtml from 'escape-html';
 import { StatusCodes as HttpStatusCodes } from 'http-status-codes';
 import { isPlainObject } from 'is-plain-object';
 import { appName } from '../config.ts';
@@ -144,7 +145,7 @@ const ajaxHandleError = async <T = unknown>(
   }
 
   const caption = t(appName, 'Error');
-  let info = '<span class="bold toastify http-status error">' + decodedStatus + '</span>';
+  let info = '<span class="bold toastify http-status error">' + escapeHtml(decodedStatus) + '</span>';
   // console.info(xhr.status, info, errorThrown, textStatus);
 
   switch (xhr.status) {
@@ -183,7 +184,7 @@ const ajaxHandleError = async <T = unknown>(
         if (failData.error && decodedStatus !== t(appName, failData.error)) {
           info += ': '
             + '<span class="bold error toastify name">'
-            + t(appName, failData.error)
+            + escapeHtml(t(appName, failData.error))
             + '</span>';
         }
         if (failData.messages) {
@@ -197,15 +198,15 @@ const ajaxHandleError = async <T = unknown>(
           let exceptionData: IException|undefined = failData.exception;
           const exception = exceptionData.Exception;
           const trace = stringifyTrace(exceptionData.Trace);
-          info += '<div class="exception error name"><pre>' + exception + '</pre></div>'
-            + '<div class="exception error trace"><pre>' + trace + '</pre></div>';
+          info += '<div class="exception error name"><pre>' + escapeHtml(exception) + '</pre></div>'
+            + '<div class="exception error trace"><pre>' + escapeHtml(trace) + '</pre></div>';
           while ((exceptionData = exceptionData.Previous)) {
             const message = exceptionData.Message;
             const exception = exceptionData.Exception;
             const trace = stringifyTrace(exceptionData.Trace);
-            info += '<div class="exception error toastify"><span class="prefix">' + t(appName, 'Previous') + ': </span><span class="message">' + message + '</span></div>';
-            info += '<div class="exception error name"><pre>' + exception + '</pre></div>'
-              + '<div class="exception error trace"><pre>' + trace + '</pre></div>';
+            info += '<div class="exception error toastify"><span class="prefix">' + escapeHtml(t(appName, 'Previous')) + ': </span><span class="message">' + escapeHtml(message) + '</span></div>';
+            info += '<div class="exception error name"><pre>' + escapeHtml(exception) + '</pre></div>'
+              + '<div class="exception error trace"><pre>' + escapeHtml(trace) + '</pre></div>';
           }
         }
         if (failData.info) {
@@ -230,7 +231,7 @@ const ajaxHandleError = async <T = unknown>(
       if (failData.error && httpStatusText(xhr.status) !== t(appName, failData.error)) {
         info += ': '
           + '<span class="bold error toastify name">'
-          + t(appName, failData.error)
+          + escapeHtml(t(appName, failData.error))
           + '</span>';
       }
       if (failData.messages) {
