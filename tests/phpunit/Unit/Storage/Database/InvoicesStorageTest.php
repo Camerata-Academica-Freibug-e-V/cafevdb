@@ -464,9 +464,9 @@ class InvoicesStorageTest extends TestCase
     $entityManager->beginTransaction();
     try {
       $entityManager->persist($file);
+      $entityManager->persist($mandate);
       $participantLink = $participantStorage->addDebitMandate($mandate, $file, flush: false);
       $mandate->setWrittenMandate($participantLink);
-      $entityManager->persist($mandate);
       $entityManager->flush();
       self::assertSame('MANDATE-1', $participantLink->getName());
 
