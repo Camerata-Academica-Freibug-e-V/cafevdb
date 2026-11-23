@@ -31,6 +31,8 @@ use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 
 use OCA\CAFEVDB\Common\TimeFactory;
+use OCA\CAFEVDB\Controller\DocumentStorageUploadController;
+use OCA\CAFEVDB\Controller\EnumAddDocumentConflictAction;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Storage\Database as DatabaseStorage;
 use OCA\CAFEVDB\Tests\MockProvider;
@@ -38,7 +40,9 @@ use OCA\CAFEVDB\Tests\MockProvider;
 /** Test aspects of the invoices storage. */
 #[Attributes\CoversClass(DatabaseStorage\InvoicesStorage::class)]
 #[Attributes\CoversClass(DatabaseStorage\DonationReceiptsStorage::class)]
+#[Attributes\CoversMethod(DocumentStorageUploadController::class, 'addDocument')]
 #[Attributes\CoversMethod(DatabaseStorage\ProjectParticipantsStorage::class, 'synchronizeFinancialDocument')]
+#[Attributes\UsesClass(DocumentStorageUploadController::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\CompositePayment::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorage::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorageDirEntry::class)]
@@ -351,7 +355,12 @@ class InvoicesStorageTest extends TestCase
     }
 
     $first = new Entities\EncryptedFile('first.pdf', 'first', 'application/pdf', $participant->getMusician());
-    $second = new Entities\EncryptedFile('second.pdf', 'second', 'application/pdf', $participant->getMusician());
+    $second = new Entities\EncryptedFile(
+      $invoice ? 'second.txt' : 'second.pdf',
+      'second',
+      $invoice ? 'text/plain' : 'application/pdf',
+      $participant->getMusician(),
+    );
     $entityManager->beginTransaction();
     try {
       $entityManager->persist($first);
@@ -372,21 +381,39 @@ class InvoicesStorageTest extends TestCase
       self::assertSame($first, $participantLink->getFile());
 
       if ($invoice) {
-        $document = $financeStorage->replaceDocument($entity, $second, flush: false);
+        $controller = new DocumentStorageUploadController(
+          appName: $this->mockProvider->appName,
+          request: $this->createStub(\OCP\IRequest::class),
+          storageFactory: $this->createStub(DatabaseStorage\Factory::class),
+          configService: $this->mockProvider->getConfigService(),
+          entityManager: $entityManager,
+        );
+        $oldFolder = $document->getParent();
+        $document = new \ReflectionMethod($controller, 'addDocument')->invoke(
+          $controller,
+          $document,
+          $second,
+          $entity,
+          $financeStorage,
+          EnumAddDocumentConflictAction::REPLACE,
+        );
+        self::assertNull($oldFolder->getFileByName($name));
       } else {
         $document->setFile($second);
       }
       $participantStorage->synchronizeFinancialDocument($entity, $document, $first, $name);
       $entityManager->flush();
       $entityManager->refresh($document);
+      $participantLink = $folder->getFileByName($document->getName());
+      self::assertNotNull($participantLink);
       $entityManager->refresh($participantLink);
       self::assertSame($second, $document->getFile());
       self::assertSame($second, $participantLink->getFile());
       self::assertTrue($second->getOwners()->contains($participant->getMusician()));
 
-      $participantStorage->synchronizeFinancialDocument($entity, null, $second, $name);
+      $participantStorage->synchronizeFinancialDocument($entity, null, $second, $document->getName());
       $entityManager->flush();
-      self::assertNull($folder->getFileByName($name));
+      self::assertNull($folder->getFileByName($document->getName()));
       $entityManager->refresh($document);
       self::assertSame($second, $document->getFile());
     } finally {
