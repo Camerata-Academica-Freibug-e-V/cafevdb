@@ -286,6 +286,7 @@ class InvoicesStorageTest extends TestCase
       self::assertSame($second, $folder->getFileByName('second.pdf')->getFile());
 
       $other = new Entities\EncryptedFile('other.pdf', 'other', 'application/pdf', $participant->getMusician());
+      $entityManager->persist($other);
       $conflict = new Entities\DatabaseStorageFile()->setName('second.pdf')->setFile($other);
       try {
         $storage->synchronizeFinancialDocument($entity, $conflict);
