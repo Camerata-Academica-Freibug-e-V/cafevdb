@@ -241,7 +241,6 @@ class DocumentStorageUploadControllerTest extends TestCase
         return $this->postData[$key] ?? $default;
       },
     );
-    $request->method('offsetGet')->willReturnCallback(fn($key) => $this->postData[$key] ?? null);
 
     $this->mockProvider->registerClassInstance(
       UserStorage::class, $this->createStub(UserStorage::class), global: true,
@@ -491,7 +490,7 @@ class DocumentStorageUploadControllerTest extends TestCase
       $this->mockProvider->registerClassInstance($class, new $class(['configService' => $config]), global: true);
     }
     $request = $this->createStub(Request::class);
-    $request->method('offsetGet')->willReturnCallback(fn($key) => $this->postData[$key] ?? null);
+    $request->method('getParam')->willReturnCallback(fn($key, $default = null) => $this->postData[$key] ?? $default);
     return new Controller\DocumentStorageUploadController(
       appName: $this->mockProvider->appName,
       request: $request,
