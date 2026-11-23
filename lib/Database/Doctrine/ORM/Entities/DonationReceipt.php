@@ -78,7 +78,7 @@ class DonationReceipt implements JsonSerializable, ArrayAccess
   /**
    * An electronic copy of the probably hand-signed original.
    */
-  #[ORM\OneToOne(targetEntity: DatabaseStorageFile::class, fetch: 'EXTRA_LAZY', cascade: ['all'], orphanRemoval: true)]
+  #[ORM\OneToOne(targetEntity: DatabaseStorageFile::class, fetch: 'EXTRA_LAZY', cascade: ['all'])]
   private ?DatabaseStorageFile $supportingDocument = null;
 
   /**
