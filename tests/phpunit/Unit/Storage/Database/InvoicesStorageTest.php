@@ -36,6 +36,7 @@ use OCA\CAFEVDB\Common\TimeFactory;
 use OCA\CAFEVDB\Controller\DocumentStorageUploadController;
 use OCA\CAFEVDB\Controller\EnumAddDocumentConflictAction;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Exceptions\DatabaseEntityExistsException;
 use OCA\CAFEVDB\Storage\Database as DatabaseStorage;
 use OCA\CAFEVDB\Tests\MockProvider;
 
@@ -614,8 +615,29 @@ class InvoicesStorageTest extends TestCase
 
       $mandate->setDeleted(new DateTimeImmutable('-1 minute'));
       $entityManager->flush();
-      $financeStorage->synchronize();
       $revokedName = $this->mockProvider->getConfigService()->getAppL10n()->t('Revoked');
+      $blocker = $projectFolder->addDocument($file, $revokedName);
+      $entityManager->persist($blocker);
+      $entityManager->flush();
+      try {
+        $financeStorage->synchronize();
+        self::fail('A file occupying the revoked folder must prevent reconciliation.');
+      } catch (DatabaseEntityExistsException $exception) {
+        self::assertStringContainsString('not a directory', $exception->getMessage());
+      }
+      self::assertSame($file, $projectFolder->getFileByName('MANDATE-1')->getFile());
+      self::assertSame($file, $participantLink->getFile());
+      self::assertSame(
+        $file->getId(),
+        (int)$entityManager->getConnection()->fetchOne(
+          'SELECT file_id FROM DatabaseStorageDirEntries WHERE id = ?',
+          [$participantLink->getId()],
+        ),
+      );
+      $blocker->setFile(null)->setParent(null);
+      $entityManager->remove($blocker);
+      $entityManager->flush();
+      $financeStorage->synchronize();
       self::assertNull($projectFolder->getFileByName('MANDATE-1'));
       self::assertSame($file, $projectFolder->getFolderByName($revokedName)->getFileByName('MANDATE-1')->getFile());
       self::assertSame($file, $participantLink->getFile());
