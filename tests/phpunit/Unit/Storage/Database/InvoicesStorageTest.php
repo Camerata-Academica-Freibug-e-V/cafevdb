@@ -156,6 +156,7 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ToolTipsDataService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Storage\Database\AbstractReadMeFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Storage\Database\ReadMeFactory::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Storage\StorageUtil::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\VCalendarService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\AppInfo\AbstractApplication::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Common\RationalNumber::class)]
