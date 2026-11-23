@@ -135,13 +135,13 @@
           />
         </div>
       </NcSettingsSection>
-      <NcSettingsSection v-if="config.isSubAdmin && !orchestraState?.enabled" id="admin-settings-configure-user-backend" :name="t(appId, 'Configure User Backend')">
+      <NcSettingsSection v-if="(config.isSubAdmin || config.isAdmin) && !orchestraState?.enabled" id="admin-settings-configure-user-backend" :name="t(appId, 'Configure User Backend')">
         <div>
           <button type="button"
                   name="cloudUserBackendConfig"
                   value="update"
                   :disabled="!config.haveCloudUserBackendConfig"
-                  @click="saveSetting('haveCloudUserBackendConfig')"
+                  @click="saveSetting('haveCloudUserBackendConfig', 'true')"
           >
             {{ t(appId, 'Autoconfigure "{cloudUserBackend}" app', { cloudUserBackend: config.cloudUserBackend }) }}
           </button>
@@ -285,13 +285,13 @@
                  :entry="tab"
                  @error="handleSettingsError"
       >
-        <template v-if="tab.key === 'sharing' && config.isSubAdmin" #userBackend>
+        <template v-if="tab.key === 'sharing' && (config.isSubAdmin || config.isAdmin)" #userBackend>
           <div>
             <button type="button"
                     name="cloudUserBackendConfig"
                     value="update"
                     :disabled="!config.haveCloudUserBackendConfig"
-                    @click="saveSetting('haveCloudUserBackendConfig')"
+                    @click="saveSetting('haveCloudUserBackendConfig', 'true')"
             >
               {{ t(appId, 'Autoconfigure "{cloudUserBackend}" app', { cloudUserBackend: config.cloudUserBackend }) }}
             </button>
@@ -768,6 +768,7 @@ const orchestraGroups = reactive({} as Record<string, GroupType>)
 const config = reactive(initialState)
 const orchestraState = getInitialState<{ enabled: boolean, error?: string }>({ section: 'orchestraSettings', defaults: { enabled: false } })
 const tree = getAdminSettingsTree({
+  isAdmin: config.isAdmin,
   isSubAdmin: config.isSubAdmin,
   orchestraSettingsEnabled: !!orchestraState?.enabled,
 })

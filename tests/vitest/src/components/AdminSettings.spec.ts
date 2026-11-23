@@ -40,6 +40,7 @@ import AdminSettings from '~/src/components/AdminSettings.vue';
 import ErrorPageModal from '~/src/components/ErrorPageModal.vue';
 import { AppError } from '~/src/toolkit/types/errors.ts';
 import { loadState } from '@nextcloud/initial-state';
+import axios from '@nextcloud/axios';
 import { AUTHORIZATION_GROUP_SUFFIXES, INITIAL_STATE_SECTION } from '~/build/ts-types/php-modules/Settings/Admin.ts';
 import { appName } from '~/src/config.ts';
 import SettingsNavigation from '~/src/components/settings/SettingsNavigation.vue';
@@ -129,6 +130,56 @@ describe('AdminSettings component', () => {
     });
     expect(wrapper.findComponent(SettingsNavigation).exists()).toBe(navigationVisible);
     expect(wrapper.find('#admin-settings-backend').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it.each([
+    { isAdmin: true, isSubAdmin: false },
+    { isAdmin: false, isSubAdmin: true },
+  ])('allows an authorized administrator to configure the backend without orchestra settings: %o', async (permissions) => {
+    const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
+    vi.mocked(loadState).mockReturnValueOnce({ ...initialState, ...permissions, haveCloudUserBackendConfig: true })
+      .mockReturnValueOnce({ enabled: false });
+    const pinia = createTestingPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(AdminSettings, {
+      global: {
+        plugins: [pinia],
+        directives: { tooltip: Tooltip },
+        stubs: { SettingsNavigation: true },
+      },
+    });
+    if (permissions.isSubAdmin) {
+      expect(wrapper.getComponent(SettingsNavigation).props('tree').map(({ id }) => id))
+        .toContain('admin-settings-configure-user-backend');
+    } else {
+      expect(wrapper.findComponent(SettingsNavigation).exists()).toBe(false);
+    }
+    const button = wrapper.get<HTMLButtonElement>('#admin-settings-configure-user-backend button[name="cloudUserBackendConfig"]');
+    expect(button.element.disabled).toBe(false);
+    vi.mocked(axios.post).mockClear();
+    await button.trigger('click');
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/haveCloudUserBackendConfig'),
+      { value: 'true' },
+    );
+    wrapper.unmount();
+  });
+
+  it('disables backend autoconfiguration when no cached configuration exists', () => {
+    const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
+    vi.mocked(loadState).mockReturnValueOnce({ ...initialState, isAdmin: true, haveCloudUserBackendConfig: false })
+      .mockReturnValueOnce({ enabled: false });
+    const pinia = createTestingPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(AdminSettings, {
+      global: {
+        plugins: [pinia],
+        directives: { tooltip: Tooltip },
+        stubs: { SettingsNavigation: true },
+      },
+    });
+    expect(wrapper.get<HTMLButtonElement>('button[name="cloudUserBackendConfig"]').element.disabled).toBe(true);
     wrapper.unmount();
   });
 

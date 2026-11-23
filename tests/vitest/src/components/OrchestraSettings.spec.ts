@@ -198,7 +198,11 @@ describe('Orchestra and sharing settings fields', () => {
       'musicianPersonalizedViews',
       'cloudUserViewsDatabase',
     ]);
-    expect(wrapper.text()).toContain('Configure backend');
+    expect(wrapper.findAll('button').map((button) => button.text())).toEqual([
+      'Recreate cloud-user views',
+      'Recreate personalized views',
+      'Configure backend',
+    ]);
   });
 
   it('shows a warning when views were recreated but user_sql settings were inaccessible', async () => {

@@ -61,6 +61,7 @@ export const getAboutSettingsEntry = (): TabEntry => ({
  * @param permissions Current orchestra permissions and encryption-key availability.
  */
 export const getAdminSettingsTree = (permissions: {
+  isAdmin: boolean;
   isSubAdmin: boolean;
   orchestraSettingsEnabled: boolean;
 }): TabEntry[] => {
@@ -72,11 +73,11 @@ export const getAdminSettingsTree = (permissions: {
   });
   const top = [
     entry('backend', t(appId, 'Camerata DB')),
+    ...((permissions.isSubAdmin || permissions.isAdmin) && !permissions.orchestraSettingsEnabled
+      ? [entry('configure-user-backend', t(appId, 'Configure User Backend'))]
+      : []),
     ...(permissions.isSubAdmin
       ? [
-        ...(!permissions.orchestraSettingsEnabled
-          ? [entry('configure-user-backend', t(appId, 'Configure User Backend'))]
-          : []),
         entry('recryption', t(appId, 'Recryption Requests')),
         entry('access-control', t(appId, 'Access Control')),
       ]
