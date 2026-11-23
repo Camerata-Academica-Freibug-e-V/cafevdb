@@ -28,6 +28,8 @@ use DateTimeImmutable;
 use ReflectionProperty;
 use UnexpectedValueException;
 
+use ParagonIE\Halite\KeyFactory;
+
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -35,8 +37,11 @@ use PHPUnit\Framework\TestCase;
 use OC\AppFramework\Http\Request;
 
 use OCA\CAFEVDB\Controller;
+use OCA\CAFEVDB\Crypto\HaliteAsymmetricCryptor;
+use OCA\CAFEVDB\Crypto\ICryptor;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumTaxType;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\Transformable\Encryption;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Exceptions\EnduserNotificationException;
 use OCA\CAFEVDB\Storage\Database as DatabaseStorage;
@@ -53,6 +58,7 @@ use OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
 #[Attributes\CoversClass(Controller\DocumentStorageUploadController::class)]
 #[Attributes\UsesClass(Controller\DTO\UploadFileData::class)]
 #[Attributes\UsesClass(Controller\DTO\UploadFileMetaData::class)]
+#[Attributes\UsesClass(HaliteAsymmetricCryptor::class)]
 #[Attributes\UsesClass(DatabaseStorage\Factory::class)]
 #[Attributes\UsesClass(DatabaseStorage\InvoicesStorage::class)]
 #[Attributes\UsesClass(DatabaseStorage\DonationReceiptsStorage::class)]
@@ -217,6 +223,10 @@ class DocumentStorageUploadControllerTest extends TestCase
 
   private array $uploadPaths = [];
 
+  private ?Encryption $encryptionTransformer = null;
+
+  private ?ICryptor $previousAppCryptor = null;
+
   /** {@inheritdoc} */
   public function setup(): void
   {
@@ -269,6 +279,7 @@ class DocumentStorageUploadControllerTest extends TestCase
       $this->entityManager->clear();
       Entities\DatabaseStorageFile::clearOrphans();
     }
+    $this->encryptionTransformer?->setAppCryptor($this->previousAppCryptor);
     foreach ($this->uploadPaths as $path) {
       if (file_exists($path)) {
         unlink($path);
@@ -451,6 +462,12 @@ class DocumentStorageUploadControllerTest extends TestCase
    */
   private function createFinancialDocument(bool $invoice): int
   {
+    $keys = KeyFactory::generateSignatureKeyPair();
+    $cryptor = new HaliteAsymmetricCryptor($keys->getSecretKey());
+    $cryptor->setPublicKey($keys->getPublicKey());
+    $this->encryptionTransformer = $this->entityManager->getDataTransformer(EntityManager::TRANSFORM_ENCRYPT);
+    $this->previousAppCryptor = $this->encryptionTransformer->getAppCryptor();
+    $this->encryptionTransformer->setAppCryptor($cryptor);
     $this->entityManager->beginTransaction();
     $this->fixtureTransaction = true;
     $participant = $this->participant();
@@ -622,6 +639,12 @@ class DocumentStorageUploadControllerTest extends TestCase
     self::assertSame($content, $file->getFileData()->getData());
     self::assertCount($owned ? 1 : 0, $file->getOwners());
     self::assertSame($owned, $file->getOwners()->contains($this->participant()->getMusician()));
+    $context = new ReflectionProperty(Entities\EncryptedFileData::class, 'encryptionContext')->getValue($file->getFileData());
+    if ($owned) {
+      self::assertContains($this->participant()->getMusician()->getUserIdSlug(), $context);
+    } else {
+      self::assertNotContains($this->participant()->getMusician()->getUserIdSlug(), $context);
+    }
     $stored = $this->storedFileData($file->getId());
     self::assertNotSame('', $stored);
     self::assertStringNotContainsString($content, $stored);
