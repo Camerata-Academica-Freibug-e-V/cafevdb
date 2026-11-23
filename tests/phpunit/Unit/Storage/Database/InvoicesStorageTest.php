@@ -25,6 +25,7 @@
 namespace OCA\CAFEVDB\Tests\Unit;
 
 use DateTimeImmutable;
+use ReflectionMethod;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes;
@@ -395,7 +396,7 @@ class InvoicesStorageTest extends TestCase
           entityManager: $entityManager,
         );
         $oldFolder = $document->getParent();
-        $document = new \ReflectionMethod($controller, 'addDocument')->invoke(
+        $document = new ReflectionMethod($controller, 'addDocument')->invoke(
           $controller,
           $document,
           $second,
