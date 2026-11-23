@@ -125,7 +125,7 @@ class DatabaseStorageFolder extends DatabaseStorageDirEntry
     if ($existing->count() > 1) {
       throw new Exceptions\DatabaseEntityExistsException(
         'Directory entry "' . $name . '" already exists multiple times in directory ' . $this->id,
-        entityName: DatabaseStorageFolder::class,
+        entityClassName: DatabaseStorageFolder::class,
       );
     }
     if ($existing->count() == 1) {
@@ -134,7 +134,7 @@ class DatabaseStorageFolder extends DatabaseStorageDirEntry
       if (!($dirEntry instanceof DatabaseStorageFolder)) {
         throw new Exceptions\DatabaseEntityExistsException(
           'Directory entry "' . $name . '" already exists in directory ' . $this->id . ' and the existing entry is not a directory.',
-          $dirEntry,
+          existingEntity: $dirEntry,
         );
       }
       return $dirEntry;

@@ -624,6 +624,7 @@ class InvoicesStorageTest extends TestCase
         self::fail('A file occupying the revoked folder must prevent reconciliation.');
       } catch (DatabaseEntityExistsException $exception) {
         self::assertStringContainsString('not a directory', $exception->getMessage());
+        self::assertSame($blocker, $exception->existingEntity);
       }
       self::assertSame($file, $projectFolder->getFileByName('MANDATE-1')->getFile());
       self::assertSame($file, $participantLink->getFile());
