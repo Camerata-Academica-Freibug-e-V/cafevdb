@@ -64,5 +64,8 @@ class Registration
     $context->registerService(InvoicesStorage::class, function(ContainerInterface $container) {
       return new InvoicesStorage([ 'configService' => $container->get(ConfigService::class), ]);
     });
+    $context->registerService(DebitMandatesStorage::class, function(ContainerInterface $container) {
+      return new DebitMandatesStorage([ 'configService' => $container->get(ConfigService::class), ]);
+    });
   }
 }

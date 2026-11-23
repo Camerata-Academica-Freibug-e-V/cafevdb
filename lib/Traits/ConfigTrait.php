@@ -812,6 +812,16 @@ trait ConfigTrait
     return $financeFolder . Constants::PATH_SEP . $invoicesFolder;
   }
 
+  /** @return null|string The finance debit-mandates folder path. */
+  protected function getDebitMandatesPath():?string
+  {
+    $financeFolder = $this->getFinanceFolderPath();
+    if (empty($financeFolder)) {
+      return null;
+    }
+    return $financeFolder . Constants::PATH_SEP . $this->appL10n()->t('debit-mandates');
+  }
+
   /**
    * @return null|string Return the full path to incoming post-box folder.
    */

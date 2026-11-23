@@ -77,7 +77,10 @@ class DatabaseStorageFileEntityListener
   private function sanitizeFileName(Entities\DatabaseStorageFile $dirEntry): void
   {
     $pathInfo = pathinfo($dirEntry->getName());
-    $name = $pathInfo['filename'] . '.' . strtolower($pathInfo['extension']);
+    $name = $pathInfo['filename'];
+    if (isset($pathInfo['extension'])) {
+      $name .= '.' . strtolower($pathInfo['extension']);
+    }
     $name = $this->systemSanitizeFilename($name);
     $dirEntry->setName($name);
   }
