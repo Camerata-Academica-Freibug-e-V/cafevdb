@@ -650,9 +650,14 @@ class DocumentStorageUploadController extends Controller
         return $fileNodeEntity;
       case ($entity instanceof Entities\Invoice):
         /** @var Entities\Invoice $entity */
-        $fileNodeEntity = $storage->addDocument($entity, $fileEntity, flush: false, conflictAction: $conflict);
-        $entity->setWrittenInvoice($fileNodeEntity);
-        return $fileNodeEntity;
+        $document = $storage->addDocument($entity, $fileEntity, flush: false, conflictAction: $conflict);
+        $entity->setWrittenInvoice($document);
+        if ($fileNodeEntity !== null && $document !== $fileNodeEntity && $conflict === EnumAddDocumentConflictAction::REPLACE) {
+          $fileNodeEntity->setFile(null);
+          $fileNodeEntity->setParent(null);
+          $this->entityManager->remove($fileNodeEntity);
+        }
+        return $document;
       case ($entity instanceof Entities\TaxExemptionNotice):
         /** @var Entities\TaxExemptionNotice $entity */
         if (!empty($fileNodeEntity)) {
