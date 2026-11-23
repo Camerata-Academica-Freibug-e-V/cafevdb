@@ -466,8 +466,8 @@ they do not seem to exists:',
   foreach ($failedFiles as $file) {
     echo '
       <li><span class="error item contents">
-        <span class="file original-name">' . $file['original_name'] . '</span>
-        <span class="file tmp-name">(' . $file['tmp_name'] . ')</span>
+        <span class="file original-name">' . htmlspecialchars($file['original_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span>
+        <span class="file tmp-name">(' . htmlspecialchars($file['tmp_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ')</span>
       </span></li>';
   }
   echo '
@@ -508,7 +508,7 @@ they do not seem to exists:',
     <ul>';
   foreach ($failedEvents as $event) {
     echo '
-      <li><span class="error item contents">' . $event . '</span></li>';
+      <li><span class="error item contents">' . htmlspecialchars($event, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span></li>';
   }
   echo '
     </ul>
@@ -722,7 +722,7 @@ if (!empty($diagnostics[Composer::DIAGNOSTICS_MESSAGE]['Events'])) {
     <ul>';
   foreach ($events as $event) {
     echo '
-      <li><span class="error item contents">' . $event . '</span></li>';
+      <li><span class="error item contents">' . htmlspecialchars($event, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span></li>';
   }
   echo '
     </ul>
@@ -750,7 +750,7 @@ if (!empty($diagnostics[Composer::DIAGNOSTICS_MESSAGE]['Files'])) {
     <ul>';
   foreach ($files as $file) {
     echo '
-      <li><span class="error item contents">' . $file . '</span></li>';
+      <li><span class="error item contents">' . htmlspecialchars($file, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span></li>';
   }
   echo '
     </ul>
