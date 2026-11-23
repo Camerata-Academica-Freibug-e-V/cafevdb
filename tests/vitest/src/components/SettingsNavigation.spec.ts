@@ -23,7 +23,7 @@ describe('settings page structure', () => {
   });
 
   it('keeps administration through Access Control ahead of all moved sections', () => {
-    const tree = getAdminSettingsTree({ isSubAdmin: true, orchestraSettingsEnabled: true });
+    const tree = getAdminSettingsTree({ isAdmin: false, isSubAdmin: true, orchestraSettingsEnabled: true });
     expect(tree.map(({ key }) => key)).toEqual([
       'backend',
       'recryption',
@@ -43,7 +43,7 @@ describe('settings page structure', () => {
   });
 
   it('omits encrypted configuration but retains existing delegated sections without a valid key', () => {
-    const tree = getAdminSettingsTree({ isSubAdmin: true, orchestraSettingsEnabled: false });
+    const tree = getAdminSettingsTree({ isAdmin: false, isSubAdmin: true, orchestraSettingsEnabled: false });
     expect(tree.map(({ key }) => key)).toEqual([
       'backend',
       'configure-user-backend',
@@ -55,8 +55,10 @@ describe('settings page structure', () => {
     ]);
   });
 
-  it('does not expose orchestra sections to unrelated delegates or instance admins', () => {
-    expect(getAdminSettingsTree({ isSubAdmin: false, orchestraSettingsEnabled: false })
+  it('exposes only backend recovery to instance admins without orchestra access', () => {
+    expect(getAdminSettingsTree({ isAdmin: true, isSubAdmin: false, orchestraSettingsEnabled: false })
+      .map(({ key }) => key)).toEqual(['backend', 'configure-user-backend']);
+    expect(getAdminSettingsTree({ isAdmin: false, isSubAdmin: false, orchestraSettingsEnabled: false })
       .map(({ key }) => key)).toEqual(['backend']);
   });
 });
@@ -74,7 +76,7 @@ describe('settings sidebar', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     }));
-    const tree = getAdminSettingsTree({ isSubAdmin: true, orchestraSettingsEnabled: true });
+    const tree = getAdminSettingsTree({ isAdmin: false, isSubAdmin: true, orchestraSettingsEnabled: true });
     for (const id of tree.flatMap((entry) => [entry.id, ...entry.children.map(({ id }) => id)])) {
       const section = document.createElement('section');
       section.id = id;

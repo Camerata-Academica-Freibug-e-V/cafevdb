@@ -20,7 +20,6 @@
     </template>
     <template #members-as-cloud-users>
       <ConnectorAccount :account="state?.cloudConnectorAccount" @error="emit('error', $event)" />
-      <slot name="userBackend" />
       <NcNoteCard type="info">
         {{ t(appId, 'The views account and password are shared with the members app and, when permitted, configured in user_sql. The account host is the host part of the MariaDB account, not the database server address.') }}
       </NcNoteCard>
@@ -41,6 +40,7 @@
       <NcNoteCard v-if="actionHints.length" type="warning">
         {{ actionHints.join(' ') }}
       </NcNoteCard>
+      <slot name="userBackend" />
     </template>
     <template #wopi-credentials-view>
       <ConnectorAccount setting="wopiConnectorCredentials" :account="state?.wopiConnectorAccount" @error="emit('error', $event)" />
