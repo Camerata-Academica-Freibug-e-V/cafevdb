@@ -500,7 +500,7 @@
         </NcButton>
       </NcSettingsSection>
     </div>
-    <SettingsNavigation :tree="tree" />
+    <SettingsNavigation v-if="config.isSubAdmin" :tree="tree" />
     <ErrorPageModal v-if="appError"
                     :show="true"
                     :error="appError"

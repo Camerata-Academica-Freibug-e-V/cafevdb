@@ -106,6 +106,34 @@ vi.mock(import('@nextcloud/initial-state'), async (originalImport) => {
 
 describe('AdminSettings component', () => {
   it.each([
+    { isAdmin: true, isSubAdmin: false, orchestraEnabled: false, navigationVisible: false },
+    { isAdmin: true, isSubAdmin: false, orchestraEnabled: true, navigationVisible: false },
+    { isAdmin: true, isSubAdmin: true, orchestraEnabled: true, navigationVisible: true },
+    { isAdmin: false, isSubAdmin: true, orchestraEnabled: false, navigationVisible: true },
+  ])('shows navigation only to orchestra sub-admins: $isAdmin, $isSubAdmin, $orchestraEnabled', ({
+    isAdmin,
+    isSubAdmin,
+    orchestraEnabled,
+    navigationVisible,
+  }) => {
+    const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
+    vi.mocked(loadState).mockReturnValueOnce({ ...initialState, isAdmin, isSubAdmin })
+      .mockReturnValueOnce({ enabled: orchestraEnabled });
+    const pinia = createTestingPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(AdminSettings, {
+      global: {
+        plugins: [pinia],
+        directives: { tooltip: Tooltip },
+        stubs: { SettingsNavigation: true },
+      },
+    });
+    expect(wrapper.findComponent(SettingsNavigation).exists()).toBe(navigationVisible);
+    expect(wrapper.find('#admin-settings-backend').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it.each([
     { isAdmin: true, isSubAdmin: false },
     { isAdmin: false, isSubAdmin: true },
   ])('allows an authorized administrator to configure the backend without orchestra settings: %o', async (permissions) => {
@@ -121,8 +149,12 @@ describe('AdminSettings component', () => {
         stubs: { SettingsNavigation: true },
       },
     });
-    expect(wrapper.getComponent(SettingsNavigation).props('tree').map(({ id }) => id))
-      .toContain('admin-settings-configure-user-backend');
+    if (permissions.isSubAdmin) {
+      expect(wrapper.getComponent(SettingsNavigation).props('tree').map(({ id }) => id))
+        .toContain('admin-settings-configure-user-backend');
+    } else {
+      expect(wrapper.findComponent(SettingsNavigation).exists()).toBe(false);
+    }
     const button = wrapper.get<HTMLButtonElement>('#admin-settings-configure-user-backend button[name="cloudUserBackendConfig"]');
     expect(button.element.disabled).toBe(false);
     vi.mocked(axios.post).mockClear();
