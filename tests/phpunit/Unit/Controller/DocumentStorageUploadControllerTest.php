@@ -59,6 +59,13 @@ use OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
 #[Attributes\UsesClass(Controller\DTO\UploadFileData::class)]
 #[Attributes\UsesClass(Controller\DTO\UploadFileMetaData::class)]
 #[Attributes\UsesClass(HaliteAsymmetricCryptor::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Crypto\AsymmetricKeyService::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Crypto\CloudAsymmetricKeyStorage::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Crypto\Registration::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\Util::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerClosedEvent::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Common\AbstractDecimalRational::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions\EnduserNotificationException::class)]
 #[Attributes\UsesClass(DatabaseStorage\Factory::class)]
 #[Attributes\UsesClass(DatabaseStorage\InvoicesStorage::class)]
 #[Attributes\UsesClass(DatabaseStorage\DonationReceiptsStorage::class)]
@@ -423,6 +430,7 @@ class DocumentStorageUploadControllerTest extends TestCase
     $document = $this->assertDocumentLinks($invoice, $id, 'Original document');
     $entryId = $document->getId();
     $fileId = $document->getFile()->getId();
+    $ciphertext = $this->storedFileData($fileId);
     $folder = $this->participantDocumentFolder($invoice);
     $collision = new Entities\EncryptedFile('collision.txt', 'Unrelated content', 'text/plain');
     $folder->getFileByName($document->getName())->setFile($collision);
@@ -432,7 +440,7 @@ class DocumentStorageUploadControllerTest extends TestCase
     $entryCount = $this->entityManager->getRepository(Entities\DatabaseStorageFile::class)->count([]);
 
     try {
-      $this->uploadDocument($invoice, $id, 'Rejected replacement');
+      $this->uploadDocument($invoice, $id, 'Rejected replacement', Controller\EnumAddDocumentConflictAction::RENAME);
       self::fail('A conflicting participant link must abort the upload.');
     } catch (EnduserNotificationException $exception) {
       self::assertInstanceOf(UnexpectedValueException::class, $exception->getPrevious());
@@ -443,6 +451,7 @@ class DocumentStorageUploadControllerTest extends TestCase
     self::assertSame($entryId, $document->getId());
     self::assertSame($fileId, $document->getFile()->getId());
     self::assertSame('Original document', $document->getFile()->getFileData()->getData());
+    self::assertSame($ciphertext, $this->storedFileData($fileId));
     self::assertSame(
       $collisionId,
       $this->participantDocumentFolder($invoice)->getFileByName($document->getName())->getFile()->getId(),

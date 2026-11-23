@@ -108,16 +108,13 @@ class EncryptedFile extends File
     }
     if (!$this->owners->containsKey($musicianId)) {
       $this->owners->set($musicianId, $musician);
-      if ($this->getId() !== null) {
-        $musician->addEncryptedFile($this);
-      }
+      $musician->addEncryptedFile($this);
     }
     return $this;
   }
 
   /**
-   * The id of this entity is note available before it has been persisted. So
-   * update any needed file-ownership updates after being persisted.
+   * Replace temporary collection keys with the generated file id.
    *
    * @return void
    */

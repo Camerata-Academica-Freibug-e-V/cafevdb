@@ -853,6 +853,8 @@ class Invoice implements \ArrayAccess, \JsonSerializable
   /** {@inheritdoc} */
   public function __toString(): string
   {
-    return 'invoice of ' . $this->amount . ' € due at ' . $this->dueDate->format('Y-m-d') . ' by ' . $this->debitor->getPublicName(true);
+    return 'invoice of ' . $this->amount . ' €'
+      . ($this->dueDate !== null ? ' due at ' . $this->dueDate->format('Y-m-d') : '')
+      . ' by ' . $this->debitor->getPublicName(true);
   }
 }
