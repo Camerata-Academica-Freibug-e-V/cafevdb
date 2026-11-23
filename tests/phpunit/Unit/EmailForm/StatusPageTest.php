@@ -20,7 +20,13 @@ use PHPUnit\Framework\TestCase;
 #[Attributes\CoversNothing]
 class StatusPageTest extends TestCase
 {
-  /** @return DOMXPath */
+  /**
+   * The included template uses the local variables below.
+   *
+   * @return DOMXPath
+   *
+   * @SuppressWarnings(PHPMD.UnusedLocalVariable)
+   */
   private function renderStatusPage(array $message, array $attachmentValidation):DOMXPath
   {
     $diagnostics = [
