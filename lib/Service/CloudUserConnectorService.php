@@ -731,9 +731,9 @@ WHERE m.email IS NOT NULL AND m.email <> ""
         }
       }
       $this->clearUserBackendCache();
-    } catch (Throwable) {
+    } catch (Throwable $t) {
       $this->logError('Unable to configure the user_sql backend.');
-      throw new Exceptions\DatabaseCloudConnectorViewException($this->l->t('Unable to configure the user_sql backend.'));
+      throw new Exceptions\DatabaseCloudConnectorViewException($this->l->t('Unable to configure the user_sql backend.'), previous: $t);
     }
     return $warnings;
   }
