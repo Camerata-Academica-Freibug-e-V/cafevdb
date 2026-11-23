@@ -1,0 +1,13 @@
+diff --git a/node_modules/@nextcloud/vue/dist/chunks/NcModal.mjs b/node_modules/@nextcloud/vue/dist/chunks/NcModal.mjs
+--- a/node_modules/@nextcloud/vue/dist/chunks/NcModal.mjs
++++ b/node_modules/@nextcloud/vue/dist/chunks/NcModal.mjs
+@@ -219,6 +219,9 @@ const _sfc_main = /* @__PURE__ */ defineComponent({
+         return;
+       }
+       await nextTick();
++      if (!maskElement.value || !showModal.value) {
++        return;
++      }
+       const options = {
+         allowOutsideClick: true,
+         fallbackFocus: maskElement.value,

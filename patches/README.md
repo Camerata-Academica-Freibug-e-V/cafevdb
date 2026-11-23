@@ -1,5 +1,12 @@
 # Patches
 
+## @nextcloud/vue
+
+The modal focus trap must not activate after the modal closes or unmounts
+during its opening transition. The patch checks the modal state and element
+after the asynchronous tick. The real-modal integration tests cover both
+early closure and normal focus activation.
+
 ## @nextcloud/app-calendar
 
 After installing the npm dependencies, regenerate the patch manually with:
