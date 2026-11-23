@@ -3,9 +3,17 @@
  * @license AGPL-3.0-or-later
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { Dialog } from '~/src/toolkit/util/custom-dialog.ts';
+
+async function waitForOpeningTransition() {
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  await nextTick();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+afterEach(waitForOpeningTransition);
 
 describe('custom dialog with Nextcloud Vue', () => {
   it('mounts content and classes in the real modal and closes through its button', async () => {
@@ -50,5 +58,20 @@ describe('custom dialog with Nextcloud Vue', () => {
     }).show();
     await expect(result).rejects.toMatchObject({ cause });
     expect(document.querySelector('.modal-mask')).toBeNull();
+  });
+
+  it('keeps the modal usable after its opening transition', async () => {
+    const result = new Dialog({
+      name: 'Title',
+      text: 'Text',
+      buttons: [{ label: 'Apply', callback() {} }],
+    }).show();
+    await waitForOpeningTransition();
+    const mask = document.querySelector('.modal-mask');
+    await vi.waitFor(() => expect(document.activeElement).toBe(mask));
+    const apply = Array.from(document.querySelectorAll('button')).find((element) => element.textContent?.includes('Apply'));
+    expect(apply).toBeDefined();
+    apply!.click();
+    await expect(result).resolves.toBeUndefined();
   });
 });
