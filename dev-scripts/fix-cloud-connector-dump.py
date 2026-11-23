@@ -25,8 +25,8 @@ def main(src, dst):
     ends[-1] = starts[-1] + tail.start() if tail else len(sql)
   blocks = {m.group(1): (s, e) for m, s, e in zip(matches, starts, ends)}
 
-  files = [n for n in blocks if n.endswith('Files')]
-  fileData = [n for n in blocks if n.endswith('FileData')]
+  files = [n for n in blocks if n.endswith('FilesView')]
+  fileData = [n for n in blocks if n.endswith('FileDataView')]
   if not files or not fileData:
     sys.exit('Could not find the Files and FileData views in ' + src)
   if len(files) != 1 or len(fileData) != 1:
