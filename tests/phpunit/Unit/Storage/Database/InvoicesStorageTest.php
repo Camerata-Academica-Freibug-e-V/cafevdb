@@ -37,6 +37,18 @@ use OCA\CAFEVDB\Tests\MockProvider;
 
 /** Test aspects of the invoices storage. */
 #[Attributes\CoversClass(DatabaseStorage\InvoicesStorage::class)]
+#[Attributes\CoversMethod(DatabaseStorage\ProjectParticipantsStorage::class, 'synchronizeFinancialDocument')]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorage::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorageDirEntry::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorageFile::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorageFolder::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DonationReceipt::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\EncryptedFile::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\EncryptedFileData::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\File::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\FileData::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Storage\Database\ProjectParticipantsStorage::class)]
+#[Attributes\UsesTrait(\OCA\CAFEVDB\Storage\Database\DatabaseStorageNodeNameTrait::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\AbstractUndoable::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\ConsoleLogger::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\GenericUndoable::class)]
@@ -53,6 +65,7 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Connection::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\DBAL\Logging\CloudLogger::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\DeprecationLogger::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\Util::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\Migrations\AbstractMigration::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\Migrations\AbstractTransactionalMigration::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\Migrations\DependencyFactory::class)]
@@ -72,6 +85,7 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\GedmoSluggableListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\GedmoTranslatableListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\Sluggable\HashHandler::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\Sluggable\AssociationSlugHandler::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\Sluggable\InvoiceNumberHandler::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\Sluggable\LoginNameSlugHandler::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\Transformable\Encryption::class)]
@@ -83,6 +97,8 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\EntityManager::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerBoundEvent::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerClosedEvent::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Listener\DatabaseStorageFileEntityListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\MusicianEmailEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\DTO\CalendarEventData::class)]
@@ -207,12 +223,87 @@ class InvoicesStorageTest extends TestCase
   }
 
   /**
+   * @param bool $invoice
+   *
+   * @return void
+   */
+  #[Attributes\Depends('testApplyMigrations')]
+  #[Attributes\DataProvider('financialDocumentTypes')]
+  public function testParticipantFinancialDocumentLinks(bool $invoice): void
+  {
+    $entityManager = $this->getEntityManager();
+    $participant = $entityManager->find(Entities\ProjectParticipant::class, [
+      'project' => self::$projectId,
+      'musician' => self::$musicianId,
+    ]);
+    $storage = new DatabaseStorage\ProjectParticipantsStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+      'participant' => $participant,
+    ]);
+    $entity = $invoice ? new Entities\Invoice() : new Entities\DonationReceipt();
+    $first = new Entities\EncryptedFile('first.pdf', 'first', 'application/pdf', $participant->getMusician());
+    $second = new Entities\EncryptedFile('second.pdf', 'second', 'application/pdf', $participant->getMusician());
+    $document = new Entities\DatabaseStorageFile()->setName('first.pdf')->setFile($first);
+
+    $entityManager->beginTransaction();
+    try {
+      $entityManager->persist($first);
+      $entityManager->persist($second);
+      $storage->synchronizeFinancialDocument($entity, $document);
+      $entityManager->flush();
+
+      $root = $participant->getDatabaseDocuments()->getRoot();
+      $folderName = $this->mockProvider->getConfigService()->getAppL10n()->t($invoice ? 'Invoices' : 'DonationReceipts');
+      $folder = $root->getFolderByName($folderName);
+      self::assertNotNull($folder);
+      self::assertSame($first, $folder->getFileByName('first.pdf')->getFile());
+      self::assertNotSame($document, $folder->getFileByName('first.pdf'));
+
+      $document->setFile($second);
+      $storage->synchronizeFinancialDocument($entity, $document, $first, 'first.pdf');
+      $entityManager->flush();
+      self::assertSame($second, $folder->getFileByName('first.pdf')->getFile());
+
+      $document->setName('second.pdf');
+      $storage->synchronizeFinancialDocument($entity, $document, $second, 'first.pdf');
+      $entityManager->flush();
+      self::assertNull($folder->getFileByName('first.pdf'));
+      self::assertSame($second, $folder->getFileByName('second.pdf')->getFile());
+
+      $other = new Entities\EncryptedFile('other.pdf', 'other', 'application/pdf', $participant->getMusician());
+      $conflict = new Entities\DatabaseStorageFile()->setName('second.pdf')->setFile($other);
+      try {
+        $storage->synchronizeFinancialDocument($entity, $conflict);
+        self::fail('A conflicting participant document must not be overwritten.');
+      } catch (\UnexpectedValueException) {
+        self::assertSame($second, $folder->getFileByName('second.pdf')->getFile());
+      }
+
+      $storage->synchronizeFinancialDocument($entity, null, $second, 'second.pdf');
+      $entityManager->flush();
+      self::assertNull($folder->getFileByName('second.pdf'));
+      self::assertSame($second, $document->getFile());
+    } finally {
+      $entityManager->rollBack();
+      $entityManager->clear();
+    }
+  }
+
+  /** @return iterable<string, array{bool}> */
+  public static function financialDocumentTypes(): iterable
+  {
+    yield 'invoice' => [true];
+    yield 'donation receipt' => [false];
+  }
+
+  /**
    * This is quas a tearDownAfterClass() but we need some mocked / stubbed
    * classes for the entity-manager.
    *
    * @return void
    */
   #[Attributes\Depends('testApplyMigrations')]
+  #[Attributes\Depends('testParticipantFinancialDocumentLinks')]
   public function testUnapplyMigrations(): void
   {
     $this->unapplyMigrations();

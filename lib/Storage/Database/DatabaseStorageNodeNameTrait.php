@@ -135,13 +135,20 @@ trait DatabaseStorageNodeNameTrait
   }
 
   /**
-   * Get the name of the folder containing tax exemption notices.
+   * Get the name of the folder containing donation receipts.
    *
    * @return string
    */
   protected function getDonationReceiptsFolderName():string
   {
     return $this->getAppL10n()->t('DonationReceipts');
+  }
+
+  /** @return string The name of the folder containing invoices. */
+  protected function getInvoicesFolderName():string
+  {
+    // TRANSLATORS: folder-name
+    return $this->getAppL10n()->t('Invoices');
   }
 
   /**

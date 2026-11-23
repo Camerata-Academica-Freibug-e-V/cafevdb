@@ -156,6 +156,75 @@ class ProjectParticipantsStorage extends Storage
   }
 
   /**
+   * Synchronize a participant's link to a financial document.
+   *
+   * The original directory entry remains in the dedicated finance storage.
+   * The previous file and name must be captured before replacing that entry.
+   *
+   * @param Entities\Invoice|Entities\DonationReceipt $entity
+   * @param null|Entities\DatabaseStorageFile $document New dedicated entry, or null when deleting.
+   * @param null|Entities\EncryptedFile $previousFile
+   * @param null|string $previousName
+   *
+   * @return void
+   */
+  public function synchronizeFinancialDocument(
+    Entities\Invoice|Entities\DonationReceipt $entity,
+    ?Entities\DatabaseStorageFile $document,
+    ?Entities\EncryptedFile $previousFile = null,
+    ?string $previousName = null,
+  ):void {
+    $folderName = $entity instanceof Entities\Invoice
+      ? $this->getInvoicesFolderName()
+      : $this->getDonationReceiptsFolderName();
+    $root = $this->getRootFolder(create: $document !== null);
+    if ($root === null) {
+      if ($document !== null) {
+        throw new UnexpectedValueException('Unable to create the participant storage root.');
+      }
+      return;
+    }
+
+    $folder = $root->getFolderByName($folderName);
+    if ($folder === null) {
+      if ($document === null) {
+        return;
+      }
+      $folder = $root->addSubFolder($folderName);
+      $this->persist($folder);
+    }
+
+    $previous = $previousName !== null ? $folder->getFileByName($previousName) : null;
+    if ($previous !== null && $previous->getFile() !== $previousFile) {
+      $previous = null;
+    }
+
+    if ($document !== null) {
+      $file = $document->getFile();
+      $name = $document->getName();
+      if ($file === null || $name === null) {
+        throw new UnexpectedValueException('The financial document has no file or name.');
+      }
+      $existing = $folder->getFileByName($name);
+      if ($existing !== null && $existing !== $previous && $existing->getFile() !== $file) {
+        throw new UnexpectedValueException('A different participant document already exists with the name "' . $name . '".');
+      }
+      if ($existing === $previous && $existing !== null) {
+        $existing->setFile($file);
+        $previous = null;
+      } elseif ($existing === null) {
+        $this->persist($folder->addDocument($file, $name));
+      }
+    }
+
+    if ($previous !== null) {
+      $previous->setFile(null);
+      $previous->setParent(null);
+      $this->entityManager->remove($previous);
+    }
+  }
+
+  /**
    * Add an directory entry for the given debit-mandate and file.
    *
    * @param Entities\SepaDebitMandate $debitMandate
