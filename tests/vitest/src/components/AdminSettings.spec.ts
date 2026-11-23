@@ -104,6 +104,34 @@ vi.mock(import('@nextcloud/initial-state'), async (originalImport) => {
 });
 
 describe('AdminSettings component', () => {
+  it.each([
+    { isAdmin: true, isSubAdmin: false, orchestraEnabled: false, navigationVisible: false },
+    { isAdmin: true, isSubAdmin: false, orchestraEnabled: true, navigationVisible: false },
+    { isAdmin: true, isSubAdmin: true, orchestraEnabled: true, navigationVisible: true },
+    { isAdmin: false, isSubAdmin: true, orchestraEnabled: false, navigationVisible: true },
+  ])('shows navigation only to orchestra sub-admins: $isAdmin, $isSubAdmin, $orchestraEnabled', ({
+    isAdmin,
+    isSubAdmin,
+    orchestraEnabled,
+    navigationVisible,
+  }) => {
+    const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
+    vi.mocked(loadState).mockReturnValueOnce({ ...initialState, isAdmin, isSubAdmin })
+      .mockReturnValueOnce({ enabled: orchestraEnabled });
+    const pinia = createTestingPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(AdminSettings, {
+      global: {
+        plugins: [pinia],
+        directives: { tooltip: Tooltip },
+        stubs: { SettingsNavigation: true },
+      },
+    });
+    expect(wrapper.findComponent(SettingsNavigation).exists()).toBe(navigationVisible);
+    expect(wrapper.find('#admin-settings-backend').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it('keeps recovery controls visible when orchestra configuration fails', () => {
     const initialState = loadState<AdminInitialState>(appName, INITIAL_STATE_SECTION);
     const error = 'Unable to load orchestra settings. The remaining administration settings are still available.';
