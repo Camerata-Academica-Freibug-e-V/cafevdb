@@ -37,6 +37,7 @@
 <script setup lang="ts">
 import type { PmeExportMenuProps } from '../types/pme-export-menu.ts'
 
+import { showError } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { emit as asyncEmit } from '@rotdrop/async-nextcloud-event-bus'
 import { ref } from 'vue'
@@ -48,7 +49,6 @@ import ExcelIcon from 'vue-material-design-icons/MicrosoftExcel.vue'
 import { appName } from '../config.ts'
 import { POP_BUSY_STATE, PUSH_BUSY_STATE } from '../event-bus-events.ts'
 import axiosFileDownload from '../toolkit/util/axios-file-download.ts'
-import { showError } from '../toolkit/util/toasts.ts'
 
 const props = defineProps<PmeExportMenuProps>()
 const downloading = ref(false)

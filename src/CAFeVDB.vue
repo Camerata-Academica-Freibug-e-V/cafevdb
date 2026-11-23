@@ -235,6 +235,7 @@ import type {
 import type { PersonalSettingKey } from './services/personal-settings.ts'
 
 import axios from '@nextcloud/axios'
+import { showInfo } from '@nextcloud/dialogs'
 import { formatFileSize } from '@nextcloud/files'
 import { translate as t } from '@nextcloud/l10n'
 import { generateUrl as nextcloudGenerateUrl } from '@nextcloud/router'
@@ -306,7 +307,6 @@ import useTooltipsStore from './stores/tooltips.ts'
 import { AppError } from './toolkit/types/errors.ts'
 import generateAppUrl from './toolkit/util/generate-url.ts'
 import getInitialState from './toolkit/util/initial-state.ts'
-import { showInfo } from './toolkit/util/toasts.ts'
 import Console from './util/console.ts'
 
 type DebugOption = {

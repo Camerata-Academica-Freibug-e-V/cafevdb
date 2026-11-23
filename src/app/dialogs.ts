@@ -34,13 +34,13 @@ import type { INode } from '@nextcloud/files';
 
 import IconMove from '@mdi/svg/svg/folder-move.svg';
 import IconCopy from '@mdi/svg/svg/folder-multiple.svg';
+import { getFilePickerBuilder } from '@nextcloud/dialogs';
 import { FileType } from '@nextcloud/files';
 import { translatePlural as n, translate as t } from '@nextcloud/l10n';
 import { basename } from 'path';
 import { appName } from '../config.ts';
 import { hasProperty } from '../toolkit/types/type-traits.ts';
 import { Dialog } from '../toolkit/util/custom-dialog.ts';
-import { getFilePickerBuilder } from '../toolkit/util/toasts.ts';
 import $ from './jquery.js';
 
 import { appNameTag } from 'variables.module.scss';

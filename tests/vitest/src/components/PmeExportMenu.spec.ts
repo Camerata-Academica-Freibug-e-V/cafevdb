@@ -19,7 +19,7 @@ const { download, notify, emit, post, saveFile } = vi.hoisted(() => ({
 }));
 vi.mock('~/src/config.ts', () => ({ appName: 'cafevdb' }));
 vi.mock('~/src/toolkit/util/axios-file-download.ts', () => ({ default: download }));
-vi.mock('~/src/toolkit/util/toasts.ts', () => ({ showError: notify }));
+vi.mock('@nextcloud/dialogs', () => ({ showError: notify }));
 vi.mock('@nextcloud/axios', () => ({ default: { post } }));
 vi.mock('js-file-download', () => ({ default: saveFile }));
 vi.mock('@rotdrop/async-nextcloud-event-bus', () => ({ emit }));

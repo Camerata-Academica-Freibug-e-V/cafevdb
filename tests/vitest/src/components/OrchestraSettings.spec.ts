@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@nextcloud/dialogs', () => ({
   FilePickerClosed: class FilePickerClosed extends Error {},
+  showSuccess: vi.fn(),
   getFilePickerBuilder: () => {
     const builder = {
       setMultiSelect: () => builder,
@@ -92,7 +93,6 @@ vi.mock('../../../../src/components/settings/WysiwygField.vue', () => ({ default
 vi.mock('../../../../src/config.ts', () => ({ appName: 'cafevdb' }));
 vi.mock('../../../../src/app/settings-urls.ts', () => ({ getAppUrl: vi.fn() }));
 vi.mock('../../../../src/services/admin-settings.ts', () => ({ getAdminSetting: vi.fn(), setAdminSetting: mocks.setAdminSetting }));
-vi.mock('../../../../src/toolkit/util/toasts.ts', () => ({ showSuccess: vi.fn() }));
 vi.mock('../../../../src/services/setting-feedback.ts', () => ({
   showSettingFeedback: mocks.showSettingFeedback,
   handleSettingError: mocks.handleSettingError,

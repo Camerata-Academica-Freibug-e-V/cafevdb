@@ -4,9 +4,9 @@
  * @license AGPL-3.0-or-later
  */
 
+import { showError, showSuccess, TOAST_PERMANENT_TIMEOUT } from '@nextcloud/dialogs';
 import { translate as t } from '@nextcloud/l10n';
 import { appName as appId } from '../config.ts';
-import { showError, showSuccess, TOAST_PERMANENT_TIMEOUT } from '../toolkit/util/toasts.ts';
 import { isNextcloudExceptionResponse } from '../types/ajax/php-exception-response.ts';
 
 type FeedbackData = { messages?: Array<string|null>|string|null; message?: string|string[]|null };
