@@ -17,6 +17,7 @@ use UnexpectedValueException;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\EntityManager;
+use OCA\CAFEVDB\PageRenderer\DatabaseTables;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\LockMode;
 
 /** Read-only finance storage containing links to written debit mandates. */
@@ -47,8 +48,7 @@ class DebitMandatesStorage extends Storage
     $filterState = $this->disableFilter(EntityManager::SOFT_DELETEABLE_FILTER);
     $this->entityManager->beginTransaction();
     try {
-      $root = $this->getRootFolder(create: true);
-      $this->entityManager->lock($this->storageEntity, LockMode::PESSIMISTIC_WRITE);
+      $root = $this->lockRootFolder();
       $now = new DateTimeImmutable();
       $desired = [];
       foreach ($this->getDatabaseRepository(Entities\SepaDebitMandate::class)->findAll() as $mandate) {
@@ -129,6 +129,51 @@ class DebitMandatesStorage extends Storage
     } finally {
       $filterState && $this->enableFilter(EntityManager::SOFT_DELETEABLE_FILTER);
     }
+  }
+
+  /**
+   * Serialize initialization as well as reconciliation on the storage row.
+   *
+   * @return Entities\DatabaseStorageFolder
+   */
+  private function lockRootFolder():Entities\DatabaseStorageFolder
+  {
+    $connection = $this->entityManager->getConnection();
+    $table = $connection->quoteIdentifier(DatabaseTables::DATABASE_STORAGES_TABLE);
+    $id = $this->getShortId();
+
+    $connection->executeStatement(
+      "INSERT INTO $table (storage_id) VALUES (?) ON DUPLICATE KEY UPDATE storage_id = VALUES(storage_id)",
+      [$id],
+    );
+    $row = $connection->fetchAssociative("SELECT id, root_id FROM $table WHERE storage_id = ? FOR UPDATE", [$id]);
+    if ($row === false) {
+      throw new UnexpectedValueException('Unable to lock debit-mandate storage.');
+    }
+
+    $storage = $this->entityManager->find(Entities\DatabaseStorage::class, (int)$row['id'], LockMode::PESSIMISTIC_WRITE);
+    if ($storage === null) {
+      throw new UnexpectedValueException('Unable to load debit-mandate storage.');
+    }
+    if ($row['root_id'] === null) {
+      $root = (new Entities\DatabaseStorageFolder())->setName('')->setParent(null);
+      $root->setStorage($storage);
+      $storage->setRoot($root);
+      $this->persist($root);
+      $this->flush();
+    } else {
+      $root = $this->entityManager->find(
+        Entities\DatabaseStorageFolder::class,
+        (int)$row['root_id'],
+        LockMode::PESSIMISTIC_WRITE,
+      );
+      if ($root === null) {
+        throw new UnexpectedValueException('Debit-mandate storage root is missing.');
+      }
+    }
+    $this->storageEntity = $storage;
+    $this->rootFolder = $root;
+    return $root;
   }
 
   /**
