@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">85.71% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/7</span>
+                <span class='fraction'>6/7</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">66.66% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/6</span>
+                <span class='fraction'>4/6</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/2</span>
+                <span class='fraction'>1/2</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/5</span>
+                <span class='fraction'>5/5</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -97,7 +97,7 @@
 <a name='L32'></a><a href='#L32'>32</a>
 <a name='L33'></a><a href='#L33'>33</a>
 <a name='L34'></a><a href='#L34'>34</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -108,15 +108,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -130,7 +130,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">&lt;template&gt;
-<span class="cstat-no" title="statement not covered" >  &lt;AdminSettingsTab :entry="entry" :groups="groups" @error<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >e</span>mit('error', $event)" /&gt;</span></span>
+  &lt;AdminSettingsTab :entry="entry" :groups="groups" @error<span class="fstat-no" title="function not covered" >="<span class="cstat-no" title="statement not covered" >e</span>mit('error', $event)" /&gt;</span>
 &lt;/template&gt;
 &nbsp;
 &lt;script setup lang="ts"&gt;
@@ -141,17 +141,17 @@ import { translate as t } from '@nextcloud/l10n'
 import AdminSettingsTab from './AdminSettingsTab.vue'
 import { appName as appId } from '../../config.ts'
 &nbsp;
-const props = <span class="cstat-no" title="statement not covered" >defineProps&lt;{ entry: TabEntry }&gt;()</span>
-const emit = <span class="cstat-no" title="statement not covered" >defineEmits&lt;{ error: [error: Error] }&gt;()</span>
-const <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >field = (k</span>ey: string, label: string): AdminSettingField =&gt; (<span class="cstat-no" title="statement not covered" >{</span></span>
+const props = defineProps&lt;{ entry: TabEntry }&gt;()
+const emit = defineEmits&lt;{ error: [error: Error] }&gt;()
+const field = (key: string, label: string): AdminSettingField =&gt; ({
   key,
   label,
   type: 'text',
   linkTest: true,
 })
-const groups: AdminSettingGroup[] = <span class="cstat-no" title="statement not covered" >[{</span>
-  id: props.entry.children[0]?.id ?? 'links',
-  name: props.entry.children[0]?.name ?? t(appId, 'Links'),
+const groups: AdminSettingGroup[] = [{
+  id: props.entry.children[0]?.id ?? <span class="branch-1 cbranch-no" title="branch not covered" >'links',</span>
+  name: props.entry.children[0]?.name ?? <span class="branch-1 cbranch-no" title="branch not covered" >t(appId, 'Links'),</span>
   fields: [
     field('phpmyadmin', t(appId, 'Link to the database {appId}@phpMyAdmin', { appId })),
     field('phpmyadmincloud', t(appId, 'Link to the database Cloud@phpMyAdmin')),
@@ -169,7 +169,7 @@ const groups: AdminSettingGroup[] = <span class="cstat-no" title="statement not 
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-11-22T23:11:27.868Z
+                at 2026-11-23T00:24:22.345Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>
