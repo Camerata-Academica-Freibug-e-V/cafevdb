@@ -153,6 +153,9 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ProjectService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\Registration::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ToolTipsService::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Service\ToolTipsDataService::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Storage\Database\AbstractReadMeFactory::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Storage\Database\ReadMeFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\VCalendarService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\AppInfo\AbstractApplication::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Common\RationalNumber::class)]
@@ -608,6 +611,16 @@ class InvoicesStorageTest extends TestCase
       $musicianFolder = $root->getFolderByName($musician->getUserIdSlug());
       $projectFolder = $musicianFolder->getFolderByName($project->getName());
       self::assertSame($file, $projectFolder->getFileByName('MANDATE-1')->getFile());
+      self::assertSame($file, $participantLink->getFile());
+      $filePath = $musician->getUserIdSlug() . '/' . $project->getName() . '/MANDATE-1';
+      $stream = $financeStorage->readStream($filePath);
+      self::assertIsResource($stream);
+      self::assertSame('signed', stream_get_contents($stream));
+      fclose($stream);
+      self::assertFalse($financeStorage->isUpdatable($filePath));
+      self::assertFalse($financeStorage->fopen($filePath, 'w'));
+      self::assertFalse($financeStorage->unlink($filePath));
+      self::assertFalse($financeStorage->mkdir($musician->getUserIdSlug() . '/new-folder'));
       self::assertSame($file, $participantLink->getFile());
 
       $mandate->setDeleted(new DateTimeImmutable('+1 day'));
