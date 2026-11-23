@@ -656,11 +656,16 @@ class CloudUserConnectorServiceTest extends TestCase
       $connection->executeStatement(
         'INSERT INTO Files (id, mime_type, type) VALUES
           (1, "text/plain", "encrypted"), (2, "text/plain", "encrypted"),
-          (3, "text/plain", "encrypted")',
+          (3, "text/plain", "encrypted"), (4, "text/plain", "encrypted")',
+      );
+      $connection->executeStatement(
+        'INSERT INTO FileData (file_id, data_hash, data, type) VALUES
+          (1, "1", "one", "encrypted"), (2, "2", "two", "encrypted"),
+          (3, "3", "three", "encrypted"), (4, "4", "four", "encrypted")',
       );
       $connection->executeStatement(
         'INSERT INTO EncryptedFileOwners (musician_id, encrypted_file_id) VALUES
-          (1, 1), (1, 2), (2, 3)',
+          (1, 1), (1, 2), (1, 4), (2, 2), (2, 3)',
       );
       $connection->executeStatement(
         'INSERT INTO DatabaseStorageDirEntries (id, name, type, parent_id, file_id) VALUES
@@ -674,7 +679,10 @@ class CloudUserConnectorServiceTest extends TestCase
           (10, "other-root", "folder", NULL, NULL),
           (11, "other-parent", "folder", 10, NULL),
           (12, "other-file", "file", 11, 3),
+          (13, "shared-file", "file", 11, 2),
+          (14, "first-owner-file", "file", 11, 1),
           (20, "empty-root", "folder", NULL, NULL),
+          (21, "unassociated-file", "file", 20, 2),
           (30, "authorized-root", "folder", NULL, NULL),
           (31, "second-file", "file", 30, 2)',
       );
@@ -682,25 +690,38 @@ class CloudUserConnectorServiceTest extends TestCase
         'INSERT INTO DatabaseStorages (id, storage_id, root_id) VALUES
           (1, "shared", 1), (2, "other", 10), (3, "empty", 20), (4, "authorized", 30)',
       );
+      $connection->executeStatement(
+        'INSERT INTO Projects (id, name, year) VALUES
+          (1, "first-project", 2026), (2, "second-project", 2026)',
+      );
+      $connection->executeStatement(
+        'INSERT INTO ProjectParticipants (project_id, musician_id, database_documents_id) VALUES
+          (1, 1, 1), (2, 1, 4), (1, 2, 2), (1, 3, NULL)',
+      );
 
       foreach ([
-        ['first-owner', 'first-token', [1, 2, 3, 4, 5, 30, 31], [1, 4]],
-        ['second-owner', 'second-token', [1, 2, 3, 6, 10, 11, 12], [1, 2]],
-        ['third-owner', 'third-token', [], []],
-        ['first-owner', 'wrong-token', [], []],
-        [null, null, [], []],
-      ] as [$userId, $token, $entryIds, $storageIds]) {
+        ['first-owner', 'first-token', [1, 2, 3, 4, 5, 30, 31], [1, 4], [1, 2, 4]],
+        ['second-owner', 'second-token', [10, 11, 12, 13], [2], [2, 3]],
+        ['third-owner', 'third-token', [], [], []],
+        ['first-owner', 'wrong-token', [], [], []],
+        [null, null, [], [], []],
+      ] as [$userId, $token, $entryIds, $storageIds, $fileIds]) {
         $connection->executeStatement('SET @' . Constants::SQL_CLOUD_USER_ID . ' = ?', [$userId]);
         $connection->executeStatement('SET @' . Constants::SQL_ROW_ACCESS_TOKEN . ' = ?', [$token]);
         foreach ([
           'DatabaseStorageDirEntries' => $entryIds,
           'DatabaseStorages' => $storageIds,
+          'Files' => $fileIds,
         ] as $table => $expectedIds) {
           $actualIds = $connection->executeQuery(
             'SELECT id FROM ' . $cloudConnectorDatabase . '.Personalized' . $table . 'View ORDER BY id',
           )->fetchFirstColumn();
           $this->assertSame($expectedIds, array_map('intval', $actualIds));
         }
+        $actualFileIds = $connection->executeQuery(
+          'SELECT file_id FROM ' . $cloudConnectorDatabase . '.PersonalizedFileDataView ORDER BY file_id',
+        )->fetchFirstColumn();
+        $this->assertSame($fileIds, array_map('intval', $actualFileIds));
       }
     } finally {
       $connection->executeStatement('SET @' . Constants::SQL_CLOUD_USER_ID . ' = NULL');

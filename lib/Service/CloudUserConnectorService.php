@@ -864,8 +864,8 @@ WHERE m.email IS NOT NULL AND m.email <> ""
 
   /**
    * Generate the (My-)SQL statements for defining the personalized single-row
-   * musician views. Storage views expose only authorized files, their ancestor
-   * directory entries, and the storages associated with those root entries.
+   * musician views. Storage views expose only authorized files in the
+   * musician's participant storages, their ancestors, and those storages.
    *
    * @param null|string $dataBaseName
    * @param string $cloudDbUser Quoted MariaDB account.
@@ -1224,14 +1224,25 @@ SELECT t.*
 SQL SECURITY DEFINER
 VIEW " . $viewName . "
 AS
-WITH RECURSIVE authorized_entries AS (
+WITH RECURSIVE participant_entries AS (
+  SELECT d.id, d.parent_id
+  FROM ProjectParticipants pp
+  INNER JOIN DatabaseStorages s ON s.id = pp.database_documents_id
+  INNER JOIN " . $table . " d ON d.id = s.root_id AND d.parent_id IS NULL
+  WHERE pp.musician_id = " . $accessFunction . "
+  UNION DISTINCT
+  SELECT d.id, d.parent_id
+  FROM " . $table . " d
+  INNER JOIN participant_entries pe ON d.parent_id = pe.id
+), authorized_entries AS (
   SELECT t.id, t.parent_id
-  FROM " . $table . " t
+  FROM participant_entries t
+  INNER JOIN " . $table . " d ON d.id = t.id
   INNER JOIN " . $this->personalizedViewName($dataBaseName, 'Files') . " fv
-    ON t.file_id = fv.id
+    ON d.file_id = fv.id
   UNION DISTINCT
   SELECT t.id, t.parent_id
-  FROM " . $table . " t
+  FROM participant_entries t
   INNER JOIN authorized_entries ae
     ON t.id = ae.parent_id
 )
