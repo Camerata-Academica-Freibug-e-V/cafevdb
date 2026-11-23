@@ -26,6 +26,7 @@ namespace OCA\CAFEVDB\Tests\Unit;
 
 use DateTimeImmutable;
 use ReflectionMethod;
+use RuntimeException;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes;
@@ -526,7 +527,7 @@ class InvoicesStorageTest extends TestCase
       stream_set_timeout($pipes[1], 15);
       $root = fgets($pipes[1]);
       if ($root === false || !ctype_digit(trim($root))) {
-        throw new \RuntimeException('Unable to prepare concurrent storage root.');
+        throw new RuntimeException('Unable to prepare concurrent storage root.');
       }
       $rootId = (int)trim($root);
       $entityManager->beginTransaction();
