@@ -288,6 +288,6 @@ class DonationReceipt implements JsonSerializable, ArrayAccess
   /** {@inheritdoc} */
   public function __toString():string
   {
-    return 'legalPerson(' . $this->musician ? $this->musician->getPublicName() : $this->contact . ')';
+    return 'donation receipt ' . $this->id . ' for ' . $this->getMusician()->getPublicName(firstNameFirst: true);
   }
 }
