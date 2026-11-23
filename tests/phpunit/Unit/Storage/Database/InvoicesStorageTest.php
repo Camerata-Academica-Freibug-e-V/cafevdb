@@ -434,6 +434,46 @@ class InvoicesStorageTest extends TestCase
 
   /** @return void */
   #[Attributes\Depends('testApplyMigrations')]
+  public function testDebitMandateRootInitializationFromLockedStorageRow(): void
+  {
+    $entityManager = $this->getEntityManager();
+    $storage = new DatabaseStorage\DebitMandatesStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+    ]);
+    $entityManager->beginTransaction();
+    try {
+      $connection = $entityManager->getConnection();
+      $connection->executeStatement(
+        'INSERT INTO DatabaseStorages (storage_id, root_id) VALUES (?, NULL)',
+        [$storage->getShortId()],
+      );
+      $storage->synchronize();
+      $row = $connection->fetchAssociative(
+        'SELECT id, root_id FROM DatabaseStorages WHERE storage_id = ?',
+        [$storage->getShortId()],
+      );
+      self::assertNotFalse($row);
+      self::assertNotNull($row['root_id']);
+      $storage->synchronize();
+      self::assertSame(
+        (int)$row['root_id'],
+        (int)$connection->fetchOne('SELECT root_id FROM DatabaseStorages WHERE id = ?', [$row['id']]),
+      );
+    } finally {
+      $entityManager->rollBack();
+      $entityManager->clear();
+      Entities\DatabaseStorageFile::clearOrphans();
+    }
+    self::assertFalse(
+      $entityManager->getConnection()->fetchOne(
+        'SELECT id FROM DatabaseStorages WHERE storage_id = ?',
+        [$storage->getShortId()],
+      ),
+    );
+  }
+
+  /** @return void */
+  #[Attributes\Depends('testApplyMigrations')]
   public function testDebitMandateFinanceStorage(): void
   {
     $entityManager = $this->getEntityManager();
@@ -525,6 +565,7 @@ class InvoicesStorageTest extends TestCase
   #[Attributes\Depends('testApplyMigrations')]
   #[Attributes\Depends('testParticipantFinancialDocumentLinks')]
   #[Attributes\Depends('testDedicatedAndParticipantLinks')]
+  #[Attributes\Depends('testDebitMandateRootInitializationFromLockedStorageRow')]
   #[Attributes\Depends('testDebitMandateFinanceStorage')]
   public function testUnapplyMigrations(): void
   {
