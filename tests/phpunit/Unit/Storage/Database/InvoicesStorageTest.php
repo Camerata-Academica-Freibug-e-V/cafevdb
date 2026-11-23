@@ -37,7 +37,9 @@ use OCA\CAFEVDB\Tests\MockProvider;
 
 /** Test aspects of the invoices storage. */
 #[Attributes\CoversClass(DatabaseStorage\InvoicesStorage::class)]
+#[Attributes\CoversClass(DatabaseStorage\DonationReceiptsStorage::class)]
 #[Attributes\CoversMethod(DatabaseStorage\ProjectParticipantsStorage::class, 'synchronizeFinancialDocument')]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\CompositePayment::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorage::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorageDirEntry::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorageFile::class)]
@@ -310,6 +312,90 @@ class InvoicesStorageTest extends TestCase
   }
 
   /**
+   * @param bool $invoice
+   *
+   * @return void
+   */
+  #[Attributes\Depends('testApplyMigrations')]
+  #[Attributes\DataProvider('financialDocumentTypes')]
+  public function testDedicatedAndParticipantLinks(bool $invoice): void
+  {
+    $entityManager = $this->getEntityManager();
+    $participant = $entityManager->find(Entities\ProjectParticipant::class, [
+      'project' => self::$projectId,
+      'musician' => self::$musicianId,
+    ]);
+    $participantStorage = new DatabaseStorage\ProjectParticipantsStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+      'participant' => $participant,
+    ]);
+    if ($invoice) {
+      $entity = new Entities\Invoice()
+        ->setDebitor($participant->getMusician())
+        ->setProject($participant->getProject())
+        ->setProjectParticipant($participant)
+        ->setInvoiceNumber('2099-001')
+        ->setInvoiceDate('2099-01-01');
+      $participant->getProject()->getInvoices()->removeElement($entity);
+      $financeStorage = $this->storage;
+    } else {
+      $donation = new Entities\CompositePayment()
+        ->setProjectParticipant($participant)
+        ->setDateOfReceipt('2099-01-01');
+      $participant->getProject()->getCompositePayments()->removeElement($donation);
+      $participant->getMusician()->getPayments()->removeElement($donation);
+      $entity = new Entities\DonationReceipt()->setId(123)->setDonation($donation);
+      $financeStorage = new DatabaseStorage\DonationReceiptsStorage([
+        'configService' => $this->mockProvider->getConfigService(),
+      ]);
+    }
+
+    $first = new Entities\EncryptedFile('first.pdf', 'first', 'application/pdf', $participant->getMusician());
+    $second = new Entities\EncryptedFile('second.pdf', 'second', 'application/pdf', $participant->getMusician());
+    $entityManager->beginTransaction();
+    try {
+      $entityManager->persist($first);
+      $entityManager->persist($second);
+      $document = $financeStorage->addDocument($entity, $first, flush: false);
+      $participantStorage->synchronizeFinancialDocument($entity, $document);
+      $entityManager->flush();
+
+      $folderName = $this->mockProvider->getConfigService()->getAppL10n()->t($invoice ? 'Invoices' : 'DonationReceipts');
+      $folder = $participant->getDatabaseDocuments()->getRoot()->getFolderByName($folderName);
+      $name = $document->getName();
+      $participantLink = $folder->getFileByName($name);
+      self::assertNotNull($participantLink);
+      self::assertNotSame($document, $participantLink);
+      $entityManager->refresh($document);
+      $entityManager->refresh($participantLink);
+      self::assertSame($first, $document->getFile());
+      self::assertSame($first, $participantLink->getFile());
+
+      if ($invoice) {
+        $document = $financeStorage->replaceDocument($entity, $second, flush: false);
+      } else {
+        $document->setFile($second);
+      }
+      $participantStorage->synchronizeFinancialDocument($entity, $document, $first, $name);
+      $entityManager->flush();
+      $entityManager->refresh($document);
+      $entityManager->refresh($participantLink);
+      self::assertSame($second, $document->getFile());
+      self::assertSame($second, $participantLink->getFile());
+      self::assertTrue($second->getOwners()->contains($participant->getMusician()));
+
+      $participantStorage->synchronizeFinancialDocument($entity, null, $second, $name);
+      $entityManager->flush();
+      self::assertNull($folder->getFileByName($name));
+      $entityManager->refresh($document);
+      self::assertSame($second, $document->getFile());
+    } finally {
+      $entityManager->rollBack();
+      $entityManager->clear();
+    }
+  }
+
+  /**
    * This is quas a tearDownAfterClass() but we need some mocked / stubbed
    * classes for the entity-manager.
    *
@@ -317,6 +403,7 @@ class InvoicesStorageTest extends TestCase
    */
   #[Attributes\Depends('testApplyMigrations')]
   #[Attributes\Depends('testParticipantFinancialDocumentLinks')]
+  #[Attributes\Depends('testDedicatedAndParticipantLinks')]
   public function testUnapplyMigrations(): void
   {
     $this->unapplyMigrations();
