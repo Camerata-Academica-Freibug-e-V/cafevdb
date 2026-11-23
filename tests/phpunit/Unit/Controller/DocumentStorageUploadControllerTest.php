@@ -32,7 +32,7 @@ use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
-use OCP\IRequest;
+use OC\AppFramework\Http\Request;
 
 use OCA\CAFEVDB\Controller;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumTaxType;
@@ -235,8 +235,7 @@ class DocumentStorageUploadControllerTest extends TestCase
 
     $this->entityManager = $this->entityManager ?? $this->mockProvider->getEntityManager();
 
-    /** @var IRequest $request */
-    $request = $this->createStub(IRequest::class);
+    $request = $this->createStub(Request::class);
     $request->method('getParam')->willReturnCallback(
       function(string $key, mixed $default = null) {
         return $this->postData[$key] ?? $default;
@@ -491,7 +490,7 @@ class DocumentStorageUploadControllerTest extends TestCase
     foreach ([DatabaseStorage\InvoicesStorage::class, DatabaseStorage\DonationReceiptsStorage::class] as $class) {
       $this->mockProvider->registerClassInstance($class, new $class(['configService' => $config]), global: true);
     }
-    $request = $this->createStub(IRequest::class);
+    $request = $this->createStub(Request::class);
     $request->method('offsetGet')->willReturnCallback(fn($key) => $this->postData[$key] ?? null);
     return new Controller\DocumentStorageUploadController(
       appName: $this->mockProvider->appName,
