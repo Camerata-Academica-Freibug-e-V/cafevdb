@@ -272,6 +272,8 @@ class DocumentStorageUploadController extends Controller
         /** @var Entities\DatabaseStorageFile $fileNodeEntity */
         $fileNodeEntity = $this->getDocument($entity);
         $fileEntity = $fileNodeEntity ? $fileNodeEntity->getFile() : null;
+        $previousFile = $fileEntity;
+        $previousName = $fileNodeEntity?->getName();
         $actualConflict = empty($fileEntity) ? null : $conflict;
 
         $this->entityManager->beginTransaction();
@@ -342,6 +344,10 @@ class DocumentStorageUploadController extends Controller
           }
 
           $fileNodeEntity = $this->addDocument($fileNodeEntity, $fileEntity, $entity, $storage, $conflict);
+
+          if ($entity instanceof Entities\Invoice || $entity instanceof Entities\DonationReceipt) {
+            $this->synchronizeParticipantDocument($entity, $fileNodeEntity, $previousFile, $previousName);
+          }
 
           $this->flush();
 
@@ -424,6 +430,9 @@ class DocumentStorageUploadController extends Controller
         $this->entityManager->beginTransaction();
         try {
           // ok, delete it
+          if ($entity instanceof Entities\Invoice || $entity instanceof Entities\DonationReceipt) {
+            $this->synchronizeParticipantDocument($entity, null, $fileNodeEntity->getFile(), $fileNodeEntity->getName());
+          }
           $this->clearDocument($entity);
           $this->remove($fileNodeEntity, flush: true);
 
@@ -477,6 +486,28 @@ class DocumentStorageUploadController extends Controller
         [ $section, $topic ],
       )
     );
+  }
+
+  /**
+   * @param Entities\Invoice|Entities\DonationReceipt $entity
+   * @param null|Entities\DatabaseStorageFile $document
+   * @param null|Entities\EncryptedFile $previousFile
+   * @param null|string $previousName
+   *
+   * @return void
+   */
+  private function synchronizeParticipantDocument(
+    Entities\Invoice|Entities\DonationReceipt $entity,
+    ?Entities\DatabaseStorageFile $document,
+    ?Entities\EncryptedFile $previousFile,
+    ?string $previousName,
+  ):void {
+    $participant = $entity->getProjectParticipant();
+    if ($participant === null) {
+      throw new UnexpectedValueException('The financial document has no project participant.');
+    }
+    $this->storageFactory->getProjectParticipantsStorage($participant)
+      ->synchronizeFinancialDocument($entity, $document, $previousFile, $previousName);
   }
 
   /**
