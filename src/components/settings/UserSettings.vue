@@ -137,7 +137,7 @@
                name="userId"
                :value="userId"
                autocomplete="username"
-        />
+        >
         <NcPasswordField v-model="loginPassword"
                          v-tooltip="hints['settings:personal:encryptionKey:own-password']"
                          :label="t(appId, 'Own Password')"
@@ -167,7 +167,6 @@
 </template>
 
 <script setup lang="ts">
-import type { PersonalSettingKey } from '../../services/personal-settings.ts'
 import type { TabEntry } from './settings-tree.ts'
 
 import { showInfo, showSuccess } from '@nextcloud/dialogs'
@@ -286,6 +285,14 @@ let savedSqlFilter = sqlFilter.value
 
 // Persist a select value; on failure restore the previous one and report the error.
 // The saving flag is cleared after the next tick so that the revert does not trigger another save.
+/**
+ * Persist a reactive select value and restore it when saving fails.
+ *
+ * @param target Reactive target containing the value to persist.
+ * @param target.value Reactive value to persist.
+ * @param key Personal setting key used for saving state.
+ * @param payload Convert the selected value to the API payload.
+ */
 function persistWatcher<T>(
   target: { value: T },
   key: 'pageRowsDefault' | 'wysiwygEditor' | 'debugMode',

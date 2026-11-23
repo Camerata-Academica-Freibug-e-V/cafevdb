@@ -37,6 +37,7 @@ import { setAdminSetting } from '../../services/admin-settings.ts'
 import { showSettingError, showSettingFeedback } from '../../services/setting-feedback.ts'
 
 const props = withDefaults(defineProps<{ account?: { user?: string, accountHost?: string }, setting?: string }>(), {
+  account: () => ({ user: '', accountHost: 'localhost' }),
   setting: 'cloudConnectorAccount',
 })
 const emit = defineEmits<{ error: [error: Error] }>()

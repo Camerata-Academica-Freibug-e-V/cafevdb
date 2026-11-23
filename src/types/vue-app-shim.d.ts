@@ -28,8 +28,6 @@
 import type { translate, translatePlural } from '@nextcloud/l10n';
 import type { AppName } from '../config.ts';
 
-import Vue from 'vue';
-
 // needs to go to a separate file. Why?
 
 declare module 'vue/types/vue' {

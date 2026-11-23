@@ -26,6 +26,7 @@
  */
 
 interface JQuery<TElement = HTMLElement> {
+  readonly _elementType?: TElement;
   imageplaceholder(seed: string, text: string, size: number): void;
   clearimageplaceholder(): void;
 }
