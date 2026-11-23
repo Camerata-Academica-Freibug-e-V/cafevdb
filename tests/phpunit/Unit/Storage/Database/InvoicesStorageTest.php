@@ -312,6 +312,7 @@ class InvoicesStorageTest extends TestCase
     } finally {
       $entityManager->rollBack();
       $entityManager->clear();
+      Entities\DatabaseStorageFile::clearOrphans();
     }
   }
 
@@ -426,6 +427,7 @@ class InvoicesStorageTest extends TestCase
     } finally {
       $entityManager->rollBack();
       $entityManager->clear();
+      Entities\DatabaseStorageFile::clearOrphans();
     }
   }
 
@@ -509,6 +511,7 @@ class InvoicesStorageTest extends TestCase
     } finally {
       $entityManager->rollBack();
       $entityManager->clear();
+      Entities\DatabaseStorageFile::clearOrphans();
     }
   }
 
