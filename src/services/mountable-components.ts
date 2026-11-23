@@ -40,9 +40,6 @@ import { AppError } from '../toolkit/types/errors.ts';
 
 const vueComponents: Record<string, Component> = {};
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ExposedComponentProperties = undefined|null|number|string|Record<number|string, unknown>|((...args: any) => any)|VNode|HTMLElement;
-
 export type MountableComponent<T extends keyof MountableComponents.ComponentProps = keyof MountableComponents.ComponentProps> = {
   vNode?: VNode;
   element?: HTMLElement;
@@ -51,8 +48,8 @@ export type MountableComponent<T extends keyof MountableComponents.ComponentProp
   unmount: () => void;
   destroy: () => void;
   props: MountableComponents.PropsData<T>;
-  [x: string]: ExposedComponentProperties;
-  [x: number]: ExposedComponentProperties;
+  [x: string]: unknown;
+  [x: number]: unknown;
 };
 
 export const provideMountableComponents = <T extends App>(vueApp: T) => {
@@ -103,7 +100,7 @@ export const provideMountableComponents = <T extends App>(vueApp: T) => {
       vueApp.component(event.name, vueComponent);
     }
     // obtain a new instance
-    const vNode = createVNode(vueComponents[event.name], event.propsData);
+    const vNode = createVNode(vueComponents[event.name], { ...event.propsData });
     if (vueApp._context) {
       vNode.appContext = vueApp._context;
     }

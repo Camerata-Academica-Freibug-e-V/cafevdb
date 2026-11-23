@@ -119,3 +119,10 @@ export interface ComponentProps {
 }
 
 export type PropsData<C extends keyof ComponentProps> = ComponentProps[C];
+
+export type MountableComponentRequest = {
+  [C in keyof ComponentProps]: {
+    name: C;
+    propsData: PropsData<C>;
+  };
+}[keyof ComponentProps];
