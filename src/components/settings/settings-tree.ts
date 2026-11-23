@@ -59,6 +59,9 @@ export const getAboutSettingsEntry = (): TabEntry => ({
  * Single source of truth for admin section ordering and sidebar visibility.
  *
  * @param permissions Current orchestra permissions and encryption-key availability.
+ * @param permissions.isAdmin Whether the user has administrator permissions.
+ * @param permissions.isSubAdmin Whether the user has sub-administrator permissions.
+ * @param permissions.orchestraSettingsEnabled Whether orchestra settings are enabled.
  */
 export const getAdminSettingsTree = (permissions: {
   isAdmin: boolean;

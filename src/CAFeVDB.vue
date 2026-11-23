@@ -446,6 +446,15 @@ const openProjectOverview = () => {
 
 const legacyReloadKeys: PersonalSettingKey[] = ['financeMode', 'expertMode', 'showDisabled']
 
+/**
+ * Update a personal setting and restore the previous value on failure.
+ *
+ * @param key Personal setting key.
+ * @param value New setting value.
+ * @param oldValue Previous setting value.
+ * @param revert Callback to restore the previous value.
+ * @param payload Optional API payload; defaults to the new value.
+ */
 async function updatePersonalSettings<T>(
   key: PersonalSettingKey,
   value: T,

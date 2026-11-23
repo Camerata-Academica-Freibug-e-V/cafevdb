@@ -36,7 +36,7 @@ import * as WebCrypto from 'easy-web-crypto';
  * derive a new key from passphrase and generate the master AES key
  * (you can now store this encrypted key for later use)
  *
- * @param passphrase
+ * @param passphrase Passphrase used to derive and protect the master key.
  */
 export const generateMasterKey = (passphrase: string) =>
   WebCrypto.genEncryptedMasterKey(passphrase);
@@ -44,8 +44,8 @@ export const generateMasterKey = (passphrase: string) =>
 /**
  * decrypt the (stored) AES key to be able to encrypt/decrypt data
  *
- * @param passphrase
- * @param encMasterKey
+ * @param passphrase Passphrase used to decrypt the master key.
+ * @param encMasterKey Protected master key to decrypt.
  */
 export const decryptMasterKey = (
   passphrase: string,
@@ -55,8 +55,8 @@ export const decryptMasterKey = (
 /**
  * Encrypt data
  *
- * @param key
- * @param data
+ * @param key Encryption key.
+ * @param data Plain-text data to encrypt.
  */
 export const encrypt = (key: CryptoKey, data: string) =>
   WebCrypto.encrypt(key, data);
@@ -64,8 +64,8 @@ export const encrypt = (key: CryptoKey, data: string) =>
 /**
  * Decrypt data
  *
- * @param key
- * @param encrypted
+ * @param key Decryption key.
+ * @param encrypted Cipher data to decrypt.
  */
 export const decrypt = (key: CryptoKey, encrypted: CipherData) =>
   WebCrypto.decrypt(key, encrypted);
