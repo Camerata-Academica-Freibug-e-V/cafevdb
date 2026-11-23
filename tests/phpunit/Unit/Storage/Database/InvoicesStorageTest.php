@@ -107,6 +107,8 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerBoundEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerClosedEvent::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Exceptions\DatabaseEntityExistsException::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions\DatabaseEntityException::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Listener\DatabaseStorageFileEntityListener::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\MusicianEmailEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\CalendarObjectFactory::class)]
