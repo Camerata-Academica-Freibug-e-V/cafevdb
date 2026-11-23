@@ -1,9 +1,9 @@
+import { showError } from '@nextcloud/dialogs';
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ConnectorCredentials from '../../../../src/components/settings/ConnectorCredentials.vue';
 import { setAdminSetting } from '../../../../src/services/admin-settings.ts';
 import { showSettingError } from '../../../../src/services/setting-feedback.ts';
-import { showError } from '../../../../src/toolkit/util/toasts.ts';
 
 vi.mock('@nextcloud/l10n', () => ({ translate: (_app: string, text: string) => text }));
 vi.mock('@nextcloud/vue', () => {
@@ -24,7 +24,7 @@ vi.mock('../../../../src/services/setting-feedback.ts', () => ({
   showSettingError: vi.fn(),
   showSettingFeedback: vi.fn(),
 }));
-vi.mock('../../../../src/toolkit/util/toasts.ts', () => ({ showError: vi.fn() }));
+vi.mock('@nextcloud/dialogs', () => ({ showError: vi.fn() }));
 
 describe('Connector credentials', () => {
   beforeEach(() => vi.resetAllMocks());

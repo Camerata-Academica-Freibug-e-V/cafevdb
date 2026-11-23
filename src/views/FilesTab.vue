@@ -188,6 +188,7 @@ import type {
 } from '../types/ajax/mail-merge.ts'
 
 import axios from '@nextcloud/axios'
+import { showError, showSuccess, TOAST_PERMANENT_TIMEOUT } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import {
@@ -218,7 +219,6 @@ import axiosFileDownload from '../toolkit/util/axios-file-download.ts'
 import cloudVersionClasses from '../toolkit/util/cloud-version-classes.ts'
 import { generateUrl as generateAppUrl } from '../toolkit/util/generate-url.ts'
 import getInitialState from '../toolkit/util/initial-state.ts'
-import { showError, showSuccess, TOAST_PERMANENT_TIMEOUT } from '../toolkit/util/toasts.ts'
 import {
   MailMergeCloud,
   MailMergeDataset,

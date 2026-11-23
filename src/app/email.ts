@@ -45,6 +45,7 @@ import type { EmailFormEvent, EmailFormTab } from '../types/email-form-envelope.
 import type { VueSelectValue } from '../types/vue-select.ts';
 import type { UploadFile } from './file-upload.ts';
 
+import { showSuccess } from '@nextcloud/dialogs';
 import { translate as t } from '@nextcloud/l10n';
 import { generateOcsUrl } from '@nextcloud/router';
 import { emit as asyncEmit, subscribe as asyncSubscribe, unsubscribe as asyncUnsubscribe, awaitEmit } from '@rotdrop/async-nextcloud-event-bus';
@@ -102,7 +103,6 @@ import { getMountedSelectize } from '../services/mountable-selectize.ts';
 import { destroyMountedSelects, mountedSelectScope } from '../services/mounted-select-scope.ts';
 import { asKey } from '../toolkit/types/type-traits.ts';
 import generateAppUrl from '../toolkit/util/generate-url.ts';
-import { showSuccess } from '../toolkit/util/toasts.ts';
 import {
   handleError as ajaxHandleError,
   validateResponse as ajaxValidateResponse,

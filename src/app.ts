@@ -47,6 +47,7 @@ import { documentReady as taxExemptionNoticesReady } from './app/tax-exemption-n
 import attachWindowResizeHandler from './app/window-resize.ts';
 import onDocumentLoaded from './toolkit/util/on-document-loaded.ts';
 
+import '@nextcloud/dialogs/style.css';
 import './app/jquery-extensions.ts';
 import 'jquery-ui';
 import 'core-js/actual';
