@@ -193,11 +193,11 @@ const cloudFilePickerDialog = function(options: CloudFilePickerParameters) {
               modal: true,
               allowHtml: true,
               dialogClasses: 'fit-content-width',
+              onReady(container) {
+                $(container).find('.cloud-file-system-operations-wrapper .tooltip-auto').cafevTooltip();
+              },
             },
-          )
-            .then(function() {
-              $('.oc-dialog .oc-dialog-content .cloud-file-system-operations-wrapper .tooltip-auto').cafevTooltip();
-            });
+          );
 
         });
     },

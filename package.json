@@ -35,7 +35,7 @@
     "@nextcloud/axios": "^2.6.0",
     "@nextcloud/browser-storage": "^0.5.0",
     "@nextcloud/browserslist-config": "^3.1.2",
-    "@nextcloud/dialogs": "github:rotdrop/nextcloud-dialogs.git#production/cafevdb/stable7",
+    "@nextcloud/dialogs": "^7.6.0",
     "@nextcloud/eslint-config": "^9.0.1",
     "@nextcloud/event-bus": "*",
     "@nextcloud/files": "^4.1.0-beta.2",
@@ -196,7 +196,6 @@
   "allowScripts": {
     "core-js": true,
     "github:stacktracejs/stacktrace-gps#62f6967fc85e6fdd5fb9cea1a056b935d9b07a9a": true,
-    "github:rotdrop/nextcloud-dialogs": true,
     "@parcel/watcher": true,
     "github:rotdrop/async-nextcloud-event-bus": true,
     "github:rotdrop/nextcloud-app-dokuwiki": true,
