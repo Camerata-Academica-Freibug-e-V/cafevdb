@@ -12,13 +12,13 @@
 </template>
 
 <script setup lang="ts">
+import { showError } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { NcButton, NcPasswordField, NcTextField } from '@nextcloud/vue'
 import { ref } from 'vue'
 import { appName as appId } from '../../config.ts'
 import { setAdminSetting } from '../../services/admin-settings.ts'
 import { showSettingError, showSettingFeedback } from '../../services/setting-feedback.ts'
-import { showError } from '../../toolkit/util/toasts.ts'
 
 const props = defineProps<{ setting: string }>()
 const user = ref('')

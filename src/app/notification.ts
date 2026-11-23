@@ -25,14 +25,14 @@
  * @module
  */
 
-import type { ToastOptions } from '../toolkit/util/toasts.ts';
+import type { ToastOptions } from '@nextcloud/dialogs';
 
 import {
   showMessage,
   TOAST_DEFAULT_TIMEOUT,
   TOAST_PERMANENT_TIMEOUT,
   TOAST_UNDO_TIMEOUT,
-} from '../toolkit/util/toasts.ts';
+} from '@nextcloud/dialogs';
 import globalState from './globalstate.ts';
 
 type ToastHandle = ReturnType<typeof showMessage>;

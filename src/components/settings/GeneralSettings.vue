@@ -48,6 +48,7 @@
 import type { AdminSettingField, AdminSettingGroup } from './AdminSettingsTab.vue'
 import type { TabEntry } from './settings-tree.ts'
 
+import { showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { NcButton, NcNoteCard, NcPasswordField } from '@nextcloud/vue'
 import { reactive, ref } from 'vue'
@@ -65,7 +66,6 @@ import { appName as appId } from '../../config.ts'
 import { getAdminSetting, getLocaleInfo, setAdminSetting } from '../../services/admin-settings.ts'
 import { handleSettingError } from '../../services/setting-feedback.ts'
 import getInitialState from '../../toolkit/util/initial-state.ts'
-import { showSuccess } from '../../toolkit/util/toasts.ts'
 
 const props = defineProps<{ entry: TabEntry }>()
 const emit = defineEmits<{ error: [error: Error] }>()

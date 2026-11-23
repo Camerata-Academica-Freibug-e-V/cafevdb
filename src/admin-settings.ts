@@ -32,6 +32,7 @@ import AdminSettings from './components/AdminSettings.vue';
 import { appName } from './config.ts';
 import { mixin as globalMixin } from './mixins/global-mixin.ts';
 
+import '@nextcloud/dialogs/style.css';
 import 'core-js/actual';
 
 const pinia = createPinia();

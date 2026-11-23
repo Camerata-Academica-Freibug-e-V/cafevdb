@@ -170,6 +170,7 @@
 import type { PersonalSettingKey } from '../../services/personal-settings.ts'
 import type { TabEntry } from './settings-tree.ts'
 
+import { showInfo, showSuccess } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { NcButton, NcCheckboxRadioSwitch, NcNoteCard, NcPasswordField, NcSelect, NcSettingsSection, NcTextField } from '@nextcloud/vue'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
@@ -181,7 +182,6 @@ import { setEncryptionKey, setPersonalSetting } from '../../services/personal-se
 import { handleSettingError, showSettingFeedback } from '../../services/setting-feedback.ts'
 import useTooltipsStore from '../../stores/tooltips.ts'
 import getInitialState from '../../toolkit/util/initial-state.ts'
-import { showInfo, showSuccess } from '../../toolkit/util/toasts.ts'
 
 type CheckboxKey = 'toolTipsEnabled' | 'restoreHistory' | 'initialFilterVisibility' | 'directChange'
   | 'deselectInvisibleMiscRecs' | 'financeMode' | 'expertMode' | 'showDisabled'

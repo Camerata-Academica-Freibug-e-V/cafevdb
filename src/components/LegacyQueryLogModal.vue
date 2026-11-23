@@ -67,6 +67,7 @@
 </template>
 
 <script setup lang="ts">
+import { showError, showInfo } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import {
   NcActionButton,
@@ -84,7 +85,6 @@ import IconClipBoard from 'vue-material-design-icons/Clippy.vue'
 import { appName } from '../config.ts'
 import { LEGACY_QUERY_LOG as COMPONENT_NAME } from '../mountable-component-names.ts'
 import modalContainer from '../toolkit/util/modal-container.ts'
-import { showError, showInfo } from '../toolkit/util/toasts.ts'
 import Console from '../util/console.ts'
 const props = defineProps<{ queryLogEntry: LegacySqlQueryLogEntry }>()
 
