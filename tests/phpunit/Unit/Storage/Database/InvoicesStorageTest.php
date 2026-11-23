@@ -252,8 +252,14 @@ class InvoicesStorageTest extends TestCase
       $folderName = $this->mockProvider->getConfigService()->getAppL10n()->t($invoice ? 'Invoices' : 'DonationReceipts');
       $folder = $root->getFolderByName($folderName);
       self::assertNotNull($folder);
-      self::assertSame($first, $folder->getFileByName('first.pdf')->getFile());
-      self::assertNotSame($document, $folder->getFileByName('first.pdf'));
+      $participantLink = $folder->getFileByName('first.pdf');
+      self::assertNotNull($participantLink);
+      $entityManager->refresh($participantLink);
+      $entityManager->refresh($first->getFileData());
+      self::assertSame($first, $participantLink->getFile());
+      self::assertNotSame($document, $participantLink);
+      self::assertTrue($first->getOwners()->contains($participant->getMusician()));
+      self::assertSame('first', $first->getFileData()->getData());
 
       $document->setFile($second);
       $storage->synchronizeFinancialDocument($entity, $document, $first, 'first.pdf');
@@ -279,6 +285,17 @@ class InvoicesStorageTest extends TestCase
       $entityManager->flush();
       self::assertNull($folder->getFileByName('second.pdf'));
       self::assertSame($second, $document->getFile());
+
+      $unowned = new Entities\EncryptedFile('unowned.pdf', 'unowned', 'application/pdf');
+      $entityManager->persist($unowned);
+      $document->setName('unowned.pdf')->setFile($unowned);
+      $storage->synchronizeFinancialDocument($entity, $document);
+      $entityManager->flush();
+      $unownedLink = $folder->getFileByName('unowned.pdf');
+      self::assertNotNull($unownedLink);
+      $entityManager->refresh($unownedLink);
+      self::assertSame($unowned, $unownedLink->getFile());
+      self::assertFalse($unowned->getOwners()->contains($participant->getMusician()));
     } finally {
       $entityManager->rollBack();
       $entityManager->clear();
