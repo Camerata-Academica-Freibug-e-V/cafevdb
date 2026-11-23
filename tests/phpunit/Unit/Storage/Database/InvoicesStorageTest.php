@@ -474,14 +474,21 @@ class InvoicesStorageTest extends TestCase
         ->findOneBy(['storageId' => $financeStorage->getShortId()])->getRoot();
       $musicianFolder = $root->getFolderByName($musician->getUserIdSlug());
       $projectFolder = $musicianFolder->getFolderByName($project->getName());
+      $projectPath = $musician->getUserIdSlug() . '/' . $project->getName();
       self::assertSame($file, $projectFolder->getFileByName('MANDATE-1')->getFile());
       self::assertSame($file, $participantLink->getFile());
+
+      $unchangedRootTime = $financeStorage->filemtime('');
+      $financeStorage->synchronize();
+      self::assertFalse($financeStorage->hasUpdated('', $unchangedRootTime));
 
       $mandate->setDeleted(new DateTimeImmutable('+1 day'));
       $entityManager->flush();
       $financeStorage->synchronize();
       self::assertNotNull($projectFolder->getFileByName('MANDATE-1'));
 
+      $rootTime = $financeStorage->filemtime('');
+      $projectTime = $financeStorage->filemtime($projectPath);
       $mandate->setDeleted(new DateTimeImmutable('-1 minute'));
       $entityManager->flush();
       $financeStorage->synchronize();
@@ -489,6 +496,8 @@ class InvoicesStorageTest extends TestCase
       self::assertNull($projectFolder->getFileByName('MANDATE-1'));
       self::assertSame($file, $projectFolder->getFolderByName($revokedName)->getFileByName('MANDATE-1')->getFile());
       self::assertSame($file, $participantLink->getFile());
+      self::assertTrue($financeStorage->hasUpdated('', $rootTime));
+      self::assertTrue($financeStorage->hasUpdated($projectPath, $projectTime));
 
       $mandate->setDeleted(null);
       $entityManager->flush();
@@ -500,10 +509,13 @@ class InvoicesStorageTest extends TestCase
 
       $replacement = new Entities\EncryptedFile('replacement', 'new', 'application/octet-stream', $musician);
       $entityManager->persist($replacement);
+      $filePath = $projectPath . '/MANDATE-1';
+      $fileTime = $financeStorage->filemtime($filePath);
       $participantLink->setFile($replacement);
       $entityManager->flush();
       $financeStorage->synchronize();
       self::assertSame($replacement, $projectFolder->getFileByName('MANDATE-1')->getFile());
+      self::assertTrue($financeStorage->hasUpdated($filePath, $fileTime));
 
       $mandate->setWrittenMandate(null);
       $entityManager->flush();

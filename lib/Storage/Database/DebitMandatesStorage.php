@@ -12,6 +12,7 @@
 namespace OCA\CAFEVDB\Storage\Database;
 
 use DateTimeImmutable;
+use DateTimeInterface;
 use Throwable;
 use UnexpectedValueException;
 
@@ -35,6 +36,12 @@ class DebitMandatesStorage extends Storage
   public function getShortId():string
   {
     return 'finance' . self::PATH_SEPARATOR . 'debit-mandates' . self::PATH_SEPARATOR;
+  }
+
+  /** {@inheritdoc} */
+  protected function getStorageModificationDateTime():?DateTimeInterface
+  {
+    return self::ensureDate($this->rootFolder?->getUpdated());
   }
 
   /**
@@ -90,6 +97,7 @@ class DebitMandatesStorage extends Storage
         if ($entry !== null) {
           unset($existing[$path]);
           if ($entry->getFile() !== $target['file']) {
+            $this->advanceModificationTime($entry, $now);
             $entry->setFile($target['file']);
             $this->markChanged($entry->getParent(), $now);
           }
@@ -140,9 +148,21 @@ class DebitMandatesStorage extends Storage
   private function markChanged(Entities\DatabaseStorageFolder $folder, DateTimeImmutable $now):void
   {
     do {
-      $folder->setUpdated($now);
+      $this->advanceModificationTime($folder, $now);
       $folder = $folder->getParent();
     } while ($folder !== null);
+  }
+
+  /**
+   * @param Entities\DatabaseStorageDirEntry $entry
+   * @param DateTimeImmutable $now
+   *
+   * @return void
+   */
+  private function advanceModificationTime(Entities\DatabaseStorageDirEntry $entry, DateTimeImmutable $now):void
+  {
+    $previous = $entry->getUpdated()?->getTimestamp() ?? 0;
+    $entry->setUpdated($now->setTimestamp(max($now->getTimestamp(), $previous + 1)));
   }
 
   /**
