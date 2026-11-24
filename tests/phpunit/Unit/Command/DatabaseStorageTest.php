@@ -11,6 +11,7 @@ namespace OCA\CAFEVDB\Tests\Unit\Command;
 use OCA\CAFEVDB\Command\DatabaseStorage;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
 use OCP\IL10N;
@@ -50,18 +51,29 @@ class DatabaseStorageTest extends TestCase
     $this->entityManager->expects(self::never())->method('remove');
     $container = $this->createStub(ContainerInterface::class);
     $config = $this->createStub(ConfigService::class);
-    $config->method('getConfigValue')->willReturnCallback(static function(string $key, mixed $default): int {
-      self::assertSame(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, $key);
-      self::assertSame(0, $default);
-      return 20;
+    $config->method('getConfigValue')->willReturnCallback(static function(string $key, mixed $default = null): mixed {
+      self::assertSame($key === ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY ? 0 : null, $default);
+      return match ($key) {
+        ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY => 20,
+        ConfigConstants::SHARED_FOLDER => 'ORCHESTRA',
+        ConfigConstants::PROJECTS_FOLDER => 'projects',
+        ConfigConstants::PROJECT_PARTICIPANTS_FOLDER => 'participants',
+      };
     });
-    $container->method('get')->willReturnMap([[EntityManager::class, $this->entityManager], [ConfigService::class, $config]]);
+    $projectService = $this->createStub(ProjectService::class);
+    $projectService->method('getProjectPathPrefix')->willReturn('2026/Project');
+    $container->method('get')->willReturnMap([
+      [EntityManager::class, $this->entityManager],
+      [ConfigService::class, $config],
+      [ProjectService::class, $projectService],
+    ]);
     $users = $this->createStub(IUserManager::class);
     $users->method('get')->willReturn($this->createStub(IUser::class));
     $session = $this->createStub(IUserSession::class);
     $session->method('login')->willReturnCallback(fn() => $this->loginSuccessful);
     $l10n = $this->createStub(IL10N::class);
     $l10n->method('t')->willReturnArgument(0);
+    $config->method('getAppL10n')->willReturn($l10n);
     $command = new DatabaseStorage(
       'cafevdb',
       $l10n,
@@ -135,21 +147,34 @@ class DatabaseStorageTest extends TestCase
     $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
       str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted', 'file_name' => '<info>private.pdf</info>']],
       str_contains($sql, 'FROM EncryptedFileOwners') => [['encrypted_file_id' => 1, 'musician_id' => 10]],
+      str_contains($sql, 'FROM ProjectParticipants pp') => [
+        ['root_id' => 100, 'name' => 'Project', 'year' => 2026, 'type' => 'temporary', 'user_id_slug' => 'member'],
+      ],
+      str_contains($sql, 'FROM DatabaseStorageDirEntries') => [
+        ['id' => 100, 'parent_id' => null, 'file_id' => null, 'type' => 'folder', 'name' => ''],
+        ['id' => 101, 'parent_id' => 100, 'file_id' => 1, 'type' => 'file', 'name' => 'linked.pdf'],
+      ],
+      str_contains($sql, 'FROM ProjectParticipants') => [['musician_id' => 10, 'project_id' => 20, 'root_id' => 100]],
       default => [],
     });
     $options = ['--audit-access' => true, '--json' => $json];
     $this->tester->execute($options, ['capture_stderr_separately' => true]);
     self::assertStringNotContainsString('private.pdf', $this->tester->getDisplay());
+    self::assertStringNotContainsString('ORCHESTRA', $this->tester->getDisplay());
     $this->tester->execute(
       $options + ['--include-file-names' => true],
       ['capture_stderr_separately' => true],
     );
     $display = $this->tester->getDisplay();
+    $path = '/ORCHESTRA/projects/2026/Project/participants/member/Documents/linked.pdf';
     if ($json) {
       $report = json_decode($display, true, flags: JSON_THROW_ON_ERROR);
       self::assertSame('<info>private.pdf</info>', $report['findings'][0]['file_name']);
+      self::assertSame([['entry_id' => 101, 'path' => $path]], $report['findings'][0]['file_paths']);
+      self::assertSame($path, $report['findings'][1]['entry_path']);
     } else {
       self::assertStringContainsString('"file_name":' . json_encode('<info>private.pdf</info>', JSON_THROW_ON_ERROR), $display);
+      self::assertStringContainsString('"entry_path":' . json_encode($path, JSON_THROW_ON_ERROR), $display);
     }
   }
 

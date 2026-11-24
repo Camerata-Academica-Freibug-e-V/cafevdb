@@ -60,7 +60,13 @@ By default, reports use database identifiers rather than names, paths or documen
 contents. Add `--include-file-names` to include `file_name` (the underlying file's
 stored name) and, for findings with an `entry_id`, `entry_name` (the directory-entry
 name, which may differ). Missing names are `null`. This works with text and JSON
-output; names may identify people or contain stored path components, so keep such
+output. The same option adds `entry_path`, the full participant mount path
+(starting at the shared orchestra folder, without a Nextcloud user's `/files`
+prefix). File-level findings without an `entry_id` include `file_paths`, listing
+each directory entry and its full path. Paths use current folder configuration
+and app-localized document folder names. Unresolved paths, including broken
+directory chains or roots without a known participant mount, are `null`, never
+misleading partial paths. Names and paths may identify people, so keep such
 reports private.
 They include retained soft-deleted records, since ownership-based views do not
 filter those records, and show each referenced record's `deleted` value.

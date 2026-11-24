@@ -114,17 +114,29 @@ class ParticipantFileAuditServiceTest extends TestCase
     $this->connection->executeStatement('ALTER TABLE Files ADD COLUMN file_name TEXT');
     $this->connection->executeStatement('ALTER TABLE DatabaseStorageDirEntries ADD COLUMN name TEXT');
     $this->connection->executeStatement("UPDATE Files SET file_name = 'original.pdf' WHERE id = 1");
+    $this->connection->executeStatement("UPDATE DatabaseStorageDirEntries SET name = 'SupportingDocuments' WHERE id = 101");
     $this->connection->executeStatement("UPDATE DatabaseStorageDirEntries SET name = 'linked.pdf' WHERE id = 102");
+    $this->connection->executeStatement(
+      "INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder', ''), (201, 200, 1, 'file', 'other.pdf')",
+    );
+    $mountPath = '/ORCHESTRA/projects/2026/Project/participants/member/Documents';
     $before = $this->snapshot();
     $anonymous = $this->service->audit();
-    $named = $this->service->audit(true);
+    $named = $this->service->audit(true, [100 => $mountPath, 200 => '/ORCHESTRA/other/Documents']);
     self::assertSame($anonymous['summary'], $named['summary']);
     foreach ($named['findings'] as $index => $finding) {
       self::assertSame('original.pdf', $finding['file_name']);
       unset($finding['file_name']);
       if (isset($finding['entry_id'])) {
         self::assertSame('linked.pdf', $finding['entry_name']);
-        unset($finding['entry_name']);
+        self::assertSame($mountPath . '/SupportingDocuments/linked.pdf', $finding['entry_path']);
+        unset($finding['entry_name'], $finding['entry_path']);
+      } else {
+        self::assertSame([
+          ['entry_id' => 102, 'path' => $mountPath . '/SupportingDocuments/linked.pdf'],
+          ['entry_id' => 201, 'path' => '/ORCHESTRA/other/Documents/other.pdf'],
+        ], $finding['file_paths']);
+        unset($finding['file_paths']);
       }
       self::assertSame($anonymous['findings'][$index], $finding);
     }
@@ -144,6 +156,36 @@ class ParticipantFileAuditServiceTest extends TestCase
     self::assertCount(1, $findings);
     self::assertNull($findings[0]['file_name']);
     self::assertNull($findings[0]['entry_name']);
+    self::assertNull($findings[0]['entry_path']);
+  }
+
+  /** @return iterable */
+  public static function unresolvedPaths(): iterable
+  {
+    yield 'missing parent' => ['UPDATE DatabaseStorageDirEntries SET parent_id = 999 WHERE id = 101'];
+    yield 'directory cycle' => ['UPDATE DatabaseStorageDirEntries SET parent_id = 101 WHERE id = 100'];
+    yield 'non-folder parent' => ["UPDATE DatabaseStorageDirEntries SET type = 'file' WHERE id = 101"];
+    yield 'missing name' => ['UPDATE DatabaseStorageDirEntries SET name = NULL WHERE id = 101'];
+    yield 'unknown mount' => [null];
+  }
+
+  /** @param null|string $sql */
+  #[Attributes\DataProvider('unresolvedPaths')]
+  public function testIncompletePathsAreNotPresentedAsFullPaths(?string $sql): void
+  {
+    $this->connection->executeStatement('ALTER TABLE Files ADD COLUMN file_name TEXT');
+    $this->connection->executeStatement('ALTER TABLE DatabaseStorageDirEntries ADD COLUMN name TEXT');
+    $this->connection->executeStatement("UPDATE DatabaseStorageDirEntries SET name = 'document'");
+    if ($sql !== null) {
+      $this->connection->executeStatement($sql);
+    }
+    $report = $this->service->audit(true, $sql === null ? [] : [100 => '/ORCHESTRA/Documents']);
+    $findings = array_values(array_filter(
+      $report['findings'],
+      static fn(array $finding) => ($finding['entry_id'] ?? null) === 102,
+    ));
+    self::assertCount(1, $findings);
+    self::assertNull($findings[0]['entry_path']);
   }
 
   /** @return void */

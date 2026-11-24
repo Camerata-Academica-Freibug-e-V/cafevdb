@@ -25,21 +25,23 @@ class ParticipantFileAuditService
   /**
    * Include soft-deleted records: the personalized views do not filter them either.
    *
-   * @param bool $includeFileNames Include potentially identifying file and entry names.
+   * @param bool $includeFileNames Include potentially identifying file names and paths.
+   * @param array<int, string> $mountPaths Mounted paths indexed by database root entry ID.
    *
    * @return array{summary: array, findings: array}
    */
-  public function audit(bool $includeFileNames = false): array
+  public function audit(bool $includeFileNames = false, array $mountPaths = []): array
   {
-    return $this->connection->transactional(fn() => $this->inspect($includeFileNames));
+    return $this->connection->transactional(fn() => $this->inspect($includeFileNames, $mountPaths));
   }
 
   /**
    * @param bool $includeFileNames
+   * @param array $mountPaths
    *
    * @return array
    */
-  private function inspect(bool $includeFileNames): array
+  private function inspect(bool $includeFileNames, array $mountPaths): array
   {
     $files = array_column($this->connection->fetchAllAssociative(
       'SELECT id, type' . ($includeFileNames ? ', file_name' : '') . ' FROM Files',
@@ -86,10 +88,22 @@ class ParticipantFileAuditService
       json_encode($right, JSON_THROW_ON_ERROR),
     ));
     if ($includeFileNames) {
+      $filePaths = [];
+      foreach ($entries as $entry) {
+        if ($entry['type'] === 'file' && $entry['file_id'] !== null && isset($relevantFiles[$entry['file_id']])) {
+          $filePaths[$entry['file_id']][$entry['id']] = $this->entryPath((int)$entry['id'], $entries, $mountPaths);
+        }
+      }
       foreach ($findings as &$finding) {
         $finding['file_name'] = isset($finding['file_id']) ? ($files[$finding['file_id']]['file_name'] ?? null) : null;
         if (array_key_exists('entry_id', $finding)) {
           $finding['entry_name'] = isset($finding['entry_id']) ? ($entries[$finding['entry_id']]['name'] ?? null) : null;
+          $finding['entry_path'] = isset($finding['entry_id']) ? $this->entryPath($finding['entry_id'], $entries, $mountPaths) : null;
+        } else {
+          $finding['file_paths'] = [];
+          foreach ($filePaths[$finding['file_id'] ?? 0] ?? [] as $entryId => $path) {
+            $finding['file_paths'][] = ['entry_id' => (int)$entryId, 'path' => $path];
+          }
         }
       }
       unset($finding);
@@ -103,6 +117,34 @@ class ParticipantFileAuditService
       ],
       'findings' => $findings,
     ];
+  }
+
+  /**
+   * @param int $entryId
+   * @param array $entries
+   * @param array $mountPaths
+   *
+   * @return null|string Full mounted path, or null for an unresolved directory chain or mount.
+   */
+  private function entryPath(int $entryId, array $entries, array $mountPaths): ?string
+  {
+    $components = [];
+    $visited = [];
+    while (isset($entries[$entryId]) && !isset($visited[$entryId])) {
+      $entry = $entries[$entryId];
+      $visited[$entryId] = true;
+      if ($entry['parent_id'] === null) {
+        return isset($mountPaths[$entryId]) && $entry['type'] === 'folder'
+          ? rtrim($mountPaths[$entryId], '/') . '/' . implode('/', array_reverse($components))
+          : null;
+      }
+      if (!isset($entry['name']) || ($components !== [] && $entry['type'] !== 'folder')) {
+        return null;
+      }
+      $components[] = $entry['name'];
+      $entryId = (int)$entry['parent_id'];
+    }
+    return null;
   }
 
   /**
@@ -219,7 +261,7 @@ class ParticipantFileAuditService
     $links = [];
     foreach ($entries as $entry) {
       $fileId = $entry['file_id'];
-      if ($entry['type'] !== 'file' || !isset($relevantFiles[$fileId])) {
+      if ($entry['type'] !== 'file' || $fileId === null || !isset($relevantFiles[$fileId])) {
         continue;
       }
       $current = $entry;

@@ -39,8 +39,10 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumProjectTemporalType;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\ParticipantFileAuditService;
+use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 
 /** Maintenance for the database file-system backend. */
@@ -77,7 +79,7 @@ class DatabaseStorage extends Command
         'include-file-names',
         null,
         InputOption::VALUE_NONE,
-        'Include potentially identifying file and directory-entry names in the access audit.',
+        'Include potentially identifying file names and full mounted paths in the access audit.',
       )
       ->addOption(
         'list-storages',
@@ -211,8 +213,10 @@ class DatabaseStorage extends Command
   {
     $config = $this->appContainer->get(ConfigService::class);
     $clubProjectId = (int)$config->getConfigValue(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0);
+    $includeFileNames = $input->getOption('include-file-names');
     $report = (new ParticipantFileAuditService($this->entityManager->getConnection(), $clubProjectId))->audit(
-      $input->getOption('include-file-names'),
+      $includeFileNames,
+      $includeFileNames ? $this->auditMountPaths($config) : [],
     );
     if ($input->getOption('json')) {
       $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
@@ -224,5 +228,44 @@ class DatabaseStorage extends Command
       }
     }
     return $report['findings'] === [] ? self::SUCCESS : self::FAILURE;
+  }
+
+  /**
+   * @param ConfigService $config
+   *
+   * @return array<int, string> Participant mount paths, without a Nextcloud user's files prefix.
+   */
+  private function auditMountPaths(ConfigService $config): array
+  {
+    $sharedFolder = $config->getConfigValue(ConfigConstants::SHARED_FOLDER);
+    $projectsFolder = $config->getConfigValue(ConfigConstants::PROJECTS_FOLDER);
+    $participantsFolder = $config->getConfigValue(ConfigConstants::PROJECT_PARTICIPANTS_FOLDER);
+    if (empty($sharedFolder) || empty($projectsFolder) || empty($participantsFolder)) {
+      return [];
+    }
+    $projectService = $this->appContainer->get(ProjectService::class);
+    $documentsFolder = $config->getAppL10n()->t('Documents');
+    $paths = [];
+    foreach ($this->entityManager->getConnection()->fetchAllAssociative(
+      'SELECT s.root_id, p.name, p.year, p.type, m.user_id_slug
+       FROM ProjectParticipants pp
+       JOIN DatabaseStorages s ON s.id = pp.database_documents_id
+       LEFT JOIN Projects p ON p.id = pp.project_id
+       LEFT JOIN Musicians m ON m.id = pp.musician_id',
+    ) as $participant) {
+      if ($participant['root_id'] === null || $participant['name'] === null || empty($participant['user_id_slug'])) {
+        continue;
+      }
+      $participant['type'] = EnumProjectTemporalType::from($participant['type']);
+      $paths[(int)$participant['root_id']] = '/' . implode('/', [
+        trim($sharedFolder, '/'),
+        trim($projectsFolder, '/'),
+        $projectService->getProjectPathPrefix($participant),
+        trim($participantsFolder, '/'),
+        $participant['user_id_slug'],
+        $documentsFolder,
+      ]);
+    }
+    return $paths;
   }
 }
