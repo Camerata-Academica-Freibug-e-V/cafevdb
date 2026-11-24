@@ -16,8 +16,9 @@ class ParticipantFileAuditService
 {
   /**
    * @param Connection $connection Orchestra database connection.
+   * @param int $clubMembersProjectId Configured club-members project ID, or zero if unset.
    */
-  public function __construct(private Connection $connection)
+  public function __construct(private Connection $connection, private int $clubMembersProjectId)
   {
   }
 
@@ -59,7 +60,8 @@ class ParticipantFileAuditService
     }
     $findings = [];
     $references = $this->references();
-    $expected = $this->documentContexts($references, $entries, $owners, $participantRoots, $findings);
+    $clubMandates = [];
+    $expected = $this->documentContexts($references, $entries, $owners, $participantRoots, $findings, $clubMandates);
     $relevantFiles = $owners + $expected;
     foreach (array_keys($relevantFiles) as $fileId) {
       if (($files[$fileId]['type'] ?? null) !== 'encrypted') {
@@ -68,7 +70,7 @@ class ParticipantFileAuditService
       $this->checkOwners((int)$fileId, $owners[$fileId] ?? [], $expected[$fileId] ?? [], $findings);
     }
     $links = $this->participantLinks($entries, $rootParticipants, $relevantFiles, $findings);
-    $this->checkLinks($owners, $expected, $links, $participantRoots, $findings);
+    $this->checkLinks($owners, $expected, $links, $participantRoots, $findings, $clubMandates);
     usort($findings, static fn(array $left, array $right) => strcmp(
       json_encode($left, JSON_THROW_ON_ERROR),
       json_encode($right, JSON_THROW_ON_ERROR),
@@ -90,11 +92,18 @@ class ParticipantFileAuditService
    * @param array $owners
    * @param array $participantRoots
    * @param array $findings
+   * @param array $clubMandates
    *
    * @return array
    */
-  private function documentContexts(array $references, array $entries, array $owners, array $participantRoots, array &$findings): array
-  {
+  private function documentContexts(
+    array $references,
+    array $entries,
+    array $owners,
+    array $participantRoots,
+    array &$findings,
+    array &$clubMandates,
+  ): array {
     $expected = [];
     foreach ($references as $reference) {
       $entryId = $reference['entry_id'];
@@ -114,6 +123,10 @@ class ParticipantFileAuditService
       $fileId = $context['file_id'];
       $key = $reference['musician_id'] . ':' . $reference['project_id'];
       $expected[$fileId][$key] = $context;
+      if ($reference['source'] === 'debit-mandate' && $this->clubMembersProjectId > 0
+          && (int)$reference['project_id'] === $this->clubMembersProjectId) {
+        $clubMandates[$fileId][(int)$reference['musician_id']] = true;
+      }
       if (!isset($owners[$fileId][$reference['musician_id']])) {
         $findings[] = ['code' => 'missing-ownership'] + $context;
       }
@@ -217,11 +230,18 @@ class ParticipantFileAuditService
    * @param array $links
    * @param array $participantRoots
    * @param array $findings
+   * @param array $clubMandates
    *
    * @return void
    */
-  private function checkLinks(array $owners, array $expected, array $links, array $participantRoots, array &$findings): void
-  {
+  private function checkLinks(
+    array $owners,
+    array $expected,
+    array $links,
+    array $participantRoots,
+    array &$findings,
+    array $clubMandates,
+  ): void {
     foreach ($expected as $fileId => $contexts) {
       foreach ($contexts as $key => $context) {
         if (!isset($links[$fileId][$key])) {
@@ -235,7 +255,8 @@ class ParticipantFileAuditService
     foreach ($links as $fileId => $participants) {
       foreach ($participants as $key => $entryIds) {
         [$musicianId, $projectId] = array_map('intval', explode(':', $key));
-        if (isset($owners[$fileId][$musicianId]) && isset($expected[$fileId][$key])) {
+        if (isset($owners[$fileId][$musicianId])
+            && (isset($expected[$fileId][$key]) || isset($clubMandates[$fileId][$musicianId]))) {
           continue;
         }
         foreach ($entryIds as $entryId) {

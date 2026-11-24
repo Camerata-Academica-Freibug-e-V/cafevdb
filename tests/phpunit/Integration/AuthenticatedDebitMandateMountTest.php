@@ -189,7 +189,8 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       $logEntries = $entityManager->getRepository(Entities\LogEntry::class);
       self::assertInstanceOf(\DateTimeInterface::class, $logEntries->modificationTime());
       self::assertNull($logEntries->modificationTime('nonexistent-entity'));
-      $audit = (new ParticipantFileAuditService($entityManager->getConnection()))->audit();
+      $clubProjectId = (int)$config->getConfigValue(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0);
+      $audit = (new ParticipantFileAuditService($entityManager->getConnection(), $clubProjectId))->audit();
       self::assertGreaterThanOrEqual(1, $audit['summary']['document_references']);
       self::assertSame([], array_values(array_filter(
         $audit['findings'],

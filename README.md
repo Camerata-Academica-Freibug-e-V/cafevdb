@@ -59,6 +59,8 @@ ownership grant or participant-storage link alone is not a business reference.
 Reports use database identifiers rather than names, paths or document contents.
 They include retained soft-deleted records, since ownership-based views do not
 filter those records, and show each referenced record's `deleted` value.
+Links to a club-members-project mandate in the same musician's other participant
+storages are recognized using the configured club-members project ID.
 
 Findings distinguish unrecognized owned files, unexpected owners, missing
 ownership, missing participants or participant-tree links, unrelated-project

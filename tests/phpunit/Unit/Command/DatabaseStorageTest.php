@@ -10,6 +10,8 @@ namespace OCA\CAFEVDB\Tests\Unit\Command;
 
 use OCA\CAFEVDB\Command\DatabaseStorage;
 use OCA\CAFEVDB\Database\EntityManager;
+use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
 use OCP\IL10N;
 use OCP\IUser;
@@ -47,7 +49,9 @@ class DatabaseStorageTest extends TestCase
     $this->entityManager->expects(self::never())->method('flush');
     $this->entityManager->expects(self::never())->method('remove');
     $container = $this->createStub(ContainerInterface::class);
-    $container->method('get')->willReturnMap([[EntityManager::class, $this->entityManager]]);
+    $config = $this->createStub(ConfigService::class);
+    $config->method('getConfigValue')->with(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0)->willReturn(20);
+    $container->method('get')->willReturnMap([[EntityManager::class, $this->entityManager], [ConfigService::class, $config]]);
     $users = $this->createStub(IUserManager::class);
     $users->method('get')->willReturn($this->createStub(IUser::class));
     $session = $this->createStub(IUserSession::class);
@@ -109,6 +113,32 @@ class DatabaseStorageTest extends TestCase
     $this->connection->method('fetchAllAssociative')->willReturn([]);
     self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(['--audit-access' => true]));
     self::assertStringContainsString('read-only', $this->tester->getDisplay());
+    self::assertStringContainsString('"findings":0', $this->tester->getDisplay());
+  }
+
+  /** @return void */
+  public function testAuditUsesConfiguredClubProject(): void
+  {
+    $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
+      str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted']],
+      str_contains($sql, 'FROM EncryptedFileOwners') => [['encrypted_file_id' => 1, 'musician_id' => 10]],
+      str_contains($sql, 'FROM DatabaseStorageDirEntries') => [
+        ['id' => 100, 'parent_id' => null, 'file_id' => null, 'type' => 'folder'],
+        ['id' => 101, 'parent_id' => 100, 'file_id' => 1, 'type' => 'file'],
+        ['id' => 200, 'parent_id' => null, 'file_id' => null, 'type' => 'folder'],
+        ['id' => 201, 'parent_id' => 200, 'file_id' => 1, 'type' => 'file'],
+      ],
+      str_contains($sql, 'FROM ProjectParticipants') => [
+        ['musician_id' => 10, 'project_id' => 20, 'root_id' => 100],
+        ['musician_id' => 10, 'project_id' => 21, 'root_id' => 200],
+      ],
+      str_contains($sql, 'FROM SepaDebitMandates') => [
+        ['source' => 'debit-mandate', 'source_id' => 1, 'musician_id' => 10, 'project_id' => 20,
+         'entry_id' => 101, 'deleted' => null, 'option_key' => null],
+      ],
+      default => [],
+    });
+    self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(['--audit-access' => true]));
     self::assertStringContainsString('"findings":0', $this->tester->getDisplay());
   }
 

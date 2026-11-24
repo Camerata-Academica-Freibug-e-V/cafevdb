@@ -27,7 +27,7 @@ class ParticipantFileAuditServiceTest extends TestCase
   protected function setUp(): void
   {
     $this->connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
-    $this->service = new ParticipantFileAuditService($this->connection);
+    $this->service = new ParticipantFileAuditService($this->connection, 20);
     foreach ([
       'CREATE TABLE Files (id INTEGER PRIMARY KEY, type TEXT)',
       'CREATE TABLE EncryptedFileOwners (encrypted_file_id INTEGER, musician_id INTEGER)',
@@ -135,6 +135,50 @@ class ParticipantFileAuditServiceTest extends TestCase
       ['non-owner-participant-link', 'unexpected-owner', 'unrelated-participant-link'],
       $this->codes($this->service->audit()),
     );
+  }
+
+  /** @return void */
+  public function testClubMandateLinksAreValidOnlyForTheSameOwner(): void
+  {
+    $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, NULL)');
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 102, NULL)');
+    $this->connection->executeStatement('INSERT INTO EncryptedFileOwners VALUES (1, 12)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants VALUES (10, 21, 2), (11, 22, 3), (12, 23, 4)');
+    $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200), (3, 300), (4, 400)');
+    $this->connection->executeStatement(
+      "INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder'), (201, 200, 1, 'file'),
+                                                   (300, NULL, NULL, 'folder'), (301, 300, 1, 'file'),
+                                                   (400, NULL, NULL, 'folder'), (401, 400, 1, 'file')",
+    );
+    $report = $this->service->audit();
+    self::assertSame(['non-owner-participant-link', 'unexpected-owner', 'unrelated-participant-link'], $this->codes($report));
+    $links = array_column(array_filter($report['findings'], static fn(array $finding) => isset($finding['entry_id'])), 'entry_id');
+    sort($links);
+    self::assertSame([301, 401], $links);
+  }
+
+  /** @return void */
+  public function testProjectSpecificMandateDoesNotJustifyOtherProjectLink(): void
+  {
+    $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, NULL)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants VALUES (10, 21, 2)');
+    $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200)');
+    $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder'), (201, 200, 1, 'file')");
+    foreach ([0, 99] as $clubProjectId) {
+      $service = new ParticipantFileAuditService($this->connection, $clubProjectId);
+      self::assertSame(['unrelated-participant-link'], $this->codes($service->audit()));
+    }
+  }
+
+  /** @return void */
+  public function testClubMandateStillRequiresItsOwnParticipantLink(): void
+  {
+    $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, NULL)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants VALUES (10, 21, 2)');
+    $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200)');
+    $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder')");
+    $this->connection->executeStatement('UPDATE DatabaseStorageDirEntries SET parent_id = 200 WHERE id = 102');
+    self::assertSame(['missing-participant-link'], $this->codes($this->service->audit()));
   }
 
   /** @return void */

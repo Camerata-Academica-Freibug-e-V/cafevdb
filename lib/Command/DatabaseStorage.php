@@ -39,7 +39,9 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\ParticipantFileAuditService;
+use OCA\CAFEVDB\Settings\ConfigConstants;
 
 /** Maintenance for the database file-system backend. */
 class DatabaseStorage extends Command
@@ -201,7 +203,9 @@ class DatabaseStorage extends Command
    */
   private function auditAccess(InputInterface $input, OutputInterface $output): int
   {
-    $report = (new ParticipantFileAuditService($this->entityManager->getConnection()))->audit();
+    $config = $this->appContainer->get(ConfigService::class);
+    $clubProjectId = (int)$config->getConfigValue(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0);
+    $report = (new ParticipantFileAuditService($this->entityManager->getConnection(), $clubProjectId))->audit();
     if ($input->getOption('json')) {
       $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
     } else {
