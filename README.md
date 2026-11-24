@@ -44,6 +44,33 @@ or README is created for the conflicting file.
 Database-backed files and Collabora
 ----------------------------------
 
+To inspect an existing orchestra database before changing personalized storage
+views, run `occ cafevdb:storage:database --audit-access`. This authenticates with
+the usual interactive CafeVDB operator login. The audit itself only reads
+metadata; it does not decrypt file contents, repair links, flush ORM entities,
+or regenerate views. Use `--json` for a report with `summary` and `findings`;
+exit status is 0 for no findings, 1 for inconsistencies, and 2 for invalid option
+combinations. Database/query failures are errors, never a clean audit.
+
+The audit recognizes debit mandates, invoices, donation receipts, composite
+payment supporting documents, participant `db-file` values and participant
+field supporting documents (including generated insurance records). An
+ownership grant or participant-storage link alone is not a business reference.
+Reports use database identifiers rather than names, paths or document contents.
+They include retained soft-deleted records, since ownership-based views do not
+filter those records, and show each referenced record's `deleted` value.
+
+Findings distinguish unrecognized owned files, unexpected owners, missing
+ownership, missing participants or participant-tree links, unrelated-project
+and non-owner participant links, broken document references and broken
+directory trees. Shared files with explicit references for several participants
+are allowed; dedicated finance links are not mistaken for participant links.
+Review findings before attempting a backfill: this command intentionally does
+not infer associations from filenames or directory names. Run during a quiet
+maintenance window; it scans file/directory metadata and uses the database's
+configured transaction isolation. It does not check deployed view definitions,
+connector grants, encryption identities or Nextcloud's file cache.
+
 Database mounts require the CafeVDB app key to unlock encrypted database
 configuration. On validated WOPI requests, CafeVDB can recover that key without
 logging in to Nextcloud or unlocking the user's private key.

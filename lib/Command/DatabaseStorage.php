@@ -34,9 +34,12 @@ use OCP\IDateTimeFormatter;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Service\ParticipantFileAuditService;
 
 /** Maintenance for the database file-system backend. */
 class DatabaseStorage extends Command
@@ -62,6 +65,13 @@ class DatabaseStorage extends Command
       ->setName($this->appName . ':storage:database')
       ->setDescription('Maintenance for DB File-System Backend')
       ->addOption(
+        'audit-access',
+        null,
+        InputOption::VALUE_NONE,
+        'Read-only audit of musician file ownership, business references and participant-storage links.',
+      )
+      ->addOption('json', null, InputOption::VALUE_NONE, 'Output the access audit as JSON.')
+      ->addOption(
         'list-storages',
         'l',
         InputOption::VALUE_OPTIONAL,
@@ -86,9 +96,22 @@ class DatabaseStorage extends Command
   /** {@inheritdoc} */
   protected function execute(InputInterface $input, OutputInterface $output):int
   {
-    $result = $this->authenticate($input, $output);
+    $audit = $input->getOption('audit-access');
+    if (($input->getOption('json') && !$audit)
+        || ($audit && ($input->getOption('list-storages') !== false
+                      || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))) {
+      $output->writeln('<error>Use --audit-access alone, optionally with --json.</error>');
+      return self::INVALID;
+    }
+    $authenticationOutput = $audit && $input->getOption('json') && $output instanceof ConsoleOutputInterface
+      ? $output->getErrorOutput()
+      : $output;
+    $result = $this->authenticate($input, $authenticationOutput);
     if ($result != 0) {
       return $result;
+    }
+    if ($audit) {
+      return $this->auditAccess($input, $output);
     }
     $storageWildcard = $input->getOption('list-storages');
     if ($storageWildcard !== false) {
@@ -168,5 +191,26 @@ class DatabaseStorage extends Command
       $output->writeln('Removed ' . count($orphans) . ' orphans.');
     }
     return 0;
+  }
+
+  /**
+   * @param InputInterface $input
+   * @param OutputInterface $output
+   *
+   * @return int
+   */
+  private function auditAccess(InputInterface $input, OutputInterface $output): int
+  {
+    $report = (new ParticipantFileAuditService($this->entityManager->getConnection()))->audit();
+    if ($input->getOption('json')) {
+      $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
+    } else {
+      $output->writeln('Participant file access audit (read-only; includes soft-deleted records).');
+      $output->writeln(json_encode($report['summary'], JSON_THROW_ON_ERROR));
+      foreach ($report['findings'] as $finding) {
+        $output->writeln(OutputFormatter::escape(json_encode($finding, JSON_THROW_ON_ERROR)));
+      }
+    }
+    return $report['findings'] === [] ? self::SUCCESS : self::FAILURE;
   }
 }

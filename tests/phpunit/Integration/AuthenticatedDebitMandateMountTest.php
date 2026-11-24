@@ -14,6 +14,7 @@ use OCA\CAFEVDB\Crypto\AsymmetricKeyService;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\MountAuthenticationService;
+use OCA\CAFEVDB\Service\ParticipantFileAuditService;
 use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\CAFEVDB\Service\WopiRequestService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
@@ -188,6 +189,12 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       $logEntries = $entityManager->getRepository(Entities\LogEntry::class);
       self::assertInstanceOf(\DateTimeInterface::class, $logEntries->modificationTime());
       self::assertNull($logEntries->modificationTime('nonexistent-entity'));
+      $audit = (new ParticipantFileAuditService($entityManager->getConnection()))->audit();
+      self::assertGreaterThanOrEqual(1, $audit['summary']['document_references']);
+      self::assertSame([], array_values(array_filter(
+        $audit['findings'],
+        static fn(array $finding) => ($finding['file_id'] ?? null) === $file->getId(),
+      )));
 
       $authentication = new MountAuthenticationService(
         $session,
