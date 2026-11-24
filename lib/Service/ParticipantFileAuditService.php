@@ -83,6 +83,7 @@ class ParticipantFileAuditService
     }
     $links = $this->participantLinks($entries, $rootParticipants, $relevantFiles, $findings);
     $this->checkLinks($owners, $expected, $links, $participantRoots, $findings, $clubMandates);
+    $this->annotateRepairs($findings, $files, $entries, $links, $participantRoots, $rootParticipants);
     usort($findings, static fn(array $left, array $right) => strcmp(
       json_encode($left, JSON_THROW_ON_ERROR),
       json_encode($right, JSON_THROW_ON_ERROR),
@@ -224,6 +225,107 @@ class ParticipantFileAuditService
               d.supporting_document_id, d.deleted, HEX(d.option_key)
        FROM ProjectParticipantFieldsData d WHERE d.supporting_document_id IS NOT NULL",
     );
+  }
+
+  /**
+   * Identify missing grants justified by an active, participant-readable supporting document.
+   *
+   * @param array $findings
+   * @param array $files
+   * @param array $entries
+   * @param array $links
+   * @param array $participantRoots
+   * @param array $rootParticipants
+   *
+   * @return void
+   */
+  private function annotateRepairs(
+    array &$findings,
+    array $files,
+    array $entries,
+    array $links,
+    array $participantRoots,
+    array $rootParticipants,
+  ): void {
+    $candidates = [];
+    foreach ($this->repairableSupportingDocuments() as $candidate) {
+      $entryId = (int)$candidate['entry_id'];
+      $fileId = $entries[$entryId]['file_id'] ?? null;
+      $key = $candidate['musician_id'] . ':' . $candidate['project_id'];
+      $root = $participantRoots[$key] ?? null;
+      if ($fileId === null || ($files[$fileId]['type'] ?? null) !== 'encrypted'
+          || $root === null || count($rootParticipants[$root] ?? []) !== 1
+          || !in_array($entryId, $links[$fileId][$key] ?? [], true)) {
+        continue;
+      }
+      $candidates[$fileId][$key][$entryId][$candidate['field_id'] . ':' . $candidate['option_key']] = true;
+    }
+    foreach ($findings as &$finding) {
+      $finding['repairable'] = $this->isRepairableSupportFinding($finding, $candidates);
+      if ($finding['repairable']) {
+        $finding['repairsteps'] = ['add-ownership', 'reconcile-encryption-seal'];
+      }
+    }
+    unset($finding);
+  }
+
+  /** @return array */
+  private function repairableSupportingDocuments(): array
+  {
+    return $this->connection->fetchAllAssociative(
+      "SELECT d.field_id, d.musician_id, d.project_id, d.supporting_document_id AS entry_id, HEX(d.option_key) AS option_key
+       FROM ProjectParticipantFieldsData d
+       JOIN ProjectParticipantFields f ON f.id = d.field_id AND f.project_id = d.project_id
+       JOIN ProjectParticipants pp ON pp.musician_id = d.musician_id AND pp.project_id = d.project_id
+       JOIN Projects p ON p.id = d.project_id
+       JOIN Musicians m ON m.id = d.musician_id
+       WHERE d.supporting_document_id IS NOT NULL AND d.deleted IS NULL AND f.deleted IS NULL
+         AND pp.deleted IS NULL AND p.deleted IS NULL AND m.deleted IS NULL
+         AND f.participant_access IN ('read', 'read-write')
+         AND (
+           f.participation_context = 'unrestricted'
+           OR (f.participation_context = 'participants' AND pp.participation_status <> 'associated'
+               AND (
+                 NOT EXISTS (
+                   SELECT 1 FROM ProjectInstruments pi
+                   JOIN instrument_instrument_family iif ON iif.instrument_id = pi.instrument_id
+                   JOIN InstrumentFamilies fam ON fam.id = iif.instrument_family_id
+                   WHERE pi.project_id = pp.project_id AND pi.musician_id = pp.musician_id
+                     AND fam.family = 'not an instrument'
+                 )
+                 OR EXISTS (
+                   SELECT 1 FROM ProjectInstruments pi
+                   WHERE pi.project_id = pp.project_id AND pi.musician_id = pp.musician_id
+                     AND NOT EXISTS (
+                       SELECT 1 FROM instrument_instrument_family iif
+                       JOIN InstrumentFamilies fam ON fam.id = iif.instrument_family_id
+                       WHERE iif.instrument_id = pi.instrument_id AND fam.family = 'not an instrument'
+                     )
+                 )
+               ))
+         )",
+    );
+  }
+
+  /**
+   * @param array $finding
+   * @param array $candidates
+   *
+   * @return bool
+   */
+  private function isRepairableSupportFinding(array $finding, array $candidates): bool
+  {
+    if (!in_array($finding['code'], ['missing-ownership', 'non-owner-participant-link'], true)
+        || !isset($finding['file_id'], $finding['musician_id'], $finding['project_id'], $finding['entry_id'])) {
+      return false;
+    }
+    $key = $finding['musician_id'] . ':' . $finding['project_id'];
+    $matches = $candidates[$finding['file_id']][$key][$finding['entry_id']] ?? [];
+    if ($finding['code'] === 'missing-ownership') {
+      return $finding['source'] === 'participant-field-support'
+        && isset($matches[$finding['source_id'] . ':' . $finding['option_key']]);
+    }
+    return $matches !== [];
   }
 
   /**

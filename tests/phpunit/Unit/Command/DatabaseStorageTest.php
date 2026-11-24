@@ -119,7 +119,7 @@ class DatabaseStorageTest extends TestCase
     ));
     $report = json_decode($this->tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
     self::assertSame(
-      [['code' => 'unrecognized-owned-file', 'file_id' => 1, 'musician_id' => 10]],
+      [['code' => 'unrecognized-owned-file', 'file_id' => 1, 'musician_id' => 10, 'repairable' => false]],
       $report['findings'],
     );
   }
@@ -131,6 +131,44 @@ class DatabaseStorageTest extends TestCase
     self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(['--audit-access' => true]));
     self::assertStringContainsString('read-only', $this->tester->getDisplay());
     self::assertStringContainsString('"findings":0', $this->tester->getDisplay());
+  }
+
+  /** @param bool $json */
+  #[Attributes\DataProvider('fileNameFormats')]
+  public function testRepairCandidatesAppearInBothOutputFormats(bool $json): void
+  {
+    $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
+      str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted']],
+      str_contains($sql, 'FROM DatabaseStorageDirEntries') => [
+        ['id' => 100, 'parent_id' => null, 'file_id' => null, 'type' => 'folder'],
+        ['id' => 101, 'parent_id' => 100, 'file_id' => 1, 'type' => 'file'],
+      ],
+      str_contains($sql, 'FROM ProjectParticipants') => [['musician_id' => 10, 'project_id' => 20, 'root_id' => 100]],
+      str_contains($sql, 'FROM SepaDebitMandates') => [
+        ['source' => 'participant-field-support', 'source_id' => 1, 'musician_id' => 10, 'project_id' => 20,
+         'entry_id' => 101, 'deleted' => null, 'option_key' => '01'],
+      ],
+      str_contains($sql, 'FROM ProjectParticipantFieldsData d') => [
+        ['field_id' => 1, 'musician_id' => 10, 'project_id' => 20, 'entry_id' => 101, 'option_key' => '01'],
+      ],
+      default => [],
+    });
+    self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(
+      ['--audit-access' => true, '--json' => $json],
+      ['capture_stderr_separately' => true],
+    ));
+    $display = $this->tester->getDisplay();
+    if ($json) {
+      $report = json_decode($display, true, flags: JSON_THROW_ON_ERROR);
+      self::assertCount(2, $report['findings']);
+      foreach ($report['findings'] as $finding) {
+        self::assertTrue($finding['repairable']);
+        self::assertSame(['add-ownership', 'reconcile-encryption-seal'], $finding['repairsteps']);
+      }
+    } else {
+      self::assertSame(2, substr_count($display, '"repairable":true'));
+      self::assertSame(2, substr_count($display, '"repairsteps":["add-ownership","reconcile-encryption-seal"]'));
+    }
   }
 
   /** @return iterable */

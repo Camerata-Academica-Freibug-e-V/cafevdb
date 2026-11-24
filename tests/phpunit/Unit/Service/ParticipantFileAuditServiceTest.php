@@ -33,18 +33,25 @@ class ParticipantFileAuditServiceTest extends TestCase
       'CREATE TABLE EncryptedFileOwners (encrypted_file_id INTEGER, musician_id INTEGER)',
       'CREATE TABLE DatabaseStorageDirEntries (id INTEGER PRIMARY KEY, parent_id INTEGER, file_id INTEGER, type TEXT)',
       'CREATE TABLE DatabaseStorages (id INTEGER PRIMARY KEY, root_id INTEGER)',
-      'CREATE TABLE ProjectParticipants (musician_id INTEGER, project_id INTEGER, database_documents_id INTEGER)',
+      "CREATE TABLE ProjectParticipants (musician_id INTEGER, project_id INTEGER, database_documents_id INTEGER, deleted TEXT, participation_status TEXT DEFAULT 'regular')",
+      'CREATE TABLE Projects (id INTEGER PRIMARY KEY, deleted TEXT)',
+      'CREATE TABLE Musicians (id INTEGER PRIMARY KEY, deleted TEXT)',
+      'CREATE TABLE ProjectInstruments (project_id INTEGER, musician_id INTEGER, instrument_id INTEGER)',
+      'CREATE TABLE instrument_instrument_family (instrument_id INTEGER, instrument_family_id INTEGER)',
+      'CREATE TABLE InstrumentFamilies (id INTEGER PRIMARY KEY, family TEXT)',
       'CREATE TABLE SepaDebitMandates (sequence INTEGER, musician_id INTEGER, project_id INTEGER, written_mandate_id INTEGER, deleted TEXT)',
       'CREATE TABLE Invoices (id INTEGER PRIMARY KEY, debitor_id INTEGER, project_id INTEGER, written_invoice_id INTEGER, deleted TEXT)',
       'CREATE TABLE CompositePayments (id INTEGER PRIMARY KEY, musician_id INTEGER, project_id INTEGER, supporting_document_id INTEGER)',
       'CREATE TABLE DonationReceipts (id INTEGER PRIMARY KEY, donation_id INTEGER, supporting_document_id INTEGER, deleted TEXT)',
-      'CREATE TABLE ProjectParticipantFields (id INTEGER PRIMARY KEY, data_type TEXT)',
+      "CREATE TABLE ProjectParticipantFields (id INTEGER PRIMARY KEY, data_type TEXT, project_id INTEGER DEFAULT 20, deleted TEXT, participant_access TEXT DEFAULT 'none', participation_context TEXT DEFAULT 'unrestricted')",
       'CREATE TABLE ProjectParticipantFieldsData (field_id INTEGER, musician_id INTEGER, project_id INTEGER, option_key BLOB, option_value TEXT, supporting_document_id INTEGER, deleted TEXT)',
       "INSERT INTO Files VALUES (1, 'encrypted')",
       'INSERT INTO EncryptedFileOwners VALUES (1, 10)',
       "INSERT INTO DatabaseStorageDirEntries VALUES (100, NULL, NULL, 'folder'), (101, 100, NULL, 'folder'), (102, 101, 1, 'file')",
       'INSERT INTO DatabaseStorages VALUES (1, 100)',
-      'INSERT INTO ProjectParticipants VALUES (10, 20, 1)',
+      'INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (10, 20, 1)',
+      'INSERT INTO Projects VALUES (20, NULL)',
+      'INSERT INTO Musicians VALUES (10, NULL)',
     ] as $sql) {
       $this->connection->executeStatement($sql);
     }
@@ -67,11 +74,11 @@ class ParticipantFileAuditServiceTest extends TestCase
       'INSERT INTO DonationReceipts VALUES (1, 1, 102, NULL)',
     ];
     yield 'uploaded participant field' => [
-      "INSERT INTO ProjectParticipantFields VALUES (1, 'db-file')",
+      "INSERT INTO ProjectParticipantFields (id, data_type) VALUES (1, 'db-file')",
       "INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', '102', NULL, NULL)",
     ];
     yield 'insurance supporting document' => [
-      "INSERT INTO ProjectParticipantFields VALUES (1, 'receivables')",
+      "INSERT INTO ProjectParticipantFields (id, data_type) VALUES (1, 'receivables')",
       "INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', '19.99', 102, NULL)",
     ];
     yield 'retained soft-deleted invoice' => ["INSERT INTO Invoices VALUES (1, 10, 20, 102, '2000-01-01')"];
@@ -100,12 +107,125 @@ class ParticipantFileAuditServiceTest extends TestCase
   /** @return void */
   public function testUnrecognizedGrantIsNotJustifiedByParticipantLinkOrTextField(): void
   {
-    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields VALUES (1, 'text')");
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields (id, data_type) VALUES (1, 'text')");
     $this->connection->executeStatement("INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', '102', NULL, NULL)");
     self::assertSame(
       ['unrecognized-owned-file', 'unrelated-participant-link'],
       $this->codes($this->service->audit()),
     );
+  }
+
+  /** @return iterable */
+  public static function readableSupportingFields(): iterable
+  {
+    yield 'unrestricted read' => ['read', 'unrestricted'];
+    yield 'unrestricted read-write' => ['read-write', 'unrestricted'];
+    yield 'participants read' => ['read', 'participants'];
+    yield 'participants read-write' => ['read-write', 'participants'];
+  }
+
+  /** @param string $access
+   * @param string $context
+   */
+  #[Attributes\DataProvider('readableSupportingFields')]
+  public function testMissingOwnershipForReadableSupportingDocumentIsRepairable(string $access, string $context): void
+  {
+    $this->createMissingSupportGrant();
+    $this->connection->executeStatement(
+      'UPDATE ProjectParticipantFields SET participant_access = ?, participation_context = ?',
+      [$access, $context],
+    );
+    $before = $this->snapshot();
+    $report = $this->service->audit();
+    self::assertSame(['missing-ownership', 'non-owner-participant-link'], $this->codes($report));
+    foreach ($report['findings'] as $finding) {
+      self::assertTrue($finding['repairable']);
+      self::assertSame(['add-ownership', 'reconcile-encryption-seal'], $finding['repairsteps']);
+    }
+    self::assertSame($before, $this->snapshot());
+  }
+
+  /** @return iterable */
+  public static function unsafeSupportGrants(): iterable
+  {
+    yield 'access disabled' => ["UPDATE ProjectParticipantFields SET participant_access = 'none'"];
+    yield 'associates field' => ["UPDATE ProjectParticipantFields SET participation_context = 'associates'"];
+    yield 'deleted datum' => ["UPDATE ProjectParticipantFieldsData SET deleted = '2000-01-01'"];
+    yield 'deleted field' => ["UPDATE ProjectParticipantFields SET deleted = '2000-01-01'"];
+    yield 'deleted participant' => ["UPDATE ProjectParticipants SET deleted = '2000-01-01'"];
+    yield 'deleted project' => ["UPDATE Projects SET deleted = '2000-01-01'"];
+    yield 'deleted musician' => ["UPDATE Musicians SET deleted = '2000-01-01'"];
+    yield 'field from another project' => ['UPDATE ProjectParticipantFields SET project_id = 21'];
+    yield 'non-encrypted file' => ["UPDATE Files SET type = 'plain'"];
+    yield 'missing storage' => ['UPDATE ProjectParticipants SET database_documents_id = NULL'];
+    yield 'associated participant' => ["UPDATE ProjectParticipants SET participation_status = 'associated'"];
+    yield 'broken directory' => ['UPDATE DatabaseStorageDirEntries SET parent_id = 999 WHERE id = 101'];
+  }
+
+  /** @param string $sql */
+  #[Attributes\DataProvider('unsafeSupportGrants')]
+  public function testAmbiguousSupportGrantsAreNotMarkedRepairable(string $sql): void
+  {
+    $this->createMissingSupportGrant();
+    $this->connection->executeStatement("UPDATE ProjectParticipantFields SET participation_context = 'participants'");
+    $this->connection->executeStatement($sql);
+    foreach ($this->service->audit()['findings'] as $finding) {
+      self::assertFalse($finding['repairable']);
+      self::assertArrayNotHasKey('repairsteps', $finding);
+    }
+  }
+
+  /** @return void */
+  public function testParticipantContextAccountsForNonInstrumentRoles(): void
+  {
+    $this->createMissingSupportGrant();
+    $this->connection->executeStatement("UPDATE ProjectParticipantFields SET participation_context = 'participants'");
+    $this->connection->executeStatement("INSERT INTO InstrumentFamilies VALUES (1, 'not an instrument')");
+    $this->connection->executeStatement('INSERT INTO instrument_instrument_family VALUES (1, 1)');
+    $this->connection->executeStatement('INSERT INTO ProjectInstruments VALUES (20, 10, 1)');
+    self::assertFalse($this->service->audit()['findings'][0]['repairable']);
+    $this->connection->executeStatement('INSERT INTO ProjectInstruments VALUES (20, 10, 2)');
+    self::assertTrue($this->service->audit()['findings'][0]['repairable']);
+  }
+
+  /** @return void */
+  public function testOtherLinksAndOtherReferencesAreNotMarkedRepairable(): void
+  {
+    $this->createMissingSupportGrant();
+    $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries VALUES (103, 101, 1, 'file')");
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 102, NULL)');
+    $findings = $this->service->audit()['findings'];
+    $byCode = [];
+    foreach ($findings as $finding) {
+      $byCode[$finding['code'] . ':' . ($finding['source'] ?? $finding['entry_id'])] = $finding;
+    }
+    self::assertTrue($byCode['missing-ownership:participant-field-support']['repairable']);
+    self::assertFalse($byCode['missing-ownership:invoice']['repairable']);
+    self::assertTrue($byCode['non-owner-participant-link:102']['repairable']);
+    self::assertFalse($byCode['non-owner-participant-link:103']['repairable']);
+  }
+
+  /** @return void */
+  public function testSharedParticipantRootIsNotAnAutomaticRepairCandidate(): void
+  {
+    $this->createMissingSupportGrant();
+    $this->connection->executeStatement(
+      'INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (11, 20, 2)',
+    );
+    $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 100)');
+    foreach ($this->service->audit()['findings'] as $finding) {
+      self::assertFalse($finding['repairable']);
+    }
+  }
+
+  /** @return void */
+  private function createMissingSupportGrant(): void
+  {
+    $this->connection->executeStatement('DELETE FROM EncryptedFileOwners');
+    $this->connection->executeStatement(
+      "INSERT INTO ProjectParticipantFields (id, data_type, participant_access) VALUES (1, 'receivables', 'read')",
+    );
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', '19.99', 102, NULL)");
   }
 
   /** @return void */
@@ -205,7 +325,7 @@ class ParticipantFileAuditServiceTest extends TestCase
   {
     $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 102, NULL)');
     $this->connection->executeStatement('INSERT INTO EncryptedFileOwners VALUES (1, 11)');
-    $this->connection->executeStatement('INSERT INTO ProjectParticipants VALUES (10, 21, 2), (12, 22, 3)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (10, 21, 2), (12, 22, 3)');
     $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200), (3, 300)');
     $this->connection->executeStatement(
       "INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder'), (201, 200, 1, 'file'),
@@ -223,7 +343,7 @@ class ParticipantFileAuditServiceTest extends TestCase
     $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, NULL)');
     $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 102, NULL)');
     $this->connection->executeStatement('INSERT INTO EncryptedFileOwners VALUES (1, 12)');
-    $this->connection->executeStatement('INSERT INTO ProjectParticipants VALUES (10, 21, 2), (11, 22, 3), (12, 23, 4)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (10, 21, 2), (11, 22, 3), (12, 23, 4)');
     $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200), (3, 300), (4, 400)');
     $this->connection->executeStatement(
       "INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder'), (201, 200, 1, 'file'),
@@ -241,7 +361,7 @@ class ParticipantFileAuditServiceTest extends TestCase
   public function testProjectSpecificMandateDoesNotJustifyOtherProjectLink(): void
   {
     $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, NULL)');
-    $this->connection->executeStatement('INSERT INTO ProjectParticipants VALUES (10, 21, 2)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (10, 21, 2)');
     $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200)');
     $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder'), (201, 200, 1, 'file')");
     foreach ([0, 99] as $clubProjectId) {
@@ -254,7 +374,7 @@ class ParticipantFileAuditServiceTest extends TestCase
   public function testClubMandateStillRequiresItsOwnParticipantLink(): void
   {
     $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, NULL)');
-    $this->connection->executeStatement('INSERT INTO ProjectParticipants VALUES (10, 21, 2)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (10, 21, 2)');
     $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200)');
     $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder')");
     $this->connection->executeStatement('UPDATE DatabaseStorageDirEntries SET parent_id = 200 WHERE id = 102');
@@ -266,7 +386,7 @@ class ParticipantFileAuditServiceTest extends TestCase
   {
     $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 102, NULL), (2, 11, 21, 201, NULL)');
     $this->connection->executeStatement('INSERT INTO EncryptedFileOwners VALUES (1, 11)');
-    $this->connection->executeStatement('INSERT INTO ProjectParticipants VALUES (11, 21, 2)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (11, 21, 2)');
     $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200)');
     $this->connection->executeStatement(
       "INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder'), (201, 200, 1, 'file')",
@@ -300,7 +420,7 @@ class ParticipantFileAuditServiceTest extends TestCase
   /** @return void */
   public function testMalformedFieldReferenceDoesNotLeakItsValue(): void
   {
-    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields VALUES (1, 'db-file')");
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields (id, data_type) VALUES (1, 'db-file')");
     $this->connection->executeStatement("INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', 'private-value', NULL, NULL)");
     $report = $this->service->audit();
     self::assertContains('broken-document-reference', $this->codes($report));
