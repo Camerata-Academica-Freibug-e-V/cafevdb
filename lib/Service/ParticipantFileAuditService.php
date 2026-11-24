@@ -228,7 +228,7 @@ class ParticipantFileAuditService
   }
 
   /**
-   * Identify missing grants justified by an active, participant-readable supporting document.
+   * Identify missing grants justified by supporting documents or debit mandates.
    *
    * @param array $findings
    * @param array $files
@@ -260,13 +260,89 @@ class ParticipantFileAuditService
       }
       $candidates[$fileId][$key][$entryId][$candidate['field_id'] . ':' . $candidate['option_key']] = true;
     }
+    $mandates = $this->repairableMandates($files, $entries, $links, $participantRoots, $rootParticipants);
     foreach ($findings as &$finding) {
-      $finding['repairable'] = $this->isRepairableSupportFinding($finding, $candidates);
+      $finding['repairable'] = $this->isRepairableSupportFinding($finding, $candidates)
+        || $this->isRepairableMandateFinding($finding, $mandates);
       if ($finding['repairable']) {
         $finding['repairsteps'] = ['add-ownership', 'reconcile-encryption-seal'];
       }
     }
     unset($finding);
+  }
+
+  /**
+   * @param array $files
+   * @param array $entries
+   * @param array $links
+   * @param array $participantRoots
+   * @param array $rootParticipants
+   *
+   * @return array
+   */
+  private function repairableMandates(
+    array $files,
+    array $entries,
+    array $links,
+    array $participantRoots,
+    array $rootParticipants,
+  ): array {
+    $candidates = [];
+    $rows = $this->connection->fetchAllAssociative(
+      'SELECT mandate.sequence, mandate.musician_id, mandate.project_id, mandate.written_mandate_id,
+              target.project_id AS target_project_id
+       FROM SepaDebitMandates mandate
+       JOIN Musicians musician ON musician.id = mandate.musician_id AND musician.deleted IS NULL
+       JOIN Projects source_project ON source_project.id = mandate.project_id AND source_project.deleted IS NULL
+       JOIN ProjectParticipants source_participant ON source_participant.project_id = mandate.project_id
+         AND source_participant.musician_id = mandate.musician_id AND source_participant.deleted IS NULL
+       JOIN ProjectParticipants target ON target.musician_id = mandate.musician_id AND target.deleted IS NULL
+       JOIN Projects target_project ON target_project.id = target.project_id AND target_project.deleted IS NULL
+       WHERE mandate.deleted IS NULL AND mandate.written_mandate_id IS NOT NULL
+         AND (target.project_id = mandate.project_id OR (? > 0 AND mandate.project_id = ?))',
+      [$this->clubMembersProjectId, $this->clubMembersProjectId],
+    );
+    foreach ($rows as $mandate) {
+      $sourceProjectId = (int)$mandate['project_id'];
+      $targetProjectId = (int)$mandate['target_project_id'];
+      $entryId = (int)$mandate['written_mandate_id'];
+      $fileId = $entries[$entryId]['file_id'] ?? null;
+      $sourceKey = $mandate['musician_id'] . ':' . $sourceProjectId;
+      $targetKey = $mandate['musician_id'] . ':' . $targetProjectId;
+      $sourceRoot = $participantRoots[$sourceKey] ?? null;
+      $targetRoot = $participantRoots[$targetKey] ?? null;
+      if ($fileId === null || ($files[$fileId]['type'] ?? null) !== 'encrypted'
+          || $sourceRoot === null || count($rootParticipants[$sourceRoot] ?? []) !== 1
+          || $targetRoot === null || count($rootParticipants[$targetRoot] ?? []) !== 1
+          || !in_array($entryId, $links[$fileId][$sourceKey] ?? [], true)) {
+        continue;
+      }
+      foreach ($links[$fileId][$targetKey] ?? [] as $targetEntryId) {
+        $candidates[$fileId][$targetKey][$targetEntryId][$sourceProjectId . ':' . $mandate['sequence']] = true;
+      }
+    }
+    return $candidates;
+  }
+
+  /**
+   * @param array $finding
+   * @param array $candidates
+   *
+   * @return bool
+   */
+  private function isRepairableMandateFinding(array $finding, array $candidates): bool
+  {
+    if (!in_array($finding['code'], ['missing-ownership', 'non-owner-participant-link'], true)
+        || !isset($finding['file_id'], $finding['musician_id'], $finding['project_id'], $finding['entry_id'])) {
+      return false;
+    }
+    $key = $finding['musician_id'] . ':' . $finding['project_id'];
+    $matches = $candidates[$finding['file_id']][$key][$finding['entry_id']] ?? [];
+    if ($finding['code'] === 'missing-ownership') {
+      return $finding['source'] === 'debit-mandate'
+        && isset($matches[$finding['project_id'] . ':' . $finding['source_id']]);
+    }
+    return $matches !== [];
   }
 
   /** @return array */

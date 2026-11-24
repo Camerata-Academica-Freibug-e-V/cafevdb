@@ -96,10 +96,12 @@ maintenance window; it scans file/directory metadata and uses the database's
 configured transaction isolation. It does not check deployed view definitions,
 connector grants, encryption identities or Nextcloud's file cache.
 
-Each finding has `repairable`; `true` currently identifies only a missing
-ownership grant backed by an active, participant-readable supporting-document
-reference in that participant's own storage and project. Participant-only
-fields must match the participant's context. Deleted records, invalid files
+Each finding has `repairable`; `true` identifies missing ownership supported by
+an active, participant-readable supporting-document reference in that
+participant's own storage and project, or by an active debit mandate. A
+club-members-project mandate also justifies links in the same musician's other
+active project storages; other mandates justify only their own project.
+Participant-only fields must match the participant's context. Deleted records, invalid files
 and ambiguous links are not candidates. Such findings include `repairsteps`:
 `add-ownership` and `reconcile-encryption-seal`. These are proposed steps, not
 repairs performed or proof that encryption keys and seals are usable. The audit

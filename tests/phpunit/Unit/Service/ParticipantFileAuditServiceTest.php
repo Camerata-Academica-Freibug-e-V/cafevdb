@@ -218,6 +218,110 @@ class ParticipantFileAuditServiceTest extends TestCase
     }
   }
 
+  /** @return iterable */
+  public static function mandateScope(): iterable
+  {
+    yield 'club project' => [20, true];
+    yield 'other project' => [99, false];
+    yield 'unset club project' => [0, false];
+  }
+
+  /**
+   * @param int $clubProjectId
+   * @param bool $crossProject
+   *
+   * @return void
+   */
+  #[Attributes\DataProvider('mandateScope')]
+  public function testMandateRepairCandidatesRespectProjectAndMusician(int $clubProjectId, bool $crossProject): void
+  {
+    $this->createMissingMandateGrant();
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 102, NULL)');
+    $before = $this->snapshot();
+    $report = (new ParticipantFileAuditService($this->connection, $clubProjectId))->audit();
+    $findings = [];
+    foreach ($report['findings'] as $finding) {
+      $findings[$finding['code'] . ':' . ($finding['source'] ?? $finding['entry_id'])] = $finding;
+    }
+    foreach (['missing-ownership:debit-mandate', 'non-owner-participant-link:102'] as $key) {
+      self::assertTrue($findings[$key]['repairable']);
+      self::assertSame(['add-ownership', 'reconcile-encryption-seal'], $findings[$key]['repairsteps']);
+    }
+    self::assertFalse($findings['missing-ownership:invoice']['repairable']);
+    self::assertSame($crossProject, $findings['non-owner-participant-link:201']['repairable']);
+    self::assertFalse($findings['non-owner-participant-link:301']['repairable']);
+    self::assertSame($before, $this->snapshot());
+  }
+
+  /** @return iterable */
+  public static function unsafeMandateGrants(): iterable
+  {
+    yield 'deleted mandate' => ["UPDATE SepaDebitMandates SET deleted = '2000-01-01'"];
+    yield 'deleted musician' => ["UPDATE Musicians SET deleted = '2000-01-01'"];
+    yield 'deleted source project' => ["UPDATE Projects SET deleted = '2000-01-01' WHERE id = 20"];
+    yield 'deleted source participant' => ["UPDATE ProjectParticipants SET deleted = '2000-01-01' WHERE musician_id = 10 AND project_id = 20"];
+    yield 'non-encrypted file' => ["UPDATE Files SET type = 'plain'"];
+    yield 'broken source entry' => ['UPDATE DatabaseStorageDirEntries SET parent_id = 999 WHERE id = 101'];
+    yield 'missing source participant link' => ['UPDATE DatabaseStorageDirEntries SET parent_id = 200 WHERE id = 102'];
+    yield 'shared source root' => ['UPDATE DatabaseStorages SET root_id = 100 WHERE id = 3'];
+  }
+
+  /** @param string $sql */
+  #[Attributes\DataProvider('unsafeMandateGrants')]
+  public function testAmbiguousMandatesAreNotMarkedRepairable(string $sql): void
+  {
+    $this->createMissingMandateGrant();
+    $this->connection->executeStatement($sql);
+    foreach ($this->service->audit()['findings'] as $finding) {
+      self::assertFalse($finding['repairable']);
+      self::assertArrayNotHasKey('repairsteps', $finding);
+    }
+  }
+
+  /** @return iterable */
+  public static function unsafeMandateDestinations(): iterable
+  {
+    yield 'deleted destination participant' => [
+      "UPDATE ProjectParticipants SET deleted = '2000-01-01' WHERE musician_id = 10 AND project_id = 21",
+    ];
+    yield 'deleted destination project' => ["UPDATE Projects SET deleted = '2000-01-01' WHERE id = 21"];
+    yield 'broken destination tree' => ['UPDATE DatabaseStorageDirEntries SET parent_id = 999 WHERE id = 201'];
+    yield 'shared destination root' => ['UPDATE DatabaseStorages SET root_id = 200 WHERE id = 3'];
+  }
+
+  /** @param string $sql */
+  #[Attributes\DataProvider('unsafeMandateDestinations')]
+  public function testUnsafeMandateDestinationIsNotRepairable(string $sql): void
+  {
+    $this->createMissingMandateGrant();
+    $this->connection->executeStatement($sql);
+    $findings = array_values(array_filter(
+      $this->service->audit()['findings'],
+      static fn(array $finding) => ($finding['entry_id'] ?? null) === 201,
+    ));
+    self::assertNotEmpty($findings);
+    foreach ($findings as $finding) {
+      self::assertFalse($finding['repairable']);
+    }
+  }
+
+  /** @return void */
+  private function createMissingMandateGrant(): void
+  {
+    $this->connection->executeStatement('DELETE FROM EncryptedFileOwners');
+    $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, NULL)');
+    $this->connection->executeStatement('INSERT INTO Projects VALUES (21, NULL), (22, NULL)');
+    $this->connection->executeStatement('INSERT INTO Musicians VALUES (11, NULL)');
+    $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200), (3, 300)');
+    $this->connection->executeStatement(
+      'INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (10, 21, 2), (11, 22, 3)',
+    );
+    $this->connection->executeStatement(
+      "INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder'), (201, 200, 1, 'file'),
+                                                   (300, NULL, NULL, 'folder'), (301, 300, 1, 'file')",
+    );
+  }
+
   /** @return void */
   private function createMissingSupportGrant(): void
   {

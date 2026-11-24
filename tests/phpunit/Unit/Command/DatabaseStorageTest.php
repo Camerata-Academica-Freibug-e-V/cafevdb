@@ -144,6 +144,7 @@ class DatabaseStorageTest extends TestCase
         ['id' => 101, 'parent_id' => 100, 'file_id' => 1, 'type' => 'file'],
       ],
       str_contains($sql, 'FROM ProjectParticipants') => [['musician_id' => 10, 'project_id' => 20, 'root_id' => 100]],
+      str_contains($sql, 'FROM SepaDebitMandates mandate') => [],
       str_contains($sql, 'FROM SepaDebitMandates') => [
         ['source' => 'participant-field-support', 'source_id' => 1, 'musician_id' => 10, 'project_id' => 20,
          'entry_id' => 101, 'deleted' => null, 'option_key' => '01'],
@@ -232,6 +233,7 @@ class DatabaseStorageTest extends TestCase
         ['musician_id' => 10, 'project_id' => 20, 'root_id' => 100],
         ['musician_id' => 10, 'project_id' => 21, 'root_id' => 200],
       ],
+      str_contains($sql, 'FROM SepaDebitMandates mandate') => [],
       str_contains($sql, 'FROM SepaDebitMandates') => [
         ['source' => 'debit-mandate', 'source_id' => 1, 'musician_id' => 10, 'project_id' => 20,
          'entry_id' => 101, 'deleted' => null, 'option_key' => null],
