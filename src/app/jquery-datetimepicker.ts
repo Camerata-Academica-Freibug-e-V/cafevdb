@@ -98,13 +98,23 @@ $.fn.datepicker = function(options?: string|DatePickerOptions, ...rest: unknown[
   }
 };
 
-console.info('GLOBAL STATE LANG', { lang: globalState.language, asset: getLanguageAsset(globalState.language ?? 'en') });
+const languageAsset = getLanguageAsset(globalState.language ?? 'en');
+console.info('GLOBAL STATE LANG', { lang: globalState.language, asset: languageAsset });
 
-languageModules[getLanguageAsset(globalState.language ?? 'en')]().then((module) => {
-
+Promise.resolve().then(() => {
+  const loadLanguage = languageModules[languageAsset];
+  if (!loadLanguage) {
+    throw new Error(`Datepicker language asset not found: ${languageAsset}`);
+  }
+  return loadLanguage();
+}).then((module) => {
   console.info('DATE GLOBAL STATE', { gs: { ...globalState }, lang: globalState.language, module });
-
-  const datePickerDefaults = $.datepicker.regional[globalState.language] || {};
+  return true;
+}, (error) => {
+  console.error('Unable to load datepicker language asset', languageAsset, error);
+  return false;
+}).then((languageLoaded) => {
+  const datePickerDefaults = (languageLoaded && $.datepicker.regional[globalState.language]) || $.datepicker.regional[''];
   Object.assign(
     datePickerDefaults,
     {
@@ -126,10 +136,12 @@ languageModules[getLanguageAsset(globalState.language ?? 'en')]().then((module) 
   );
 
   $.datepicker.setDefaults(datePickerDefaults);
-  $.datetimepicker.setLocale(globalState.language);
+  if (languageLoaded) {
+    $.datetimepicker.setLocale(globalState.language);
+  }
 
   // convert to php format, incomplete
-  const dateFormat = $.datepicker.regional[globalState.language].dateFormat
+  const dateFormat = datePickerDefaults.dateFormat
     .replace(/yy/g, 'Y')
     .replace(/MM/g, 'F')
   //  .replace(/M/g, 'M')
