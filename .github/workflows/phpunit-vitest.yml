@@ -35,6 +35,13 @@ jobs:
           path: server/apps/${{ env.APP_NAME }}
           submodules: recursive
 
+      - name: Checkout Groupfolders test dependency
+        uses: actions/checkout@v4
+        with:
+          repository: nextcloud/groupfolders
+          ref: stable35
+          path: server/apps/groupfolders
+
       - name: Install xpath
         # the Makefile needs the xpath binary to read the app info from info.xml
         run: sudo apt-get install -y --no-install-recommends libxml-xpath-perl
