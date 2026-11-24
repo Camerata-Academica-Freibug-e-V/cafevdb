@@ -64,6 +64,29 @@ or regenerate views. Use `--json` for a report with `summary` and `findings`;
 exit status is 0 for no findings, 1 for inconsistencies, and 2 for invalid option
 combinations. Database/query failures are errors, never a clean audit.
 
+To list directory-entry trees not connected to a registered `DatabaseStorage`,
+run `occ cafevdb:storage:database --find-orphan-trees`, optionally with `--json`.
+The read-only listing groups entry IDs, parent IDs, file IDs and types by root
+ID, including empty trees. Add `--include-file-names` to include entry names and
+`parent_path` relative to the orphan tree (root parents use `/`); entries are
+sorted by `parent_path`, then `name`, and trees by root name.
+Use `--find-orphan-trees=prune-empty` to remove complete trees containing only
+folders. Trees containing file entries, file references, or nested registered
+storages are preserved. Pruning owns a transaction, locks the relevant metadata,
+deletes leaves before parents, and rolls back on errors. Its report lists the
+remaining trees and `pruned_root_ids`, with pruned tree/entry counts. Run pruning
+during a quiet maintenance window; repeating it is safe.
+The included names and paths
+these may identify people and should be kept private. These trees have no known
+mount path. Registered roots and their descendants are excluded, including
+registered subtrees nested beneath an unregistered root. This lists trees with
+a parentless root, not broken parent chains or cycles. It does not infer that
+their files are unused: business references and links elsewhere may still
+exist. This action never removes entries, files or directories, and cannot be
+combined with `--remove-orphans`, `--find-orphans`, `--list-storages` or
+`--audit-access`. Listing succeeds even when trees are found; query failures
+remain errors.
+
 The audit recognizes debit mandates, invoices, donation receipts, composite
 payment supporting documents, participant `db-file` values and participant
 field supporting documents (including generated insurance records). An

@@ -13,9 +13,11 @@ use RuntimeException;
 use OCA\CAFEVDB\Command\DatabaseStorage;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\OrphanTreeService;
 use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\DriverManager;
 use OCP\IL10N;
 use OCP\IUser;
 use OCP\IUserManager;
@@ -30,7 +32,10 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 /** Audit command output, authentication and non-destructive option selection. */
 #[Attributes\CoversClass(DatabaseStorage::class)]
+#[Attributes\UsesClass(OrphanTreeService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ParticipantFileAuditService::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Common\ConsoleLogger::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\DeprecationLogger::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Command\AuthenticatedCommandTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\EntityManagerTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Traits\AuthenticatedCommandTrait::class)]
@@ -97,7 +102,10 @@ class DatabaseStorageTest extends TestCase
     yield 'repair with removal' => [['--repair-access' => true, '--remove-orphans' => true]];
     yield 'repair with orphan search' => [['--repair-access' => true, '--find-orphans' => true]];
     yield 'repair with storage listing' => [['--repair-access' => true, '--list-storages' => null]];
-    yield 'repair with orphan trees' => [['--repair-access' => true, '--find-orphan-trees' => true]];
+    yield 'repair with orphan trees' => [['--repair-access' => true, '--find-orphan-trees' => null]];
+    yield 'unknown orphan mode' => [['--find-orphan-trees' => 'prune-all']];
+    yield 'empty orphan mode' => [['--find-orphan-trees' => '']];
+    yield 'pruning with dry run' => [['--find-orphan-trees' => 'prune-empty', '--dry-run' => true]];
     yield 'repair with names' => [['--repair-access' => true, '--include-file-names' => true]];
     yield 'repair with field names' => [['--repair-access' => true, '--include-field-names' => true]];
     yield 'JSON without audit' => [['--json' => true]];
@@ -106,6 +114,11 @@ class DatabaseStorageTest extends TestCase
     yield 'removal during audit' => [['--audit-access' => true, '--remove-orphans' => true]];
     yield 'listing during audit' => [['--audit-access' => true, '--list-storages' => null]];
     yield 'orphan search during audit' => [['--audit-access' => true, '--find-orphans' => true]];
+    yield 'orphan trees during audit' => [['--audit-access' => true, '--find-orphan-trees' => null]];
+    yield 'removal during tree listing' => [['--find-orphan-trees' => null, '--remove-orphans' => true]];
+    yield 'storage listing during tree listing' => [['--find-orphan-trees' => null, '--list-storages' => null]];
+    yield 'file search during tree listing' => [['--find-orphan-trees' => null, '--find-orphans' => true]];
+    yield 'field names during tree listing' => [['--find-orphan-trees' => null, '--include-field-names' => true]];
   }
 
   /** @param array $options */
@@ -235,7 +248,7 @@ class DatabaseStorageTest extends TestCase
       $database->executeStatement('INSERT INTO DatabaseStorages VALUES (1, 1), (2, 13)');
       $before = $database->fetchAllAssociative('SELECT * FROM DatabaseStorageDirEntries ORDER BY id');
       $this->connection->method('fetchAllAssociative')->willReturnCallback($database->fetchAllAssociative(...));
-      $options = ['--find-orphan-trees' => true, '--json' => $json];
+      $options = ['--find-orphan-trees' => null, '--json' => $json];
       self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute($options, ['capture_stderr_separately' => true]));
       $display = $this->tester->getDisplay();
       self::assertStringNotContainsString('private', $display);
@@ -268,7 +281,7 @@ class DatabaseStorageTest extends TestCase
   {
     $this->connection->method('fetchAllAssociative')->willReturn([]);
     self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(
-      ['--find-orphan-trees' => true, '--json' => true],
+      ['--find-orphan-trees' => null, '--json' => true],
       ['capture_stderr_separately' => true],
     ));
     self::assertSame(
@@ -282,7 +295,7 @@ class DatabaseStorageTest extends TestCase
   {
     $this->loginSuccessful = false;
     $this->connection->expects(self::never())->method('fetchAllAssociative');
-    self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(['--find-orphan-trees' => true]));
+    self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(['--find-orphan-trees' => null]));
   }
 
   /** @return void */
@@ -291,7 +304,7 @@ class DatabaseStorageTest extends TestCase
     $this->connection->method('fetchAllAssociative')->willThrowException(new RuntimeException('Tree query failed'));
     $this->expectException(RuntimeException::class);
     $this->expectExceptionMessage('Tree query failed');
-    $this->tester->execute(['--find-orphan-trees' => true]);
+    $this->tester->execute(['--find-orphan-trees' => null]);
   }
 
   /** @param bool $json */

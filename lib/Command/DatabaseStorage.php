@@ -43,6 +43,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumProjectTemporalType;
 use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\OrphanTreeService;
 use OCA\CAFEVDB\Service\ParticipantFileAuditService;
 use OCA\CAFEVDB\Service\ParticipantFileRepairService;
 use OCA\CAFEVDB\Service\ProjectService;
@@ -84,9 +85,16 @@ class DatabaseStorage extends Command
         'include-file-names',
         null,
         InputOption::VALUE_NONE,
-        'Include potentially identifying file names and full mounted paths in the access audit.',
+        'Include names and orphan parent paths (full mounted paths for the access audit).',
       )
       ->addOption('include-field-names', null, InputOption::VALUE_NONE, 'Include potentially identifying participant field names in the access audit.')
+      ->addOption(
+        'find-orphan-trees',
+        null,
+        InputOption::VALUE_OPTIONAL,
+        'List orphan directory-entry trees; use =prune-empty to remove complete folder-only trees.',
+        false,
+      )
       ->addOption(
         'list-storages',
         'l',
@@ -114,8 +122,10 @@ class DatabaseStorage extends Command
   {
     $audit = $input->getOption('audit-access');
     $repair = $input->getOption('repair-access');
-    $orphanTrees = $input->getOption('find-orphan-trees');
-    if (($repair && ($audit || $orphanTrees || $input->getOption('list-storages') !== false
+    $orphanMode = $input->getOption('find-orphan-trees');
+    $orphanTrees = $orphanMode !== false;
+    if (($orphanTrees && !in_array($orphanMode, [null, 'prune-empty'], true))
+        || ($repair && ($audit || $orphanTrees || $input->getOption('list-storages') !== false
                      || $input->getOption('find-orphans') || $input->getOption('remove-orphans')
                      || $input->getOption('include-file-names') || $input->getOption('include-field-names')))
         || ($input->getOption('dry-run') && !$repair)
@@ -125,7 +135,10 @@ class DatabaseStorage extends Command
                             || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))
         || ($audit && ($input->getOption('list-storages') !== false
                       || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))) {
-      $output->writeln('<error>Use --audit-access or --find-orphan-trees alone, optionally with --json and --include-file-names. --include-field-names requires --audit-access. Use --repair-access alone, optionally with --dry-run and --json.</error>');
+      $output->writeln(
+        '<error>Use --audit-access or --find-orphan-trees[=prune-empty] alone, optionally with --json and --include-file-names. '
+        . '--include-field-names requires --audit-access. Use --repair-access alone, optionally with --dry-run and --json.</error>',
+      );
       return self::INVALID;
     }
     $authenticationOutput = ($audit || $orphanTrees || $repair) && $input->getOption('json') && $output instanceof ConsoleOutputInterface
@@ -222,6 +235,43 @@ class DatabaseStorage extends Command
       $output->writeln('Removed ' . count($orphans) . ' orphans.');
     }
     return 0;
+  }
+
+  /**
+   * @param InputInterface $input
+   * @param OutputInterface $output
+   *
+   * @return int
+   */
+  private function findOrphanTrees(InputInterface $input, OutputInterface $output): int
+  {
+    $pruneEmpty = $input->getOption('find-orphan-trees') === 'prune-empty';
+    $service = new OrphanTreeService($this->entityManager->getConnection());
+    try {
+      $report = $service->inspect($input->getOption('include-file-names'), $pruneEmpty);
+    } finally {
+      if ($pruneEmpty) {
+        $this->entityManager->clear();
+      }
+    }
+    if ($input->getOption('json')) {
+      $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
+    } else {
+      $output->writeln($pruneEmpty
+        ? 'Storage-less directory-entry trees after pruning empty trees.'
+        : 'Storage-less directory-entry trees (read-only; includes soft-deleted records).');
+      $output->writeln(json_encode($report['summary'], JSON_THROW_ON_ERROR));
+      if ($pruneEmpty) {
+        $output->writeln('Pruned roots: ' . json_encode($report['pruned_root_ids'], JSON_THROW_ON_ERROR));
+      }
+      foreach ($report['trees'] as $tree) {
+        $output->writeln('Root ' . $tree['root_id'] . ': ' . count($tree['entries']) . ' entries');
+        foreach ($tree['entries'] as $entry) {
+          $output->writeln(OutputFormatter::escape(json_encode($entry, JSON_THROW_ON_ERROR)));
+        }
+      }
+    }
+    return self::SUCCESS;
   }
 
   /**
