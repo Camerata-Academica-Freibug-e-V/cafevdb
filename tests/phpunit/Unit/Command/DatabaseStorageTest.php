@@ -92,6 +92,7 @@ class DatabaseStorageTest extends TestCase
   {
     yield 'JSON without audit' => [['--json' => true]];
     yield 'file names without audit' => [['--include-file-names' => true]];
+    yield 'field names without audit' => [['--include-field-names' => true]];
     yield 'removal during audit' => [['--audit-access' => true, '--remove-orphans' => true]];
     yield 'listing during audit' => [['--audit-access' => true, '--list-storages' => null]];
     yield 'orphan search during audit' => [['--audit-access' => true, '--find-orphans' => true]];
@@ -177,6 +178,44 @@ class DatabaseStorageTest extends TestCase
   {
     yield 'text' => [false];
     yield 'JSON' => [true];
+  }
+
+  /** @param bool $json */
+  #[Attributes\DataProvider('fileNameFormats')]
+  public function testFieldNamesAreOptionalInBothOutputFormats(bool $json): void
+  {
+    $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
+      str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted']],
+      str_contains($sql, 'FROM DatabaseStorageDirEntries') => [
+        ['id' => 100, 'parent_id' => null, 'file_id' => null, 'type' => 'folder'],
+        ['id' => 101, 'parent_id' => 100, 'file_id' => 1, 'type' => 'file'],
+      ],
+      str_contains($sql, 'FROM ProjectParticipants') => [['musician_id' => 10, 'project_id' => 20, 'root_id' => 100]],
+      str_contains($sql, 'FROM SepaDebitMandates mandate') => [],
+      str_contains($sql, 'FROM SepaDebitMandates') => [
+        ['source' => 'participant-field-support', 'source_id' => 1, 'musician_id' => 10, 'project_id' => 20,
+         'entry_id' => 101, 'deleted' => null, 'option_key' => '01'],
+      ],
+      str_contains($sql, 'FROM ProjectParticipantFieldsData d') => [],
+      str_contains($sql, 'FROM ProjectParticipantFields') => [
+        ['id' => 1, 'data_type' => 'receivables', 'multiplicity' => 'recurring',
+         'participant_access' => 'read', 'name' => 'private field'],
+      ],
+      default => [],
+    });
+    $options = ['--audit-access' => true, '--json' => $json];
+    $this->tester->execute($options, ['capture_stderr_separately' => true]);
+    $display = $this->tester->getDisplay();
+    self::assertStringContainsString('participant_fields', $display);
+    self::assertStringNotContainsString('private field', $display);
+    $this->tester->execute($options + ['--include-field-names' => true], ['capture_stderr_separately' => true]);
+    $display = $this->tester->getDisplay();
+    if ($json) {
+      $report = json_decode($display, true, flags: JSON_THROW_ON_ERROR);
+      self::assertSame('private field', $report['findings'][0]['participant_fields'][0]['field_name']);
+    } else {
+      self::assertStringContainsString('"field_name":"private field"', $display);
+    }
   }
 
   /** @param bool $json */

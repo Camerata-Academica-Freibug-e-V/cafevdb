@@ -43,7 +43,7 @@ class ParticipantFileAuditServiceTest extends TestCase
       'CREATE TABLE Invoices (id INTEGER PRIMARY KEY, debitor_id INTEGER, project_id INTEGER, written_invoice_id INTEGER, deleted TEXT)',
       'CREATE TABLE CompositePayments (id INTEGER PRIMARY KEY, musician_id INTEGER, project_id INTEGER, supporting_document_id INTEGER)',
       'CREATE TABLE DonationReceipts (id INTEGER PRIMARY KEY, donation_id INTEGER, supporting_document_id INTEGER, deleted TEXT)',
-      "CREATE TABLE ProjectParticipantFields (id INTEGER PRIMARY KEY, data_type TEXT, project_id INTEGER DEFAULT 20, deleted TEXT, participant_access TEXT DEFAULT 'none', participation_context TEXT DEFAULT 'unrestricted')",
+      "CREATE TABLE ProjectParticipantFields (id INTEGER PRIMARY KEY, data_type TEXT, project_id INTEGER DEFAULT 20, deleted TEXT, participant_access TEXT DEFAULT 'none', participation_context TEXT DEFAULT 'unrestricted', multiplicity TEXT DEFAULT 'simple', name TEXT DEFAULT 'private field')",
       'CREATE TABLE ProjectParticipantFieldsData (field_id INTEGER, musician_id INTEGER, project_id INTEGER, option_key BLOB, option_value TEXT, supporting_document_id INTEGER, deleted TEXT)',
       "INSERT INTO Files VALUES (1, 'encrypted')",
       'INSERT INTO EncryptedFileOwners VALUES (1, 10)',
@@ -113,6 +113,65 @@ class ParticipantFileAuditServiceTest extends TestCase
       ['unrecognized-owned-file', 'unrelated-participant-link'],
       $this->codes($this->service->audit()),
     );
+  }
+
+  /** @return void */
+  public function testFieldAssociationsCoverBothReferenceTypesAndSharedFiles(): void
+  {
+    $this->connection->executeStatement('DELETE FROM EncryptedFileOwners');
+    $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries VALUES (103, 101, 1, 'file')");
+    $this->connection->executeStatement(
+      "INSERT INTO ProjectParticipantFields (id, data_type, multiplicity, participant_access, name) VALUES
+       (1, 'receivables', 'recurring', 'read-write', 'private support'),
+       (2, 'db-file', 'simple', 'read', 'private upload'),
+       (3, 'text', 'simple', 'none', 'not a file')",
+    );
+    $this->connection->executeStatement(
+      "INSERT INTO ProjectParticipantFieldsData VALUES
+       (1, 10, 20, X'01', '103', 102, NULL),
+       (2, 11, 21, X'02', '103', NULL, NULL),
+       (3, 10, 20, X'03', '102', NULL, NULL)",
+    );
+    $before = $this->snapshot();
+    $report = $this->service->audit();
+    $finding = array_values(array_filter(
+      $report['findings'],
+      static fn(array $item) => $item['code'] === 'non-owner-participant-link' && $item['entry_id'] === 102,
+    ))[0];
+    self::assertSame([
+      ['field_id' => 1, 'field_type' => 'receivables', 'multiplicity' => 'recurring', 'participant_access' => 'read-write',
+       'relation' => 'supporting_document_id', 'entry_id' => 102, 'musician_id' => 10, 'project_id' => 20, 'option_key' => '01'],
+      ['field_id' => 2, 'field_type' => 'db-file', 'multiplicity' => 'simple', 'participant_access' => 'read',
+       'relation' => 'option_value', 'entry_id' => 103, 'musician_id' => 11, 'project_id' => 21, 'option_key' => '02'],
+    ], $finding['participant_fields']);
+    self::assertStringNotContainsString('private', json_encode($report, JSON_THROW_ON_ERROR));
+    $named = $this->service->audit(includeFieldNames: true);
+    $finding = array_values(array_filter(
+      $named['findings'],
+      static fn(array $item) => $item['code'] === 'non-owner-participant-link' && $item['entry_id'] === 102,
+    ))[0];
+    self::assertSame(['private support', 'private upload'], array_column($finding['participant_fields'], 'field_name'));
+    self::assertSame($before, $this->snapshot());
+  }
+
+  /** @return void */
+  public function testBrokenFieldReferencesIncludeMetadataWithoutLeakingMalformedValue(): void
+  {
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields (id, data_type) VALUES (1, 'db-file')");
+    $this->connection->executeStatement(
+      "INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', 'private-value', NULL, NULL),
+       (1, 10, 20, X'02', '999', NULL, NULL)",
+    );
+    $findings = array_values(array_filter(
+      $this->service->audit()['findings'],
+      static fn(array $item) => $item['code'] === 'broken-document-reference',
+    ));
+    self::assertCount(2, $findings);
+    foreach ($findings as $finding) {
+      self::assertSame(1, $finding['participant_fields'][0]['field_id']);
+      self::assertSame($finding['entry_id'], $finding['participant_fields'][0]['entry_id']);
+    }
+    self::assertStringNotContainsString('private-value', json_encode($findings, JSON_THROW_ON_ERROR));
   }
 
   /** @return iterable */

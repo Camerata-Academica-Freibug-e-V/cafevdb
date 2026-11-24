@@ -27,21 +27,23 @@ class ParticipantFileAuditService
    *
    * @param bool $includeFileNames Include potentially identifying file names and paths.
    * @param array<int, string> $mountPaths Mounted paths indexed by database root entry ID.
+   * @param bool $includeFieldNames Include potentially identifying field names.
    *
    * @return array{summary: array, findings: array}
    */
-  public function audit(bool $includeFileNames = false, array $mountPaths = []): array
+  public function audit(bool $includeFileNames = false, array $mountPaths = [], bool $includeFieldNames = false): array
   {
-    return $this->connection->transactional(fn() => $this->inspect($includeFileNames, $mountPaths));
+    return $this->connection->transactional(fn() => $this->inspect($includeFileNames, $mountPaths, $includeFieldNames));
   }
 
   /**
    * @param bool $includeFileNames
    * @param array $mountPaths
+   * @param bool $includeFieldNames
    *
    * @return array
    */
-  private function inspect(bool $includeFileNames, array $mountPaths): array
+  private function inspect(bool $includeFileNames, array $mountPaths, bool $includeFieldNames): array
   {
     $files = array_column($this->connection->fetchAllAssociative(
       'SELECT id, type' . ($includeFileNames ? ', file_name' : '') . ' FROM Files',
@@ -84,6 +86,7 @@ class ParticipantFileAuditService
     $links = $this->participantLinks($entries, $rootParticipants, $relevantFiles, $findings);
     $this->checkLinks($owners, $expected, $links, $participantRoots, $findings, $clubMandates);
     $this->annotateRepairs($findings, $files, $entries, $links, $participantRoots, $rootParticipants);
+    $this->annotateFields($findings, $references, $entries, $includeFieldNames);
     usort($findings, static fn(array $left, array $right) => strcmp(
       json_encode($left, JSON_THROW_ON_ERROR),
       json_encode($right, JSON_THROW_ON_ERROR),
@@ -118,6 +121,83 @@ class ParticipantFileAuditService
       ],
       'findings' => $findings,
     ];
+  }
+
+  /**
+   * @param array $findings
+   * @param array $references
+   * @param array $entries
+   * @param bool $includeFieldNames
+   *
+   * @return void
+   */
+  private function annotateFields(array &$findings, array $references, array $entries, bool $includeFieldNames): void
+  {
+    $fields = array_column($this->connection->fetchAllAssociative(
+      'SELECT id, data_type, multiplicity, participant_access' . ($includeFieldNames ? ', name' : '') . ' FROM ProjectParticipantFields',
+    ), null, 'id');
+    $byFile = [];
+    $byEntry = [];
+    $byReference = [];
+    foreach ($references as $reference) {
+      if (!in_array($reference['source'], ['participant-field', 'participant-field-support'], true)
+          || !isset($fields[$reference['source_id']])) {
+        continue;
+      }
+      $field = $fields[$reference['source_id']];
+      $rawEntryId = $reference['entry_id'];
+      $validEntryId = is_scalar($rawEntryId) && ctype_digit((string)$rawEntryId)
+        && (string)(int)$rawEntryId === ltrim((string)$rawEntryId, '0') && (int)$rawEntryId > 0;
+      $entryId = $validEntryId ? (int)$rawEntryId : null;
+      $association = [
+        'field_id' => (int)$reference['source_id'],
+        'field_type' => $field['data_type'],
+        'multiplicity' => $field['multiplicity'],
+        'participant_access' => $field['participant_access'],
+        'relation' => $reference['source'] === 'participant-field-support' ? 'supporting_document_id' : 'option_value',
+        'entry_id' => $entryId,
+        'musician_id' => (int)$reference['musician_id'],
+        'project_id' => (int)$reference['project_id'],
+        'option_key' => $reference['option_key'],
+      ];
+      if ($includeFieldNames) {
+        $association['field_name'] = $field['name'];
+      }
+      if ($entryId === null) {
+        $referenceKey = implode(':', [
+          $reference['source'], $reference['source_id'], $reference['musician_id'],
+          $reference['project_id'], $reference['option_key'],
+        ]);
+        $byReference[$referenceKey][] = $association;
+        continue;
+      }
+      $byEntry[$entryId][] = $association;
+      $fileId = $entries[$entryId]['file_id'] ?? null;
+      if (($entries[$entryId]['type'] ?? null) === 'file' && $fileId !== null) {
+        $byFile[$fileId][] = $association;
+      }
+    }
+    foreach ($findings as &$finding) {
+      $associations = isset($finding['file_id'])
+        ? ($byFile[$finding['file_id']] ?? [])
+        : (isset($finding['entry_id']) ? ($byEntry[$finding['entry_id']] ?? []) : []);
+      if ($associations === [] && $finding['code'] === 'broken-document-reference'
+          && in_array($finding['source'], ['participant-field', 'participant-field-support'], true)) {
+        $referenceKey = implode(':', [
+          $finding['source'], $finding['source_id'], $finding['musician_id'],
+          $finding['project_id'], $finding['option_key'],
+        ]);
+        $associations = $byReference[$referenceKey] ?? [];
+      }
+      if ($associations !== []) {
+        usort($associations, static fn(array $left, array $right) => strcmp(
+          json_encode($left, JSON_THROW_ON_ERROR),
+          json_encode($right, JSON_THROW_ON_ERROR),
+        ));
+        $finding['participant_fields'] = $associations;
+      }
+    }
+    unset($finding);
   }
 
   /**

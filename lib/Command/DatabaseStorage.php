@@ -81,6 +81,7 @@ class DatabaseStorage extends Command
         InputOption::VALUE_NONE,
         'Include potentially identifying file names and full mounted paths in the access audit.',
       )
+      ->addOption('include-field-names', null, InputOption::VALUE_NONE, 'Include potentially identifying participant field names in the access audit.')
       ->addOption(
         'list-storages',
         'l',
@@ -107,10 +108,10 @@ class DatabaseStorage extends Command
   protected function execute(InputInterface $input, OutputInterface $output):int
   {
     $audit = $input->getOption('audit-access');
-    if ((($input->getOption('json') || $input->getOption('include-file-names')) && !$audit)
+    if ((($input->getOption('json') || $input->getOption('include-file-names') || $input->getOption('include-field-names')) && !$audit)
         || ($audit && ($input->getOption('list-storages') !== false
                       || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))) {
-      $output->writeln('<error>Use --audit-access alone, optionally with --json and --include-file-names.</error>');
+      $output->writeln('<error>Use --audit-access alone, optionally with --json, --include-file-names and --include-field-names.</error>');
       return self::INVALID;
     }
     $authenticationOutput = $audit && $input->getOption('json') && $output instanceof ConsoleOutputInterface
@@ -217,6 +218,7 @@ class DatabaseStorage extends Command
     $report = (new ParticipantFileAuditService($this->entityManager->getConnection(), $clubProjectId))->audit(
       $includeFileNames,
       $includeFileNames ? $this->auditMountPaths($config) : [],
+      $input->getOption('include-field-names'),
     );
     if ($input->getOption('json')) {
       $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);

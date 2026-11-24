@@ -80,6 +80,13 @@ and app-localized document folder names. Unresolved paths, including broken
 directory chains or roots without a known participant mount, are `null`, never
 misleading partial paths. Names and paths may identify people, so keep such
 reports private.
+Findings with associated participant fields include `participant_fields`, one
+entry per datum/reference, with field ID, type, multiplicity, participant access,
+relation (`supporting_document_id` or `option_value`), entry ID, musician,
+project and option key. Associations follow all directory links to the same
+file, so an association may belong to another project or musician. Only `db-file`
+option values are treated as entry IDs. Use `--include-field-names` to include
+the stored field name; it can identify people and should be kept private.
 They include retained soft-deleted records, since ownership-based views do not
 filter those records, and show each referenced record's `deleted` value.
 Links to a club-members-project mandate in the same musician's other participant
