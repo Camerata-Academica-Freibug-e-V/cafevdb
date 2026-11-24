@@ -781,6 +781,84 @@ class InvoicesStorageTest extends TestCase
     ));
   }
 
+  /** @return void */
+  #[Attributes\Depends('testDebitMandateOutermostRollbackAndRetry')]
+  public function testConcurrentDebitMandateReconciliations(): void
+  {
+    $entityManager = $this->getEntityManager();
+    $entityManager->clear();
+    $mandate = $entityManager->find(Entities\SepaDebitMandate::class, [
+      'musician' => self::$musicianId,
+      'sequence' => 1,
+    ]);
+    $musician = $mandate->getMusician();
+    $project = $mandate->getProject();
+    $fileId = $mandate->getWrittenMandate()->getFile()->getId();
+    $oldPath = $musician->getUserIdSlug() . '/' . $project->getName() . '/ROLLBACK-1';
+    $newPath = $musician->getUserIdSlug() . '/' . $project->getName() . '/UPDATED-1';
+    $storage = new DatabaseStorage\DebitMandatesStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+    ]);
+    $databaseProvider = \OCP\Server::get(\OCA\RotDrop\Tests\DatabaseProvider::class);
+    $database = $databaseProvider->getDatabaseConfig();
+    $process = proc_open([PHP_BINARY, '-d', 'xdebug.mode=off', __DIR__ . '/../../../fixtures/DebitMandatesSynchronizationWorker.php'], [
+      0 => ['pipe', 'r'],
+      1 => ['pipe', 'w'],
+      2 => ['pipe', 'w'],
+    ], $pipes);
+    self::assertIsResource($process);
+    $transactionStarted = false;
+    try {
+      fwrite($pipes[0], json_encode([
+        'databaseName' => $database->databaseName,
+        'databaseServer' => $database->databaseServer,
+        'databaseUser' => $database->databaseUser,
+        'databasePassword' => $database->databasePassword,
+      ], JSON_THROW_ON_ERROR) . "\n");
+      stream_set_timeout($pipes[1], 60);
+      self::assertSame("READY\n", fgets($pipes[1]));
+      $entityManager->beginTransaction();
+      $transactionStarted = true;
+      $mandate->setMandateReference('UPDATED-1');
+      $entityManager->flush();
+      $storage->synchronize();
+      fwrite($pipes[0], "synchronize\n");
+      self::assertSame("SYNCHRONIZING\n", fgets($pipes[1]));
+      usleep(1500000);
+      self::assertTrue(proc_get_status($process)['running'], 'The second reconciliation must wait for the first.');
+      $entityManager->commit();
+      $transactionStarted = false;
+      $completion = fgets($pipes[1]);
+      self::assertIsString($completion);
+      self::assertStringStartsWith('DONE ', $completion);
+      self::assertGreaterThan(0.5, (float)substr($completion, 5));
+      $entityManager->clear();
+      $storage = new DatabaseStorage\DebitMandatesStorage([
+        'configService' => $this->mockProvider->getConfigService(),
+      ]);
+      self::assertFalse($storage->file_exists($oldPath));
+      $stream = $storage->readStream($newPath);
+      self::assertIsResource($stream);
+      self::assertSame('signed', stream_get_contents($stream));
+      fclose($stream);
+      $mandate = $entityManager->find(Entities\SepaDebitMandate::class, [
+        'musician' => self::$musicianId,
+        'sequence' => 1,
+      ]);
+      self::assertSame($fileId, $mandate->getWrittenMandate()->getFile()->getId());
+    } finally {
+      if ($transactionStarted && $entityManager->isTransactionActive()) {
+        $entityManager->rollBack();
+      }
+      fclose($pipes[0]);
+      fclose($pipes[1]);
+      $errors = stream_get_contents($pipes[2]);
+      fclose($pipes[2]);
+      $status = proc_close($process);
+      self::assertSame(0, $status, $errors);
+    }
+  }
+
   /**
    * This is quas a tearDownAfterClass() but we need some mocked / stubbed
    * classes for the entity-manager.
@@ -794,6 +872,7 @@ class InvoicesStorageTest extends TestCase
   #[Attributes\Depends('testDebitMandateFirstAccessWaitsForConcurrentRootCreation')]
   #[Attributes\Depends('testDebitMandateFinanceStorage')]
   #[Attributes\Depends('testDebitMandateOutermostRollbackAndRetry')]
+  #[Attributes\Depends('testConcurrentDebitMandateReconciliations')]
   public function testUnapplyMigrations(): void
   {
     $this->unapplyMigrations();

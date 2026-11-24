@@ -217,7 +217,7 @@ class DatabaseMountAuthorizationTest extends TestCase
     $expression = $this->createStub(IExpressionBuilder::class);
     $expression->method('eq')->willReturn('condition');
     $result = $this->createStub(IResult::class);
-    $result->method('fetchOne')->willReturn('cafevdb::database-storage::/finance/debit-mandates/');
+    $result->method('fetchOne')->willReturn('cafevdb::database-storage/finance/debit-mandates/');
     $query = $this->createStub(IQueryBuilder::class);
     foreach (['select', 'from', 'innerJoin', 'where', 'andWhere'] as $method) {
       $query->method($method)->willReturnSelf();
