@@ -10,7 +10,6 @@ namespace OCA\CAFEVDB\Tests\Integration;
 
 use DateTimeImmutable;
 use OCA\CAFEVDB\AppInfo\Application;
-use OCA\CAFEVDB\Crypto\AsymmetricCryptorInterface;
 use OCA\CAFEVDB\Crypto\AsymmetricKeyService;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Service\AuthorizationService;
@@ -30,7 +29,6 @@ use OC\Files\Mount\MountPoint;
 use OCP\App\IAppManager;
 use OCP\Authentication\LoginCredentials\IStore as ICredentialsStore;
 use OCP\Files\Config\IMountProviderCollection;
-use OCP\Files\Config\IUserMountCache;
 use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
@@ -48,6 +46,21 @@ use OCP\Server;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+
+class AuthenticatedMountMockProvider extends MockProvider
+{
+  private ?AsymmetricKeyService $keyService = null;
+
+  public function useKeyService(AsymmetricKeyService $keyService): void
+  {
+    $this->keyService = $keyService;
+  }
+
+  public function getAsymmetricKeyService(): AsymmetricKeyService
+  {
+    return $this->keyService ?? parent::getAsymmetricKeyService();
+  }
+}
 
 #[CoversNothing]
 class AuthenticatedDebitMandateMountTest extends TestCase
@@ -69,7 +82,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
     $root = Server::get(IRootFolder::class);
     $mounts = Server::get(IMountManager::class);
     $providers = Server::get(IMountProviderCollection::class);
-    $mountCache = Server::get(IUserMountCache::class);
+    $mountCache = $providers->getMountCache();
     $connection = Server::get(IDBConnection::class);
     $logger = Server::get(LoggerInterface::class);
     $folderManager = Server::get(FolderManager::class);
@@ -107,7 +120,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       $shared->newFolder('Projects');
       Filesystem::tearDown();
 
-      $this->mockProvider = MockProvider::create($this);
+      $this->mockProvider = $mockProvider = AuthenticatedMountMockProvider::create($this);
       $this->mockProvider->registerClassInstance(IUserSession::class, $session, global: true);
       $this->mockProvider->registerClassInstance(ICredentialsStore::class, $credentials, global: true);
       $this->mockProvider->registerClassInstance(GroupFoldersService::class, $groupFolders);
@@ -124,7 +137,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       self::assertTrue($authorization->authorized($uid, AuthorizationService::PERMISSION_FINANCE));
       $appContainer = $this->mockProvider->getAppContainer();
       $keyService = $appContainer->get(AsymmetricKeyService::class);
-      $this->mockProvider->registerClassInstance(AsymmetricCryptorInterface::class, $keyService);
+      $mockProvider->useKeyService($keyService);
       $this->generateCalendarBackend();
       $this->applyMigrations('latest');
       $this->generateProjectParticipant(persist: true, now: new DateTimeImmutable('2099-01-01'), delete: false);
