@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra Management App.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -13,7 +14,9 @@ use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
 /** Inspect file grants and participant links without loading encrypted data or ORM entities. */
 class ParticipantFileAuditService
 {
-  /** @param Connection $connection Orchestra database connection. */
+  /**
+   * @param Connection $connection Orchestra database connection.
+   */
   public function __construct(private Connection $connection)
   {
   }
@@ -94,6 +97,14 @@ class ParticipantFileAuditService
   {
     $expected = [];
     foreach ($references as $reference) {
+      $entryId = $reference['entry_id'];
+      if (!is_scalar($entryId) || !ctype_digit((string)$entryId)
+          || (string)(int)$entryId !== ltrim((string)$entryId, '0') || (int)$entryId <= 0) {
+        $reference['entry_id'] = null;
+        $findings[] = ['code' => 'broken-document-reference'] + $reference + ['file_id' => null];
+        continue;
+      }
+      $reference['entry_id'] = (int)$entryId;
       $entry = $entries[$reference['entry_id']] ?? null;
       $context = array_merge($reference, ['file_id' => isset($entry['file_id']) ? (int)$entry['file_id'] : null]);
       if ($entry === null || $entry['type'] !== 'file' || $context['file_id'] === null) {

@@ -16,6 +16,8 @@ use PHPUnit\Framework\TestCase;
 
 /** Run the audit's actual metadata queries against an isolated database. */
 #[Attributes\CoversClass(ParticipantFileAuditService::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Common\ConsoleLogger::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\DeprecationLogger::class)]
 class ParticipantFileAuditServiceTest extends TestCase
 {
   private Connection $connection;
@@ -169,6 +171,16 @@ class ParticipantFileAuditServiceTest extends TestCase
       ['broken-directory-tree', 'broken-document-reference', 'unrecognized-owned-file'],
       $this->codes($this->service->audit()),
     );
+  }
+
+  /** @return void */
+  public function testMalformedFieldReferenceDoesNotLeakItsValue(): void
+  {
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields VALUES (1, 'db-file')");
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', 'private-value', NULL, NULL)");
+    $report = $this->service->audit();
+    self::assertContains('broken-document-reference', $this->codes($report));
+    self::assertStringNotContainsString('private-value', json_encode($report, JSON_THROW_ON_ERROR));
   }
 
   /** @return void */

@@ -52,9 +52,11 @@ class DatabaseStorageTest extends TestCase
     $users->method('get')->willReturn($this->createStub(IUser::class));
     $session = $this->createStub(IUserSession::class);
     $session->method('login')->willReturnCallback(fn() => $this->loginSuccessful);
+    $l10n = $this->createStub(IL10N::class);
+    $l10n->method('t')->willReturnArgument(0);
     $command = new DatabaseStorage(
       'cafevdb',
-      $this->createStub(IL10N::class),
+      $l10n,
       new NullLogger,
       $users,
       $session,
