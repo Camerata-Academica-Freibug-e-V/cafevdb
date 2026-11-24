@@ -28,6 +28,7 @@ use OC\Files\Filesystem;
 use OC\Files\Mount\MountPoint;
 use OCP\App\IAppManager;
 use OCP\Authentication\LoginCredentials\IStore as ICredentialsStore;
+use OCP\Config\IUserConfig;
 use OCP\Files\Config\IMountProviderCollection;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -62,6 +63,7 @@ class AuthenticatedMountMockProvider extends MockProvider
   }
 }
 
+/** @SuppressWarnings(PHPMD.CouplingBetweenObjects) */
 #[CoversNothing]
 class AuthenticatedDebitMandateMountTest extends TestCase
 {
@@ -78,6 +80,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
     $groups = Server::get(IGroupManager::class);
     $session = Server::get(IUserSession::class);
     $credentials = Server::get(ICredentialsStore::class);
+    $userConfig = Server::get(IUserConfig::class);
     $request = Server::get(IRequest::class);
     $root = Server::get(IRootFolder::class);
     $mounts = Server::get(IMountManager::class);
@@ -97,6 +100,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
     $group = $groups->createGroup($groupId);
     $user = null;
     $folderId = null;
+    $mockProvider = null;
     try {
       self::assertInstanceOf(IGroup::class, $group);
       $user = $users->createUser($uid, $password);
@@ -181,6 +185,9 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       $entityManager->flush();
       $entityManager->commit();
       $entityManager->clear();
+      $logEntries = $entityManager->getRepository(Entities\LogEntry::class);
+      self::assertInstanceOf(\DateTimeInterface::class, $logEntries->modificationTime());
+      self::assertNull($logEntries->modificationTime('nonexistent-entity'));
 
       $authentication = new MountAuthenticationService(
         $session,
@@ -228,6 +235,9 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       }
     } finally {
       Filesystem::tearDown();
+      if ($mockProvider !== null) {
+        $mockProvider->registerClassInstance(IUserConfig::class, $userConfig, global: true);
+      }
       if ($folderId !== null) {
         $folderManager->removeFolder($folderId);
       }
