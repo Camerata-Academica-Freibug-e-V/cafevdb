@@ -79,6 +79,7 @@ class DatabaseStorageTest extends TestCase
   public static function invalidOptions(): iterable
   {
     yield 'JSON without audit' => [['--json' => true]];
+    yield 'file names without audit' => [['--include-file-names' => true]];
     yield 'removal during audit' => [['--audit-access' => true, '--remove-orphans' => true]];
     yield 'listing during audit' => [['--audit-access' => true, '--list-storages' => null]];
     yield 'orphan search during audit' => [['--audit-access' => true, '--find-orphans' => true]];
@@ -118,6 +119,38 @@ class DatabaseStorageTest extends TestCase
     self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(['--audit-access' => true]));
     self::assertStringContainsString('read-only', $this->tester->getDisplay());
     self::assertStringContainsString('"findings":0', $this->tester->getDisplay());
+  }
+
+  /** @return iterable */
+  public static function fileNameFormats(): iterable
+  {
+    yield 'text' => [false];
+    yield 'JSON' => [true];
+  }
+
+  /** @param bool $json */
+  #[Attributes\DataProvider('fileNameFormats')]
+  public function testFileNamesAreIncludedOnlyWhenRequested(bool $json): void
+  {
+    $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
+      str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted', 'file_name' => '<info>private.pdf</info>']],
+      str_contains($sql, 'FROM EncryptedFileOwners') => [['encrypted_file_id' => 1, 'musician_id' => 10]],
+      default => [],
+    });
+    $options = ['--audit-access' => true, '--json' => $json];
+    $this->tester->execute($options, ['capture_stderr_separately' => true]);
+    self::assertStringNotContainsString('private.pdf', $this->tester->getDisplay());
+    $this->tester->execute(
+      $options + ['--include-file-names' => true],
+      ['capture_stderr_separately' => true],
+    );
+    $display = $this->tester->getDisplay();
+    if ($json) {
+      $report = json_decode($display, true, flags: JSON_THROW_ON_ERROR);
+      self::assertSame('<info>private.pdf</info>', $report['findings'][0]['file_name']);
+    } else {
+      self::assertStringContainsString('"file_name":' . json_encode('<info>private.pdf</info>', JSON_THROW_ON_ERROR), $display);
+    }
   }
 
   /** @return void */

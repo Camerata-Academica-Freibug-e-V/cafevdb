@@ -74,6 +74,12 @@ class DatabaseStorage extends Command
       )
       ->addOption('json', null, InputOption::VALUE_NONE, 'Output the access audit as JSON.')
       ->addOption(
+        'include-file-names',
+        null,
+        InputOption::VALUE_NONE,
+        'Include potentially identifying file and directory-entry names in the access audit.',
+      )
+      ->addOption(
         'list-storages',
         'l',
         InputOption::VALUE_OPTIONAL,
@@ -99,10 +105,10 @@ class DatabaseStorage extends Command
   protected function execute(InputInterface $input, OutputInterface $output):int
   {
     $audit = $input->getOption('audit-access');
-    if (($input->getOption('json') && !$audit)
+    if ((($input->getOption('json') || $input->getOption('include-file-names')) && !$audit)
         || ($audit && ($input->getOption('list-storages') !== false
                       || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))) {
-      $output->writeln('<error>Use --audit-access alone, optionally with --json.</error>');
+      $output->writeln('<error>Use --audit-access alone, optionally with --json and --include-file-names.</error>');
       return self::INVALID;
     }
     $authenticationOutput = $audit && $input->getOption('json') && $output instanceof ConsoleOutputInterface
@@ -205,7 +211,9 @@ class DatabaseStorage extends Command
   {
     $config = $this->appContainer->get(ConfigService::class);
     $clubProjectId = (int)$config->getConfigValue(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0);
-    $report = (new ParticipantFileAuditService($this->entityManager->getConnection(), $clubProjectId))->audit();
+    $report = (new ParticipantFileAuditService($this->entityManager->getConnection(), $clubProjectId))->audit(
+      $input->getOption('include-file-names'),
+    );
     if ($input->getOption('json')) {
       $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
     } else {

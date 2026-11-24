@@ -25,23 +25,33 @@ class ParticipantFileAuditService
   /**
    * Include soft-deleted records: the personalized views do not filter them either.
    *
+   * @param bool $includeFileNames Include potentially identifying file and entry names.
+   *
    * @return array{summary: array, findings: array}
    */
-  public function audit(): array
+  public function audit(bool $includeFileNames = false): array
   {
-    return $this->connection->transactional(fn() => $this->inspect());
+    return $this->connection->transactional(fn() => $this->inspect($includeFileNames));
   }
 
-  /** @return array */
-  private function inspect(): array
+  /**
+   * @param bool $includeFileNames
+   *
+   * @return array
+   */
+  private function inspect(bool $includeFileNames): array
   {
-    $files = array_column($this->connection->fetchAllAssociative('SELECT id, type FROM Files'), null, 'id');
+    $files = array_column($this->connection->fetchAllAssociative(
+      'SELECT id, type' . ($includeFileNames ? ', file_name' : '') . ' FROM Files',
+    ), null, 'id');
     $owners = [];
     foreach ($this->connection->fetchAllAssociative('SELECT encrypted_file_id, musician_id FROM EncryptedFileOwners') as $owner) {
       $owners[$owner['encrypted_file_id']][(int)$owner['musician_id']] = true;
     }
     $entries = array_column(
-      $this->connection->fetchAllAssociative('SELECT id, parent_id, file_id, type FROM DatabaseStorageDirEntries'),
+      $this->connection->fetchAllAssociative(
+        'SELECT id, parent_id, file_id, type' . ($includeFileNames ? ', name' : '') . ' FROM DatabaseStorageDirEntries',
+      ),
       null,
       'id',
     );
@@ -75,6 +85,15 @@ class ParticipantFileAuditService
       json_encode($left, JSON_THROW_ON_ERROR),
       json_encode($right, JSON_THROW_ON_ERROR),
     ));
+    if ($includeFileNames) {
+      foreach ($findings as &$finding) {
+        $finding['file_name'] = isset($finding['file_id']) ? ($files[$finding['file_id']]['file_name'] ?? null) : null;
+        if (array_key_exists('entry_id', $finding)) {
+          $finding['entry_name'] = isset($finding['entry_id']) ? ($entries[$finding['entry_id']]['name'] ?? null) : null;
+        }
+      }
+      unset($finding);
+    }
     return [
       'summary' => [
         'owned_files' => count($owners),

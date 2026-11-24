@@ -56,7 +56,12 @@ The audit recognizes debit mandates, invoices, donation receipts, composite
 payment supporting documents, participant `db-file` values and participant
 field supporting documents (including generated insurance records). An
 ownership grant or participant-storage link alone is not a business reference.
-Reports use database identifiers rather than names, paths or document contents.
+By default, reports use database identifiers rather than names, paths or document
+contents. Add `--include-file-names` to include `file_name` (the underlying file's
+stored name) and, for findings with an `entry_id`, `entry_name` (the directory-entry
+name, which may differ). Missing names are `null`. This works with text and JSON
+output; names may identify people or contain stored path components, so keep such
+reports private.
 They include retained soft-deleted records, since ownership-based views do not
 filter those records, and show each referenced record's `deleted` value.
 Links to a club-members-project mandate in the same musician's other participant

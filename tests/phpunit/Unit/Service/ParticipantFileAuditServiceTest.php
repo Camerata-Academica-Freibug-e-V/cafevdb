@@ -109,6 +109,44 @@ class ParticipantFileAuditServiceTest extends TestCase
   }
 
   /** @return void */
+  public function testOptionalNamesDistinguishTheFileFromItsParticipantLink(): void
+  {
+    $this->connection->executeStatement('ALTER TABLE Files ADD COLUMN file_name TEXT');
+    $this->connection->executeStatement('ALTER TABLE DatabaseStorageDirEntries ADD COLUMN name TEXT');
+    $this->connection->executeStatement("UPDATE Files SET file_name = 'original.pdf' WHERE id = 1");
+    $this->connection->executeStatement("UPDATE DatabaseStorageDirEntries SET name = 'linked.pdf' WHERE id = 102");
+    $before = $this->snapshot();
+    $anonymous = $this->service->audit();
+    $named = $this->service->audit(true);
+    self::assertSame($anonymous['summary'], $named['summary']);
+    foreach ($named['findings'] as $index => $finding) {
+      self::assertSame('original.pdf', $finding['file_name']);
+      unset($finding['file_name']);
+      if (isset($finding['entry_id'])) {
+        self::assertSame('linked.pdf', $finding['entry_name']);
+        unset($finding['entry_name']);
+      }
+      self::assertSame($anonymous['findings'][$index], $finding);
+    }
+    self::assertSame($before, $this->snapshot());
+  }
+
+  /** @return void */
+  public function testOptionalNamesRemainNullForMissingRecords(): void
+  {
+    $this->connection->executeStatement('ALTER TABLE Files ADD COLUMN file_name TEXT');
+    $this->connection->executeStatement('ALTER TABLE DatabaseStorageDirEntries ADD COLUMN name TEXT');
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 999, NULL)');
+    $findings = array_values(array_filter(
+      $this->service->audit(true)['findings'],
+      static fn(array $finding) => $finding['code'] === 'broken-document-reference',
+    ));
+    self::assertCount(1, $findings);
+    self::assertNull($findings[0]['file_name']);
+    self::assertNull($findings[0]['entry_name']);
+  }
+
+  /** @return void */
   public function testFinanceLinkDoesNotReplaceMissingParticipantLink(): void
   {
     $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 102, NULL)');
