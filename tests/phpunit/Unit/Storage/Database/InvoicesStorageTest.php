@@ -685,6 +685,102 @@ class InvoicesStorageTest extends TestCase
     }
   }
 
+  /** @return void */
+  #[Attributes\Depends('testApplyMigrations')]
+  public function testDebitMandateOutermostRollbackAndRetry(): void
+  {
+    $entityManager = $this->getEntityManager();
+    $participant = $entityManager->find(Entities\ProjectParticipant::class, [
+      'project' => self::$projectId,
+      'musician' => self::$musicianId,
+    ]);
+    $musician = $participant->getMusician();
+    $project = $participant->getProject();
+    $participantStorage = new DatabaseStorage\ProjectParticipantsStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+      'participant' => $participant,
+    ]);
+    $mandate = new Entities\SepaDebitMandate()
+      ->setMusician($musician)
+      ->setProject($project)
+      ->setSepaBankAccount($musician->getSepaBankAccounts()->first())
+      ->setMandateReference('ROLLBACK-1')
+      ->setSequence(1)
+      ->setNonRecurring(false)
+      ->setMandateDate('2099-01-01');
+    $file = new Entities\EncryptedFile('mandate', 'signed', 'application/octet-stream', $musician);
+    $entityManager->beginTransaction();
+    try {
+      $entityManager->persist($file);
+      $entityManager->persist($mandate);
+      $link = $participantStorage->addDebitMandate($mandate, $file, flush: false);
+      $mandate->setWrittenMandate($link);
+      $mandate->setMandateReference('invalid/path');
+      $entityManager->flush();
+      $entityManager->commit();
+    } catch (\Throwable $exception) {
+      if ($entityManager->isTransactionActive()) {
+        $entityManager->rollBack();
+      }
+      throw $exception;
+    }
+
+    $linkId = $link->getId();
+    $fileId = $file->getId();
+    $path = $musician->getUserIdSlug() . '/' . $project->getName() . '/ROLLBACK-1';
+    $storage = new DatabaseStorage\DebitMandatesStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+    ]);
+    $connection = $entityManager->getConnection();
+    self::assertFalse($entityManager->isTransactionActive());
+    self::assertFalse($connection->fetchOne(
+      'SELECT id FROM DatabaseStorages WHERE storage_id = ?',
+      [$storage->getShortId()],
+    ));
+    $rootCount = (int)$connection->fetchOne(
+      "SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE name = '' AND type = 'folder'",
+    );
+    try {
+      $storage->synchronize();
+      self::fail('An invalid mandate path must prevent reconciliation.');
+    } catch (\UnexpectedValueException $exception) {
+      self::assertStringContainsString('invalid storage path component', $exception->getMessage());
+    }
+    self::assertFalse($entityManager->isTransactionActive());
+    $connection = $entityManager->getConnection();
+    self::assertFalse($connection->fetchOne(
+      'SELECT id FROM DatabaseStorages WHERE storage_id = ?',
+      [$storage->getShortId()],
+    ));
+    self::assertSame($rootCount, (int)$connection->fetchOne(
+      "SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE name = '' AND type = 'folder'",
+    ));
+    self::assertSame($fileId, (int)$connection->fetchOne(
+      'SELECT file_id FROM DatabaseStorageDirEntries WHERE id = ?',
+      [$linkId],
+    ));
+
+    $entityManager->clear();
+    $mandate = $entityManager->find(Entities\SepaDebitMandate::class, [
+      'musician' => self::$musicianId,
+      'sequence' => 1,
+    ]);
+    $mandate->setMandateReference('ROLLBACK-1');
+    $entityManager->flush();
+    $storage = new DatabaseStorage\DebitMandatesStorage([
+      'configService' => $this->mockProvider->getConfigService(),
+    ]);
+    $storage->synchronize();
+    $stream = $storage->readStream($path);
+    self::assertIsResource($stream);
+    self::assertSame('signed', stream_get_contents($stream));
+    fclose($stream);
+    self::assertSame($fileId, (int)$connection->fetchOne(
+      'SELECT file_id FROM DatabaseStorageDirEntries WHERE id = ?',
+      [$linkId],
+    ));
+  }
+
   /**
    * This is quas a tearDownAfterClass() but we need some mocked / stubbed
    * classes for the entity-manager.
@@ -697,6 +793,7 @@ class InvoicesStorageTest extends TestCase
   #[Attributes\Depends('testDebitMandateRootInitializationFromLockedStorageRow')]
   #[Attributes\Depends('testDebitMandateFirstAccessWaitsForConcurrentRootCreation')]
   #[Attributes\Depends('testDebitMandateFinanceStorage')]
+  #[Attributes\Depends('testDebitMandateOutermostRollbackAndRetry')]
   public function testUnapplyMigrations(): void
   {
     $this->unapplyMigrations();
