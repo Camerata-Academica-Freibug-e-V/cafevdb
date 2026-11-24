@@ -108,6 +108,10 @@ jobs:
         working-directory: server/apps/${{ env.APP_NAME }}
         run: make phpunit PHPCOVERAGE='-d xdebug.mode=coverage' PHPUNIT_ARGS='--display-all-issues'
 
+      - name: Enable Groupfolders
+        working-directory: server
+        run: php occ app:enable groupfolders
+
       - name: Run PHPUnit integration suite
         working-directory: server/apps/${{ env.APP_NAME }}
         run: vendor-bin/phpunit/vendor/bin/phpunit -c phpunit.integration.xml
