@@ -50,7 +50,11 @@ class DatabaseStorageTest extends TestCase
     $this->entityManager->expects(self::never())->method('remove');
     $container = $this->createStub(ContainerInterface::class);
     $config = $this->createStub(ConfigService::class);
-    $config->method('getConfigValue')->with(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0)->willReturn(20);
+    $config->method('getConfigValue')->willReturnCallback(static function(string $key, mixed $default): int {
+      self::assertSame(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, $key);
+      self::assertSame(0, $default);
+      return 20;
+    });
     $container->method('get')->willReturnMap([[EntityManager::class, $this->entityManager], [ConfigService::class, $config]]);
     $users = $this->createStub(IUserManager::class);
     $users->method('get')->willReturn($this->createStub(IUser::class));
