@@ -44,6 +44,18 @@ or README is created for the conflicting file.
 Database-backed files and Collabora
 ----------------------------------
 
+Personalized directory-entry views export field documents only when the exact
+entry is referenced by a field datum for that storage's musician and project,
+and the field permits `read` or `read-write` participant access. This applies to
+supporting documents and `db-file` values. Unreferenced non-field entries retain
+the ownership and participant-tree checks; a readable link to the same encrypted
+file does not expose a hidden field entry. Folders without visible descendants
+are omitted. Management-board storage is unchanged and retains hidden field
+documents. This filters filesystem entries, not direct ownership-based access
+through the personalized `Files` and `FileData` views.
+After deploying this change, use **Recreate personalized views** in the sharing
+settings to apply the updated definitions to an existing connector database.
+
 To inspect an existing orchestra database before changing personalized storage
 views, run `occ cafevdb:storage:database --audit-access`. This authenticates with
 the usual interactive CafeVDB operator login. The audit itself only reads

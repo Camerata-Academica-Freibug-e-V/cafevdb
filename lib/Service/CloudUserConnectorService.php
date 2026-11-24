@@ -1141,7 +1141,7 @@ SELECT t.*
   FROM " .  $this->personalizedViewName($dataBaseName, 'Projects') . " p
   INNER JOIN " . $table . " t
     ON  t.project_id = p.id
-  WHERE t.participant_access <> 'none'
+  WHERE t.participant_access IN ('read', 'read-write')
   GROUP BY t.id";
 
     $table = DatabaseTables::PROJECT_PARTICIPANT_FIELDS_DATA_TABLE;
@@ -1153,7 +1153,7 @@ VIEW " . $viewName . "
 AS
 SELECT t.* FROM " . $table . " t
     INNER JOIN ProjectParticipantFields ppf
-      ON t.field_id = ppf.id AND ppf.participant_access <> 'none'
+      ON t.field_id = ppf.id AND ppf.participant_access IN ('read', 'read-write')
     WHERE t." . $column . " = " . $accessFunction;
 
     $table = DatabaseTables::PROJECT_PARTICIPANT_FIELDS_OPTIONS_TABLE;
@@ -1225,21 +1225,38 @@ SQL SECURITY DEFINER
 VIEW " . $viewName . "
 AS
 WITH RECURSIVE participant_entries AS (
-  SELECT d.id, d.parent_id
+  SELECT d.id, d.parent_id, pp.musician_id, pp.project_id
   FROM ProjectParticipants pp
   INNER JOIN DatabaseStorages s ON s.id = pp.database_documents_id
   INNER JOIN " . $table . " d ON d.id = s.root_id AND d.parent_id IS NULL
   WHERE pp.musician_id = " . $accessFunction . "
   UNION DISTINCT
-  SELECT d.id, d.parent_id
+  SELECT d.id, d.parent_id, pe.musician_id, pe.project_id
   FROM " . $table . " d
   INNER JOIN participant_entries pe ON d.parent_id = pe.id
+), field_entries AS (
+  SELECT datum.supporting_document_id AS entry_id, datum.musician_id, datum.project_id, datum.field_id
+  FROM ProjectParticipantFieldsData datum
+  WHERE datum.supporting_document_id IS NOT NULL
+  UNION DISTINCT
+  SELECT d.id, datum.musician_id, datum.project_id, datum.field_id
+  FROM ProjectParticipantFieldsData datum
+  INNER JOIN ProjectParticipantFields field ON field.id = datum.field_id AND field.data_type = 'db-file'
+  INNER JOIN " . $table . " d ON datum.option_value = CAST(d.id AS CHAR)
 ), authorized_entries AS (
   SELECT t.id, t.parent_id
   FROM participant_entries t
   INNER JOIN " . $table . " d ON d.id = t.id
   INNER JOIN " . $this->personalizedViewName($dataBaseName, 'Files') . " fv
     ON d.file_id = fv.id
+  WHERE NOT EXISTS (SELECT 1 FROM field_entries fe WHERE fe.entry_id = d.id)
+    OR EXISTS (
+      SELECT 1 FROM field_entries fe
+      INNER JOIN ProjectParticipantFields field
+        ON field.id = fe.field_id AND field.project_id = fe.project_id
+      WHERE fe.entry_id = d.id AND fe.musician_id = t.musician_id AND fe.project_id = t.project_id
+        AND field.participant_access IN ('read', 'read-write')
+    )
   UNION DISTINCT
   SELECT t.id, t.parent_id
   FROM participant_entries t
