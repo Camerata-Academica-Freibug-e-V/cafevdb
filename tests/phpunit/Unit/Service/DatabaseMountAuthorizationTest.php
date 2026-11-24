@@ -10,6 +10,8 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Service;
 
+use UnexpectedValueException;
+
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\ConfigService;
@@ -194,7 +196,7 @@ class DatabaseMountAuthorizationTest extends TestCase
 
     $mandates = $this->createMock(Database\DebitMandatesStorage::class);
     $mandates->expects($this->once())->method('synchronize')
-      ->willThrowException(new \UnexpectedValueException('Invalid mandate path.'));
+      ->willThrowException(new UnexpectedValueException('Invalid mandate path.'));
     $factory = $this->createStub(Factory::class);
     $factory->method('getBankTransactionsStorage')->willReturn($this->createStub(Database\BankTransactionsStorage::class));
     $factory->method('getTaxExemptionNoticesStorage')->willReturn($this->createStub(Database\TaxExemptionNoticesStorage::class));
@@ -217,7 +219,7 @@ class DatabaseMountAuthorizationTest extends TestCase
     $expression = $this->createStub(IExpressionBuilder::class);
     $expression->method('eq')->willReturn('condition');
     $result = $this->createStub(IResult::class);
-    $result->method('fetchOne')->willReturn('cafevdb::database-storage::/finance/debit-mandates/');
+    $result->method('fetchOne')->willReturn('cafevdb::database-storage/finance/debit-mandates/');
     $query = $this->createStub(IQueryBuilder::class);
     foreach (['select', 'from', 'innerJoin', 'where', 'andWhere'] as $method) {
       $query->method($method)->willReturnSelf();
