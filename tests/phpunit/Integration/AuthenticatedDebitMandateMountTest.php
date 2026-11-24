@@ -37,11 +37,11 @@ use OCP\Files\NotPermittedException;
 use OCP\IDBConnection;
 use OCP\IGroup;
 use OCP\IGroupManager;
-use OCP\IL10N;
 use OCP\IRequest;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
+use OCP\L10N\IFactory as IL10NFactory;
 use OCP\Server;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -87,7 +87,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
     $logger = Server::get(LoggerInterface::class);
     $folderManager = Server::get(FolderManager::class);
     $folderStorageManager = Server::get(FolderStorageManager::class);
-    $l10n = Server::get(IL10N::class);
+    $l10n = Server::get(IL10NFactory::class)->get(Application::getAppName());
     $groupFolders = new GroupFoldersService($logger, $root, $folderManager, $folderStorageManager, $l10n);
 
     $uid = 'cafevdb-mount-' . bin2hex(random_bytes(6));
