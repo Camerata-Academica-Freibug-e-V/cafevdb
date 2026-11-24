@@ -5,13 +5,15 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
-"PO-Revision-Date: 2026-11-24 03:07+0100\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
+"Project-Id-Version: cafevdb 10.2.3\n"
+"PO-Revision-Date: 2026-11-24 10:20+0100\n"
+"Last-Translator: Claus-Justus Heine <himself@claus-justus-heine.de>\n"
+"Language-Team: de <himself@claus-justus-heine.de>\n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: de\n"
 
 #~ msgid ""
 #~ msgstr ""
@@ -21012,125 +21014,133 @@ msgstr "MITGLIED"
 #: lib/Controller/AdminSettingsController.php:312
 #, php-format
 msgid "The GitHub repository must be specified as \"owner/name\", got \"%s\"."
-msgstr ""
+msgstr "Das GitHub-Repository muss als \"owner/name\" angegeben werden; erhalten wurde \"%s\"."
 
 #: lib/Controller/AdminSettingsController.php:326
 #, php-format
 msgid "Setting the GitHub repository for problem reports to \"%s\"."
-msgstr ""
+msgstr "Setze das GitHub-Repository für Problemberichte auf \"%s\"."
 
 #: lib/Controller/AdminSettingsController.php:341
 msgid "The GitHub access token for problem reports has been removed."
-msgstr ""
+msgstr "Das GitHub-Zugriffstoken für Problemberichte wurde entfernt."
 
 #: lib/Controller/AdminSettingsController.php:342
 msgid "The GitHub access token for problem reports has been stored."
-msgstr ""
+msgstr "Das GitHub-Zugriffstoken für Problemberichte wurde gespeichert."
 
 #: lib/Controller/OrchestraSettingsController.php:1386
 msgid ""
 "The user_sql settings could not be fully updated or verified. Check the "
 "configuration; access to its administrative settings may be required."
 msgstr ""
+"Die user_sql-Einstellungen konnten nicht vollständig aktualisiert oder "
+"überprüft werden. Überprüfen Sie die Konfiguration; möglicherweise ist der "
+"Zugriff auf die administrativen Einstellungen erforderlich."
 
 #: lib/Controller/OrchestraSettingsController.php:1462
 msgid "Unable to enable WOPI access to database storage."
-msgstr ""
+msgstr "Der WOPI-Zugriff auf den Datenbankspeicher kann nicht aktiviert werden."
 
 #: lib/Controller/OrchestraSettingsController.php:1463
 msgid "Unable to disable WOPI access to database storage."
-msgstr ""
+msgstr "Der WOPI-Zugriff auf den Datenbankspeicher kann nicht deaktiviert werden."
 
 #: lib/Controller/OrchestraSettingsController.php:1479
 msgid "Unable to reconfigure WOPI access to database storage."
-msgstr ""
+msgstr "Der WOPI-Zugriff auf den Datenbankspeicher kann nicht neu konfiguriert werden."
 
 #: lib/Controller/OrchestraSettingsController.php:1555
 #: specialVueFakeDummyForL10nScript.js:10596
 msgid "Unable to regenerate the WOPI credential view."
-msgstr ""
+msgstr "Die WOPI-Zugangsdatenansicht kann nicht neu erstellt werden."
 
 #: lib/Controller/OrchestraSettingsController.php:1560
 msgid "WOPI credential view has been regenerated successfully."
-msgstr ""
+msgstr "Die WOPI-Zugangsdatenansicht wurde erfolgreich neu erstellt."
 
 #: lib/Controller/OrchestraSettingsController.php:2268
 #: lib/Controller/OrchestraSettingsController.php:2376
 msgid "Enter a database username, account host and password."
-msgstr ""
+msgstr "Geben Sie einen Datenbankbenutzernamen, den Account-Host und das Passwort ein."
 
 #: lib/Controller/OrchestraSettingsController.php:2282
 #: lib/Controller/OrchestraSettingsController.php:2383
 msgid "Enter the password for the views database account."
-msgstr ""
+msgstr "Geben Sie das Passwort für das Ansichten-Datenbankkonto ein."
 
 #: lib/Controller/OrchestraSettingsController.php:2288
 #: lib/Controller/OrchestraSettingsController.php:2389
 msgid ""
 "The connected MariaDB account host does not match the specified account host."
-msgstr ""
+msgstr "Der Host des verbundenen MariaDB-Kontos stimmt nicht mit dem angegebenen Konto-Host überein."
 
 #: lib/Controller/OrchestraSettingsController.php:2328
 msgid ""
 "Unable to save or restore the connector account. Check the views account and "
 "consumer settings."
 msgstr ""
+"Das Connector-Konto kann nicht gespeichert oder wiederhergestellt werden. "
+"Überprüfen Sie das Ansichten-Konto und die Verbrauchereinstellungen."
 
 #: lib/Controller/OrchestraSettingsController.php:2331
 #: lib/Controller/OrchestraSettingsController.php:2337
 #: specialVueFakeDummyForL10nScript.js:9414
 msgid "Unable to save the connector database account."
-msgstr ""
+msgstr "Das Connector-Datenbankkonto kann nicht gespeichert werden."
 
 #: lib/Controller/OrchestraSettingsController.php:2347
 msgid ""
 "The user_sql settings could not be updated. Check the configuration; access "
 "to its administrative settings may be required."
 msgstr ""
+"Die user_sql-Einstellungen konnten nicht aktualisiert werden. Überprüfen Sie "
+"die Konfiguration; möglicherweise ist der Zugriff auf die administrativen "
+"Einstellungen erforderlich."
 
 #: lib/Controller/OrchestraSettingsController.php:2351
 msgid "Connector database account saved."
-msgstr ""
+msgstr "Das Connector-Datenbankkonto wurde gespeichert."
 
 #: lib/Controller/OrchestraSettingsController.php:2366
 msgid "Enter a database username and password."
-msgstr ""
+msgstr "Geben Sie einen Datenbankbenutzernamen und ein Passwort ein."
 
 #: lib/Controller/OrchestraSettingsController.php:2400
 #: specialVueFakeDummyForL10nScript.js:9461
 msgid "Unable to save connector database credentials."
-msgstr ""
+msgstr "Die Zugangsdaten für die Connector-Datenbank können nicht gespeichert werden."
 
 #: lib/Controller/OrchestraSettingsController.php:2404
 msgid "Restored Nextcloud database credentials."
-msgstr ""
+msgstr "Die Nextcloud-Datenbankzugangsdaten wurden wiederhergestellt."
 
 #: lib/Controller/OrchestraSettingsController.php:2404
 msgid "Connector database credentials saved."
-msgstr ""
+msgstr "Die Zugangsdaten für die Connector-Datenbank wurden gespeichert."
 
 #: lib/Controller/ProblemReportController.php:128
 #: specialVueFakeDummyForL10nScript.js:3767
 msgid "Unable to generate the preview of the GitHub issue."
-msgstr ""
+msgstr "Die Vorschau des GitHub-Issues kann nicht erstellt werden."
 
 #: lib/Maintenance/Migrations/Version20261118191044.php:28
 msgid "Create storage for encrypted WOPI mount credentials."
-msgstr ""
+msgstr "Speicher für verschlüsselte WOPI-Einbindungszugangsdaten erstellen."
 
 #: lib/Notifications/Notifier.php:197
 msgid ""
 "Upload renamed because its name is reserved for a participant-field folder"
-msgstr ""
+msgstr "Der Upload wurde umbenannt, da sein Name für einen Teilnehmerfeld-Ordner reserviert ist."
 
 #: lib/Notifications/Notifier.php:198
 msgid "Upload conflicts with a participant-field folder"
-msgstr ""
+msgstr "Der Upload steht in Konflikt mit einem Teilnehmerfeld-Ordner."
 
 #: lib/Notifications/Notifier.php:200
 #, php-format
 msgid "The file \"%1$s\" was renamed to \"%2$s\"."
-msgstr ""
+msgstr "Die Datei \"%1$s\" wurde in \"%2$s\" umbenannt."
 
 #: lib/Notifications/Notifier.php:201
 #, php-format
@@ -21138,38 +21148,48 @@ msgid ""
 "The file \"%s\" could not be renamed automatically. Move or rename it to "
 "free the reserved folder path."
 msgstr ""
+"Die Datei \"%s\" konnte nicht automatisch umbenannt werden. Verschieben oder "
+"benennen Sie sie um, um den reservierten Ordnerpfad freizugeben."
 
 #: lib/Service/CloudUserConnectorService.php:289
 msgid ""
 "Nextcloud must use MySQL or MariaDB on the orchestra database server, or you "
 "must configure a connector database account."
 msgstr ""
+"Nextcloud muss MySQL oder MariaDB auf dem Orchester-Datenbankserver verwenden, "
+"oder Sie müssen ein Connector-Datenbankkonto konfigurieren."
 
 #: lib/Service/CloudUserConnectorService.php:306
 msgid "The connector database account is invalid."
-msgstr ""
+msgstr "Das Connector-Datenbankkonto ist ungültig."
 
 #: lib/Service/CloudUserConnectorService.php:324
 msgid ""
 "Enter a dedicated database username and account host, not the orchestra "
 "database username."
 msgstr ""
+"Geben Sie einen eigenen Datenbankbenutzernamen und Konto-Host ein, nicht den "
+"Benutzernamen der Orchester-Datenbank."
 
 #: lib/Service/CloudUserConnectorService.php:361
 msgid "The orchestra database account cannot access the connector views."
-msgstr ""
+msgstr "Das Orchester-Datenbankkonto kann nicht auf die Connector-Ansichten zugreifen."
 
 #: lib/Service/CloudUserConnectorService.php:685
 msgid ""
 "Configure the views database password in CafeVDB and check the user_sql "
 "database connection."
 msgstr ""
+"Konfigurieren Sie das Passwort für die Ansichten-Datenbank in CafeVDB und "
+"überprüfen Sie die user_sql-Datenbankverbindung."
 
 #: lib/Service/CloudUserConnectorService.php:689
 msgid ""
 "The user_sql database connection cannot use the configured port or socket. "
 "Configure it separately."
 msgstr ""
+"Die user_sql-Datenbankverbindung kann den konfigurierten Port oder Socket "
+"nicht verwenden. Konfigurieren Sie diese separat."
 
 #: lib/Service/CloudUserConnectorService.php:736
 msgid "Unable to configure the user_sql backend."
@@ -21178,63 +21198,70 @@ msgstr "Kann das User-Backend für die Vereinsmitglieder nicht konfigurieren."
 #: lib/Service/CloudUserConnectorService.php:753
 #: lib/Service/CloudUserConnectorService.php:773
 msgid "The connector database credentials are invalid."
-msgstr ""
+msgstr "Die Zugangsdaten für die Connector-Datenbank sind ungültig."
 
 #: lib/Service/CloudUserConnectorService.php:813
 msgid ""
 "Access to the user_sql administrative settings is required to configure the "
 "backend."
 msgstr ""
+"Für die Konfiguration des Backends ist der Zugriff auf die administrativen "
+"user_sql-Einstellungen erforderlich."
 
 #: lib/Service/ConnectorDatabaseCredentials.php:90
 msgid ""
 "Enter a dedicated database username, not the orchestra database username."
 msgstr ""
+"Geben Sie einen eigenen Datenbankbenutzernamen ein, nicht den Benutzernamen "
+"der Orchester-Datenbank."
 
 #: lib/Service/ConnectorDatabaseCredentials.php:156
 msgid ""
 "Cannot access the connector database with these credentials. Check the "
 "MariaDB account, password, and view privileges."
 msgstr ""
+"Mit diesen Zugangsdaten kann nicht auf die Connector-Datenbank zugegriffen "
+"werden. Überprüfen Sie das MariaDB-Konto, das Passwort und die Berechtigungen "
+"für die Ansichten."
 
 #: lib/Service/ProblemReportGithubService.php:158
 msgid "The GitHub problem-report channel is not configured."
-msgstr ""
+msgstr "Der GitHub-Kanal für Problemberichte ist nicht konfiguriert."
 
 #: lib/Service/ProblemReportGithubService.php:165
 msgid "The problem has been reported again."
-msgstr ""
+msgstr "Das Problem wurde erneut gemeldet."
 
 #: lib/Service/ProblemReportGithubService.php:186
 msgid "GitHub returned an unexpected response."
-msgstr ""
+msgstr "GitHub hat eine unerwartete Antwort zurückgegeben."
 
 #: lib/Service/ProblemReportGithubService.php:217
 msgid "Unable to decrypt the GitHub access token."
-msgstr ""
+msgstr "Das GitHub-Zugriffstoken kann nicht entschlüsselt werden."
 
 #: lib/Service/ProblemReportGithubService.php:242
 #, php-format
 msgid "Communication with GitHub failed (code %d)."
-msgstr ""
+msgstr "Die Kommunikation mit GitHub ist fehlgeschlagen (Code %d)."
 
 #: lib/Service/ProblemReportService.php:136
 msgid "There is no channel configured for problem reports."
-msgstr ""
+msgstr "Es ist kein Kanal für Problemberichte konfiguriert."
 
 #: lib/Service/ProblemReportService.php:160
 #, php-format
 msgid "Submitting the problem report via \"%1$s\" has failed: %2$s"
-msgstr ""
+msgstr "Die Übermittlung des Problemberichts über \"%1$s\" ist fehlgeschlagen: %2$s"
 
 #: lib/Service/ProblemReportService.php:300
 #, php-format
 msgid "Pseudonym of the reporting user (as used in public reports): %s"
-msgstr ""
+msgstr "Pseudonym der meldenden Person (wie in öffentlichen Berichten verwendet): %s"
 
 #: lib/Service/ProblemReportService.php:411
 msgid "GitHub is not configured as receiver for problem reports."
-msgstr ""
+msgstr "GitHub ist nicht als Empfänger für Problemberichte konfiguriert."
 
 #: lib/Service/ProblemReportService.php:419
 #: lib/Service/ProblemReportService.php:473
@@ -21242,15 +21269,17 @@ msgid ""
 "The submitted user-id differs from what the server thinks is the currently "
 "logged in user."
 msgstr ""
+"Die übermittelte Benutzer-ID stimmt nicht mit der vom Server ermittelten "
+"Benutzer-ID der aktuell angemeldeten Person überein."
 
 #: lib/Service/ProblemReportService.php:431
 msgid "Too many problem reports, please try again later."
-msgstr ""
+msgstr "Zu viele Problemberichte. Bitte versuchen Sie es später erneut."
 
 #: lib/Service/ProblemReportService.php:442
 #, php-format
 msgid "Your problem report has been submitted as GitHub issue %s."
-msgstr ""
+msgstr "Ihr Problembericht wurde als GitHub-Issue %s übermittelt."
 
 #: lib/Service/ProblemReportService.php:443
 #, php-format
@@ -21258,82 +21287,91 @@ msgid ""
 "The problem has already been reported, your report has been added to the "
 "existing GitHub issue %s."
 msgstr ""
+"Das Problem wurde bereits gemeldet. Ihr Bericht wurde dem bestehenden "
+"GitHub-Issue %s hinzugefügt."
 
 #: lib/Service/ProblemReportService.php:478
 msgid "Comment"
-msgstr ""
+msgstr "Kommentar"
 
 #: lib/Service/ProblemReportService.php:517
 #, php-format
 msgid "Reported by user `%s` (pseudonym)."
-msgstr ""
+msgstr "Gemeldet von Benutzer*in `%s` (Pseudonym)."
 
 #: lib/Service/ProblemReportService.php:573
 msgid "Unspecified error"
-msgstr ""
+msgstr "Nicht näher bezeichneter Fehler"
 
 #: lib/Service/ProblemReportService.php:616
 msgid ""
 "This issue has been created automatically from an end-user problem report."
 msgstr ""
+"Dieses Issue wurde automatisch aufgrund eines Problemberichts einer "
+"endnutzenden Person erstellt."
 
 #: lib/Service/ProblemReportService.php:629
 msgid "Error page"
-msgstr ""
+msgstr "Fehlerseite"
 
 #: lib/Service/ProblemReportService.php:633
 msgid "Error data"
-msgstr ""
+msgstr "Fehlerdaten"
 
 #: lib/Service/ToolTipsDataService.php:1485
 msgid ""
 "Move the users of the executive board to the configured default backend."
-msgstr ""
+msgstr "Die Benutzer*innen des Vorstands in das konfigurierte Standard-Backend verschieben."
 
 #: lib/Service/WopiCredentialsViewService.php:93
 msgid "Unable to configure the WOPI credential view."
-msgstr ""
+msgstr "Die WOPI-Zugangsdatenansicht kann nicht konfiguriert werden."
 
 #: lib/Service/WopiCredentialsViewService.php:146
 msgid ""
 "Nextcloud must use MySQL or MariaDB on the orchestra database server, or you "
 "must configure separate connector credentials."
 msgstr ""
+"Nextcloud muss MySQL oder MariaDB auf dem Orchester-Datenbankserver verwenden, "
+"oder Sie müssen separate Zugangsdaten für den Connector konfigurieren."
 
 #: lib/Settings/OrchestraSettingsInitialState.php:86
 msgid ""
 "Unable to load orchestra settings. The remaining administration settings are "
 "still available. See the server log for details."
 msgstr ""
+"Die Orchestereinstellungen können nicht geladen werden. Die übrigen "
+"Administratoreinstellungen sind weiterhin verfügbar. Einzelheiten finden Sie "
+"im Serverprotokoll."
 
 #: specialVueFakeDummyForL10nScript.js:125
 #: specialVueFakeDummyForL10nScript.js:1959
 msgid "Unable to save administrative setting."
-msgstr ""
+msgstr "Die Administratoreinstellung kann nicht gespeichert werden."
 
 #: specialVueFakeDummyForL10nScript.js:243
 #: specialVueFakeDummyForL10nScript.js:2077
 msgid "Artificial error for testing problem reports."
-msgstr ""
+msgstr "Künstlicher Fehler zum Testen von Problemberichten."
 
 #. TRANSLATORS /dev6/htdocs/nextcloud-git-35/apps/cafevdb/blah.vue:462
 #. TRANSLATORS src/components/AdminSettings.vue:479
 #: specialVueFakeDummyForL10nScript.js:1079
 #: specialVueFakeDummyForL10nScript.js:2916
 msgid "GitHub Repository for Problem Reports (owner/name)"
-msgstr ""
+msgstr "GitHub-Repository für Problemberichte (owner/name)"
 
 #. TRANSLATORS /dev6/htdocs/nextcloud-git-35/apps/cafevdb/blah.vue:470
 #. TRANSLATORS src/components/AdminSettings.vue:487
 #: specialVueFakeDummyForL10nScript.js:1081
 #: specialVueFakeDummyForL10nScript.js:2918
 msgid "GitHub Access Token (set, enter new value to replace)"
-msgstr ""
+msgstr "GitHub-Zugriffstoken (gesetzt; zum Ersetzen einen neuen Wert eingeben)"
 
 #: specialVueFakeDummyForL10nScript.js:1081
 #: specialVueFakeDummyForL10nScript.js:2918
 msgid "GitHub Access Token"
-msgstr ""
+msgstr "GitHub-Zugriffstoken"
 
 #. TRANSLATORS /dev6/htdocs/nextcloud-git-35/apps/cafevdb/blah.vue:479
 #. TRANSLATORS src/components/AdminSettings.vue:496
@@ -21343,37 +21381,41 @@ msgid ""
 "Generate an artificial error, then submit its problem report to test the "
 "configured reporting methods."
 msgstr ""
+"Einen künstlichen Fehler erzeugen und anschließend dessen Problembericht "
+"übermitteln, um die konfigurierten Meldewege zu testen."
 
 #. TRANSLATORS /dev6/htdocs/nextcloud-git-35/apps/cafevdb/blah.vue:482
 #. TRANSLATORS src/components/AdminSettings.vue:499
 #: specialVueFakeDummyForL10nScript.js:1085
 #: specialVueFakeDummyForL10nScript.js:2922
 msgid "Generate Test Error"
-msgstr ""
+msgstr "Testfehler erzeugen"
 
 #: specialVueFakeDummyForL10nScript.js:3227
 msgid "Unable to download the donation receipt with id {receiptId}: {error}."
-msgstr ""
+msgstr "Die Zuwendungsbestätigung mit der ID {receiptId} kann nicht heruntergeladen werden: {error}."
 
 #: specialVueFakeDummyForL10nScript.js:3228
 msgid ""
 "Unable to download the mail-merge substitutions for donation receipt with id "
 "{receiptId}: {error}."
 msgstr ""
+"Die Serienbrief-Ersetzungen für die Zuwendungsbestätigung mit der ID "
+"{receiptId} können nicht heruntergeladen werden: {error}."
 
 #. TRANSLATORS src/components/EmailFormEnvelope.vue:20
 #: specialVueFakeDummyForL10nScript.js:3483
 msgid "Minimize"
-msgstr ""
+msgstr "Minimieren"
 
 #: specialVueFakeDummyForL10nScript.js:3508
 msgid "Restore {title}"
-msgstr ""
+msgstr "{title} wiederherstellen"
 
 #. TRANSLATORS src/components/ErrorPage.vue:205
 #: specialVueFakeDummyForL10nScript.js:3909
 msgid "Public GitHub Issue"
-msgstr ""
+msgstr "Öffentliches GitHub-Issue"
 
 #. TRANSLATORS src/components/ErrorPage.vue:207
 #: specialVueFakeDummyForL10nScript.js:3911
@@ -21383,27 +21425,31 @@ msgid ""
 "identified only by a pseudonym. Please check the text below, it is exactly "
 "what will be published."
 msgstr ""
+"Der Bericht wird zusätzlich als Issue in einem öffentlichen GitHub-Repository "
+"veröffentlicht. Personenbezogene Daten wurden soweit möglich automatisch "
+"entfernt; Sie werden nur durch ein Pseudonym identifiziert. Bitte prüfen Sie "
+"den folgenden Text sorgfältig: Er wird genau so veröffentlicht."
 
 #: specialVueFakeDummyForL10nScript.js:5623
 msgid "Unable to download table in format \"{format}\"."
-msgstr ""
+msgstr "Die Tabelle kann nicht im Format \"{format}\" heruntergeladen werden."
 
 #: specialVueFakeDummyForL10nScript.js:8651
 #: specialVueFakeDummyForL10nScript.js:8687
 msgid "The validation response does not contain a valid option."
-msgstr ""
+msgstr "Die Validierungsantwort enthält keine gültige Option."
 
 #: specialVueFakeDummyForL10nScript.js:8700
 msgid "This option is disabled."
-msgstr ""
+msgstr "Diese Option ist deaktiviert."
 
 #: specialVueFakeDummyForL10nScript.js:8716
 msgid "Could not add \"{value}\": {message}"
-msgstr ""
+msgstr "\"{value}\" konnte nicht hinzugefügt werden: {message}"
 
 #: specialVueFakeDummyForL10nScript.js:8903
 msgid "Please wait for validation to finish."
-msgstr ""
+msgstr "Bitte warten Sie, bis die Validierung abgeschlossen ist."
 
 #: specialVueFakeDummyForL10nScript.js:8904
 msgid "Please select an item."
@@ -21412,108 +21458,108 @@ msgstr "Bitte ein Element auswählen."
 #. TRANSLATORS src/components/VueSelect.vue:57
 #: specialVueFakeDummyForL10nScript.js:8932
 msgid "Add \"{value}\""
-msgstr ""
+msgstr "\"{value}\" hinzufügen"
 
 #. TRANSLATORS src/components/VueSelect.vue:82
 #: specialVueFakeDummyForL10nScript.js:8934
 msgid "Move {label} earlier"
-msgstr ""
+msgstr "{label} nach oben verschieben"
 
 #. TRANSLATORS src/components/VueSelect.vue:90
 #: specialVueFakeDummyForL10nScript.js:8936
 msgid "Move {label} later"
-msgstr ""
+msgstr "{label} nach unten verschieben"
 
 #. TRANSLATORS src/components/VueSelect.vue:100
 #: specialVueFakeDummyForL10nScript.js:8938
 msgid "Remove {label}"
-msgstr ""
+msgstr "{label} entfernen"
 
 #. TRANSLATORS src/components/settings/ConnectorAccount.vue:4
 #: specialVueFakeDummyForL10nScript.js:9406
 #: specialVueFakeDummyForL10nScript.js:9423
 msgid "Views database account"
-msgstr ""
+msgstr "Datenbankkonto für Ansichten"
 
 #. TRANSLATORS src/components/settings/ConnectorAccount.vue:6
 #: specialVueFakeDummyForL10nScript.js:9425
 msgid "Account username"
-msgstr ""
+msgstr "Kontobenutzername"
 
 #: specialVueFakeDummyForL10nScript.js:9425
 msgid "e.g. connector"
-msgstr ""
+msgstr "z. B. connector"
 
 #. TRANSLATORS src/components/settings/ConnectorAccount.vue:8
 #: specialVueFakeDummyForL10nScript.js:9427
 msgid "Account host"
-msgstr ""
+msgstr "Konto-Host"
 
 #: specialVueFakeDummyForL10nScript.js:9427
 msgid "e.g. localhost or %"
-msgstr ""
+msgstr "z. B. localhost oder %"
 
 #. TRANSLATORS src/components/settings/ConnectorAccount.vue:11
 #: specialVueFakeDummyForL10nScript.js:9429
 msgid "MariaDB account:"
-msgstr ""
+msgstr "MariaDB-Konto:"
 
 #. TRANSLATORS src/components/settings/ConnectorAccount.vue:15
 #: specialVueFakeDummyForL10nScript.js:9431
 msgid "Views database password"
-msgstr ""
+msgstr "Passwort für die Ansichten-Datenbank"
 
 #. TRANSLATORS src/components/settings/ConnectorAccount.vue:16
 #: specialVueFakeDummyForL10nScript.js:9433
 msgid "Leave blank to keep the current password."
-msgstr ""
+msgstr "Leer lassen, um das aktuelle Passwort beizubehalten."
 
 #. TRANSLATORS src/components/settings/ConnectorAccount.vue:20
 #: specialVueFakeDummyForL10nScript.js:9435
 msgid "Save views database account"
-msgstr ""
+msgstr "Datenbankkonto für Ansichten speichern"
 
 #. TRANSLATORS src/components/settings/ConnectorAccount.vue:23
 #: specialVueFakeDummyForL10nScript.js:9437
 msgid "Use Nextcloud database account"
-msgstr ""
+msgstr "Nextcloud-Datenbankkonto verwenden"
 
 #: specialVueFakeDummyForL10nScript.js:9456
 msgid "Connector database credentials"
-msgstr ""
+msgstr "Zugangsdaten für die Connector-Datenbank"
 
 #. TRANSLATORS src/components/settings/ConnectorCredentials.vue:3
 #: specialVueFakeDummyForL10nScript.js:9470
 msgid "Connector database username"
-msgstr ""
+msgstr "Benutzername der Connector-Datenbank"
 
 #. TRANSLATORS src/components/settings/ConnectorCredentials.vue:4
 #: specialVueFakeDummyForL10nScript.js:9472
 msgid "Connector database password"
-msgstr ""
+msgstr "Passwort der Connector-Datenbank"
 
 #. TRANSLATORS src/components/settings/ConnectorCredentials.vue:6
 #: specialVueFakeDummyForL10nScript.js:9474
 msgid "Save connector credentials"
-msgstr ""
+msgstr "Connector-Zugangsdaten speichern"
 
 #. TRANSLATORS src/components/settings/ConnectorCredentials.vue:9
 #: specialVueFakeDummyForL10nScript.js:9476
 msgid "Use Nextcloud database credentials"
-msgstr ""
+msgstr "Nextcloud-Datenbankzugangsdaten verwenden"
 
 #: specialVueFakeDummyForL10nScript.js:10508
 #: src/components/settings/settings-tree.ts:121
 msgid "WOPI access to DB-Storage"
-msgstr ""
+msgstr "WOPI-Zugriff auf den Datenbankspeicher"
 
 #: specialVueFakeDummyForL10nScript.js:10509
 msgid "Enable WOPI access to database storage"
-msgstr ""
+msgstr "WOPI-Zugriff auf den Datenbankspeicher aktivieren"
 
 #: specialVueFakeDummyForL10nScript.js:10510
 msgid "WOPI views database"
-msgstr ""
+msgstr "WOPI-Ansichten-Datenbank"
 
 #. TRANSLATORS src/components/settings/SharingSettings.vue:24
 #: specialVueFakeDummyForL10nScript.js:10610
@@ -21522,25 +21568,28 @@ msgid ""
 "permitted, configured in user_sql. The account host is the host part of the "
 "MariaDB account, not the database server address."
 msgstr ""
+"Das Ansichten-Konto und sein Passwort werden mit der Mitglieder-App geteilt "
+"und, sofern zulässig, in user_sql konfiguriert. Der Konto-Host ist der Host-"
+"Bestandteil des MariaDB-Kontos, nicht die Adresse des Datenbankservers."
 
 #. TRANSLATORS src/components/settings/SharingSettings.vue:49
 #: specialVueFakeDummyForL10nScript.js:10616
 msgid "Regenerate WOPI access views"
-msgstr ""
+msgstr "WOPI-Zugriffsansichten neu erstellen"
 
 #: src/app/email.ts:175 src/app/email.ts:390 src/app/jquery-chosen.ts:50
 #: src/app/pme.ts:1662 src/app/select-popup.ts:176
 #: src/app/sepa-debit-mandate.ts:443
 msgid "Unable to initialize the select controls."
-msgstr ""
+msgstr "Die Auswahlfelder können nicht initialisiert werden."
 
 #: src/app/email.ts:2623
 msgid "Unable to initialize the email form."
-msgstr ""
+msgstr "Das E-Mail-Formular kann nicht initialisiert werden."
 
 #: src/app/pme-export.ts:44
 msgid "Unable to initialize the export menu."
-msgstr ""
+msgstr "Das Exportmenü kann nicht initialisiert werden."
 
 #, php-format
 #~ msgid "Unable to configure \"%1$s\"."
