@@ -41,8 +41,75 @@ path. If the rename fails, the file is left in place and the notification
 asks the uploader to move or rename it manually. No participant-field value
 or README is created for the conflicting file.
 
+Auditing exported personalized database storage views
+-----------------------------------------------------
+
+Personalized directory-entry views export field documents only when the exact
+entry is referenced by a field datum for that storage's musician and project,
+and the field permits `read` or `read-write` participant access. This applies to
+supporting documents and `db-file` values. Unreferenced non-field entries retain
+the ownership and participant-tree checks; a readable link to the same encrypted
+file does not expose a hidden field entry. Folders without visible descendants
+are omitted. Management-board storage is unchanged and retains hidden field
+documents. This filters filesystem entries, not direct ownership-based access
+through the personalized `Files` and `FileData` views.
+After deploying this change, use **Recreate personalized views** in the sharing
+settings to apply the updated definitions to an existing connector database.
+
+To inspect an existing orchestra database before changing personalized storage
+views, run `occ cafevdb:storage:database --audit-access`. This authenticates with
+the usual interactive CafeVDB operator login. The audit itself only reads
+metadata; it does not decrypt file contents, repair links, flush ORM entities,
+or regenerate views. Use `--json` for a report with `summary` and `findings`;
+exit status is 0 for no findings, 1 for inconsistencies, and 2 for invalid option
+combinations. Database/query failures are errors, never a clean audit.
+
+The audit recognizes debit mandates, invoices, donation receipts, composite
+payment supporting documents, participant `db-file` values and participant
+field supporting documents (including generated insurance records). An
+ownership grant or participant-storage link alone is not a business reference.
+By default, reports use database identifiers rather than names, paths or document
+contents. Add `--include-file-names` to include `file_name` (the underlying file's
+stored name) and, for findings with an `entry_id`, `entry_name` (the directory-entry
+name, which may differ). Missing names are `null`. This works with text and JSON
+output. The same option adds `entry_path`, the full participant mount path
+(starting at the shared orchestra folder, without a Nextcloud user's `/files`
+prefix). File-level findings without an `entry_id` include `file_paths`, listing
+each directory entry and its full path. Paths use current folder configuration
+and app-localized document folder names. Unresolved paths, including broken
+directory chains or roots without a known participant mount, are `null`, never
+misleading partial paths. Names and paths may identify people, so keep such
+reports private.
+They include retained soft-deleted records, since ownership-based views do not
+filter those records, and show each referenced record's `deleted` value.
+Links to a club-members-project mandate in the same musician's other participant
+storages are recognized using the configured club-members project ID.
+
+Findings distinguish unrecognized owned files, unexpected owners, missing
+ownership, missing participants or participant-tree links, unrelated-project
+and non-owner participant links, broken document references and broken
+directory trees. Shared files with explicit references for several participants
+are allowed; dedicated finance links are not mistaken for participant links.
+Review findings before attempting a backfill: this command intentionally does
+not infer associations from filenames or directory names. Run during a quiet
+maintenance window; it scans file/directory metadata and uses the database's
+configured transaction isolation. It does not check deployed view definitions,
+connector grants, encryption identities or Nextcloud's file cache.
+
+Each finding has `repairable`; `true` currently identifies only a missing
+ownership grant backed by an active, participant-readable supporting-document
+reference in that participant's own storage and project. Participant-only
+fields must match the participant's context. Deleted records, invalid files
+and ambiguous links are not candidates. Such findings include `repairsteps`:
+`add-ownership` and `reconcile-encryption-seal`. These are proposed steps, not
+repairs performed or proof that encryption keys and seals are usable. The audit
+does not validate decryption; a future backfill must verify it and preserve
+existing recipients.
+`false` means this audit has not identified a safe automatic repair; it does not
+mean that the inconsistency is irreparable.
+
 Database-backed files and Collabora
-----------------------------------
+-----------------------------------
 
 Database mounts require the CafeVDB app key to unlock encrypted database
 configuration. On validated WOPI requests, CafeVDB can recover that key without
