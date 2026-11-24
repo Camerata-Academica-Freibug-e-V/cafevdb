@@ -112,7 +112,12 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       $folderInfo = $groupFolders->getFolderForUser('CAFEVDBIntegration', $user);
       self::assertNotNull($folderInfo);
       self::assertNotSame(0, $folderInfo->permissions & \OCP\Constants::PERMISSION_READ);
+      Filesystem::tearDown();
       Filesystem::initMountPoints($user);
+      self::assertSame(
+        '/' . $uid . '/files/CAFEVDBIntegration/',
+        $mounts->find('/' . $uid . '/files/CAFEVDBIntegration/')->getMountPoint(),
+      );
       $userFolder = $root->getUserFolder($uid);
       $shared = $userFolder->get('CAFEVDBIntegration');
       self::assertInstanceOf(Folder::class, $shared);
