@@ -104,10 +104,10 @@ export const provideMountableComponents = <T extends App>(vueApp: T) => {
     if (vueApp._context) {
       vNode.appContext = vueApp._context;
     }
-    console.info('MOUNTABLE COMPONENT APP', {
-      vueApp,
-      vNode,
-    });
+    // console.info('MOUNTABLE COMPONENT APP', {
+    //   vueApp,
+    //   vNode,
+    // });
     // return instance;
     return new Proxy<MountableComponent<typeof event.name>>(
       {
