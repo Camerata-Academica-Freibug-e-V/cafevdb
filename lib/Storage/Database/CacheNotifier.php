@@ -138,15 +138,26 @@ class CacheNotifier
         return;
       }
       $this->clearPathCache($storage);
-      foreach ($changes as $change) {
+      $count = count($changes);
+      for ($index = 0; $index < $count; ++$index) {
+        $change = $changes[$index];
+        $path = $change->getPath();
+        $oldPath = $change->getOldPath();
+        // Intermediate paths may no longer exist after several flushes.
+        while ($oldPath !== null && $index + 1 < $count && $changes[$index + 1]->getOldPath() === $path) {
+          $path = $changes[++$index]->getPath();
+        }
+        if ($oldPath === $path) {
+          $oldPath = null;
+        }
         try {
-          $this->reconcile($storage, $change->getPath(), $change->getOldPath());
+          $this->reconcile($storage, $path, $oldPath);
         } catch (Throwable $t) {
           $this->logger->error(
-            'Unable to update the file cache of storage "' . $shortId . '" for path "' . $change->getPath() . '".',
+            'Unable to update the file cache of storage "' . $shortId . '" for path "' . $path . '".',
             [ 'exception' => $t ],
           );
-          $unresolved[$shortId][$change->getPath()] = $change->getOldPath();
+          $unresolved[$shortId][$path] = $oldPath;
           if ($throwOnFailure) {
             throw new RuntimeException(
               'Unable to reconcile pending cache changes for storage "' . $shortId . '".',

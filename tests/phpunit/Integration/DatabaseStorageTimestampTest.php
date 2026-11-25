@@ -486,6 +486,23 @@ class DatabaseStorageTimestampTest extends TestCase
       self::assertNotFalse($finalFile);
       self::assertSame($fileId, $finalFile->getId());
 
+      $this->entityManager->beginTransaction();
+      try {
+        $entry->setName('intermediate.txt');
+        $this->entityManager->flush();
+        $entry->setName('final.txt');
+        $this->entityManager->flush();
+        $this->entityManager->commit();
+      } finally {
+        if ($this->entityManager->isOwnTransactionActive()) {
+          $this->entityManager->rollback();
+        }
+      }
+      self::assertFalse($cache->get('sub/intermediate.txt'));
+      $finalFile = $cache->get('sub/final.txt');
+      self::assertNotFalse($finalFile);
+      self::assertSame($fileId, $finalFile->getId());
+
       $entry->setParent(null);
       $entry->setFile(null);
       $this->entityManager->remove($entry);
