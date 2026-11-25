@@ -84,6 +84,8 @@ class Storage extends AbstractStorage
   /** @var ReadMeFactory */
   protected ?ReadMeFactory $readMeFactory = null;
 
+  private bool $checkedPendingCacheChanges = false;
+
   /** {@inheritdoc} */
   public function __construct($params)
   {
@@ -160,6 +162,7 @@ class Storage extends AbstractStorage
    */
   protected function findFiles(string $dirName, bool $rootIsMandatory = false):array
   {
+    $this->processPendingCacheChanges();
     $dirName = self::normalizeDirectoryName($dirName);
     if (!empty($this->files[$dirName])) {
       return $this->files[$dirName];
@@ -561,8 +564,23 @@ class Storage extends AbstractStorage
    */
   public function hasUpdated(string $path, int $time): bool
   {
+    $this->processPendingCacheChanges();
     $mtime = $this->filemtime($path);
     return $mtime === false || ($mtime > $time);
+  }
+
+  /**
+   * Retry durable cache updates on first access to this authenticated mount.
+   *
+   * @return void
+   */
+  private function processPendingCacheChanges(): void
+  {
+    if ($this->checkedPendingCacheChanges) {
+      return;
+    }
+    $this->checkedPendingCacheChanges = true;
+    $this->appContainer()->get(CacheNotifier::class)->notifyStorage($this);
   }
 
   /** {@inheritdoc} */

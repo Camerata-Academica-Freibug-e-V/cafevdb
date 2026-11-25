@@ -24,10 +24,12 @@ class DatabaseStorageTimestampListener implements EventSubscriber
   /**
    * @param TimeFactory $clock
    * @param null|StorageChangeCollector $collector
+   * @param null|string $userId
    */
   public function __construct(
     private TimeFactory $clock,
     private ?StorageChangeCollector $collector = null,
+    private ?string $userId = null,
   ) {
   }
 
@@ -71,7 +73,17 @@ class DatabaseStorageTimestampListener implements EventSubscriber
       }
     }
 
-    $this->recordChanges($unitOfWork, $entries);
+    $changes = $this->recordChanges($unitOfWork, $entries);
+    foreach ($changes as $storageId => $paths) {
+      foreach ($paths as $path => $details) {
+        $change = new Entities\DatabaseStorageCacheChange($storageId, $path, $details['oldPath'], $details['entryId'], $this->userId);
+        $entityManager->persist($change);
+        $unitOfWork->computeChangeSet(
+          $entityManager->getClassMetadata($change::class),
+          $change,
+        );
+      }
+    }
 
     // Collect both paths before recomputing any change set.
     $folders = [];
@@ -124,13 +136,11 @@ class DatabaseStorageTimestampListener implements EventSubscriber
    * @param UnitOfWork $unitOfWork
    * @param array<int, Entities\DatabaseStorageDirEntry> $entries
    *
-   * @return void
+   * @return array<string, array<string, ?string>>
    */
-  private function recordChanges(UnitOfWork $unitOfWork, array $entries): void
+  private function recordChanges(UnitOfWork $unitOfWork, array $entries): array
   {
-    if ($this->collector === null) {
-      return;
-    }
+    $changes = [];
     foreach ($entries as $entry) {
       $changeSet = $unitOfWork->getEntityChangeSet($entry);
       $original = $unitOfWork->getOriginalEntityData($entry);
@@ -168,12 +178,16 @@ class DatabaseStorageTimestampListener implements EventSubscriber
       }
       if ($newPath === null) {
         if ($oldPath !== null) {
-          $this->collector->record($storageId, $oldPath);
+          $changes[$storageId][$oldPath] = null;
+          $this->collector?->record($storageId, $oldPath);
         }
       } else {
-        $this->collector->record($storageId, $newPath, $oldPath !== $newPath ? $oldPath : null);
+        $moveFrom = $oldPath !== $newPath ? $oldPath : null;
+        $changes[$storageId][$newPath] = $moveFrom;
+        $this->collector?->record($storageId, $newPath, $moveFrom);
       }
     }
+    return $changes;
   }
 
   /**

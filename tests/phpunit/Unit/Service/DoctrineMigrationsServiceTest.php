@@ -66,6 +66,7 @@ use OCA\CAFEVDB\Wrapped\Doctrine\Migrations\DependencyFactory;
 #[Attributes\UsesClass(MigrationsNamespace\Version20261031220000::class)]
 #[Attributes\UsesClass(MigrationsNamespace\Version20261101120000::class)]
 #[Attributes\UsesClass(MigrationsNamespace\Version20261118191044::class)]
+#[Attributes\UsesClass(MigrationsNamespace\Version20261125155000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
 #[Attributes\CoversClass(Migrations\AbstractMigration::class)]
 #[Attributes\CoversClass(Migrations\DependencyFactory::class)]

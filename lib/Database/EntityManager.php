@@ -793,7 +793,11 @@ class EntityManager extends AbstractEntityManager
     $evm->addEventSubscriber($foreignKeyListener);
 
     // Run after Sluggable so file-data hash updates are visible in this flush.
-    $evm->addEventSubscriber(new Listeners\DatabaseStorageTimestampListener($timeFactory, $this->storageChanges));
+    $evm->addEventSubscriber(new Listeners\DatabaseStorageTimestampListener(
+      $timeFactory,
+      $this->storageChanges,
+      $this->encryptionService->getUserId() === null ? null : $this->getUserId(),
+    ));
 
     return [ $config, $evm, $attributeReader ];
   }

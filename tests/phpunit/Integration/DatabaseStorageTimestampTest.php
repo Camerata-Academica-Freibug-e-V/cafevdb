@@ -22,10 +22,13 @@ use OC\Files\View;
 
 use OCA\CAFEVDB\Common\TimeFactory;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\DatabaseStorageTimestampListener;
+use OCA\CAFEVDB\PageRenderer\DatabaseTables;
 use OCA\CAFEVDB\Storage\Database\InvoicesStorage;
 use OCA\CAFEVDB\Storage\Database\ReadMeFactoryInterface;
 use OCA\CAFEVDB\Tests\MockProvider;
 use OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
+use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Events;
 
 /** Exercise timestamp propagation through the real Doctrine flush. */
 class DatabaseStorageTimestampTest extends TestCase
@@ -33,6 +36,121 @@ class DatabaseStorageTimestampTest extends TestCase
   use SetupMigrationTrait;
 
   private DateTimeImmutable $now;
+
+  /** @return void */
+  public function testCacheChangeMigrationPreservesLegacyRows(): void
+  {
+    $this->applyMigrations('20261125155000');
+    try {
+      $this->entityManager->getConnection()->executeStatement(
+        'INSERT INTO ' . DatabaseTables::DATABASE_STORAGE_CACHE_CHANGES_TABLE . ' (storage_id, path, old_path) VALUES (?, ?, ?)',
+        ['legacy', 'new.txt', 'old.txt'],
+      );
+      $this->applyMigrations('latest');
+      $changes = $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+        ->findBy(['storageId' => 'legacy']);
+      self::assertCount(1, $changes);
+      self::assertNull($changes[0]->getEntryId());
+      self::assertSame('old.txt', $changes[0]->getOldPath());
+      self::assertSame('new.txt', $changes[0]->getPath());
+      self::assertNotNull($changes[0]->getCreated());
+      self::assertSame('unknown', $changes[0]->getCreatedBy());
+    } finally {
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testOutboxCreationTimeIsGeneratedByDatabase(): void
+  {
+    $this->applyMigrations('latest');
+    $storageId = 'integration/outbox-created/' . bin2hex(random_bytes(8));
+    try {
+      $connection = $this->entityManager->getConnection();
+      $before = $connection->fetchOne('SELECT CURRENT_TIMESTAMP');
+
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storage = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storage);
+      $root->addDocument(new Entities\EncryptedFile('document.txt', 'content', 'text/plain'));
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storage);
+      $this->flushTransaction();
+
+      $direct = new Entities\DatabaseStorageCacheChange($storageId, 'direct.txt');
+      $this->entityManager->persist($direct);
+      $this->flushTransaction();
+      self::assertNotNull($direct->getCreated(), 'Doctrine must fetch the generated value after insertion.');
+      $after = $connection->fetchOne('SELECT CURRENT_TIMESTAMP');
+      $this->entityManager->clear();
+
+      $changes = $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+        ->findBy(['storageId' => $storageId], ['id' => 'ASC']);
+      self::assertGreaterThan(1, count($changes), 'The listener must record at least one outbox row.');
+      foreach ($changes as $change) {
+        self::assertNotNull($change->getCreated());
+        $expectedUser = $change->getPath() === 'direct.txt'
+          ? 'unknown'
+          : ($this->mockProvider->getEncryptionService()->getUserId() ?: 'unknown');
+        self::assertSame($expectedUser, $change->getCreatedBy());
+        $created = $change->getCreated()->format('Y-m-d H:i:s');
+        self::assertGreaterThanOrEqual($before, $created);
+        self::assertLessThanOrEqual($after, $created);
+      }
+    } finally {
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testOutboxRecordsListenerIdentityAndUnknownFallback(): void
+  {
+    $this->applyMigrations('latest');
+    $events = $this->entityManager->getEventManager();
+    $original = null;
+    foreach ($events->getListeners(Events::onFlush) as $listener) {
+      if ($listener instanceof DatabaseStorageTimestampListener) {
+        $original = $listener;
+        break;
+      }
+    }
+    self::assertNotNull($original);
+    $events->removeEventSubscriber($original);
+    $listener = null;
+    try {
+      foreach (['operator', null] as $userId) {
+        $listener = new DatabaseStorageTimestampListener(
+          $this->mockProvider->getAppContainer()->get(TimeFactory::class),
+          userId: $userId,
+        );
+        $events->addEventSubscriber($listener);
+        $storageId = 'integration/outbox-user/' . bin2hex(random_bytes(8));
+        $root = (new Entities\DatabaseStorageFolder)->setName('');
+        $storage = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+        $root->setStorage($storage);
+        $root->addDocument(new Entities\EncryptedFile('document.txt', 'content', 'text/plain'));
+        $this->entityManager->persist($root);
+        $this->entityManager->persist($storage);
+        $this->flushTransaction();
+        $this->entityManager->clear();
+
+        $changes = $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]);
+        self::assertNotEmpty($changes);
+        foreach ($changes as $change) {
+          self::assertSame($userId ?? 'unknown', $change->getCreatedBy());
+        }
+        $events->removeEventSubscriber($listener);
+        $listener = null;
+      }
+    } finally {
+      if ($listener !== null) {
+        $events->removeEventSubscriber($listener);
+      }
+      $events->addEventSubscriber($original);
+      $this->unapplyMigrations();
+    }
+  }
 
   /** @return void */
   public function testPropagationAndRollback(): void
@@ -163,11 +281,10 @@ class DatabaseStorageTimestampTest extends TestCase
    * the file's cached mtime and ETag.
    *
    * Replace the file data with "other", keeping both its length and the clock
-   * unchanged while the storage is mounted. A successful commit must notify
-   * the cache even though hasUpdated() cannot detect a same-second change.
-   * A new storage instance models a later request. The cached file and the
-   * listing obtained through Nextcloud's view must have a new ETag and the
-   * original mtime; reading the storage must return "other".
+   * unchanged while the storage is not mounted. The committed change must
+   * remain in the durable queue until a new authorized storage instance
+   * encounters it. The cached file and subsequent Nextcloud listing must
+   * have a new ETag and the original mtime; reading must return "other".
    *
    * The mount and file-cache entries are removed and migrations unapplied in
    * the finally block. The test does not cover concurrent scans or generated
@@ -218,25 +335,31 @@ class DatabaseStorageTimestampTest extends TestCase
       $initialMtime = $initialFile['mtime'];
       $initialEtag = $initialFile['etag'];
       $initialRootMtime = $initialRoot['storage_mtime'];
-      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
-      $mounted = true;
-
       // Keep the content size and the clock unchanged.
       $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
       $file->getFileData()->setData('other');
       $this->flushTransaction();
       $this->entityManager->clear();
-      self::assertNotSame($initialEtag, $cache->get('branch/deep/document.txt')['etag']);
+      self::assertSame($initialEtag, $cache->get('branch/deep/document.txt')['etag']);
       self::assertSame($initialMtime, $cache->get('branch/deep/document.txt')['mtime']);
+      self::assertNotEmpty(
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
 
-      // A new storage instance models a new request and its empty path cache.
-      Filesystem::getMountManager()->removeMount($mountPath);
-      $mounted = false;
+      // An authorized mount in the next request drains the durable queue.
       $storage = $this->createScanStorage($storageId);
       $storage->getWatcher()->setPolicy(Watcher::CHECK_ONCE);
       $cache = $storage->getCache();
       self::assertSame($initialMtime, $storage->filemtime('branch/deep/document.txt'));
       self::assertFalse($storage->hasUpdated('', $initialRootMtime));
+      self::assertNotSame($initialEtag, $cache->get('branch/deep/document.txt')['etag']);
+      self::assertSame($initialMtime, $cache->get('branch/deep/document.txt')['mtime']);
+      self::assertSame(
+        [],
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
       Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
       $mounted = true;
       $view = new View($mountPath);
