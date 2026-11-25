@@ -1,0 +1,98 @@
+name: PHPUnit integration
+
+on:
+  push:
+    branches: [ master, main, nextcloud35, 'cjh-*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NC_REPO: Camerata-Academica-Freibug-e-V/nextcloud-server
+  NC_BRANCH: cjh-stable35
+  APP_NAME: cafevdb
+  PHP_VERSION: '8.5'
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      MARIADB_MAJOR: '12'
+    steps:
+      - name: Checkout modified Nextcloud server
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NC_REPO }}
+          ref: ${{ env.NC_BRANCH }}
+          submodules: recursive
+          path: server
+
+      - name: Checkout app
+        uses: actions/checkout@v4
+        with:
+          path: server/apps/${{ env.APP_NAME }}
+          submodules: recursive
+
+      - name: Install xpath
+        run: sudo apt-get install -y --no-install-recommends libxml-xpath-perl
+
+      - name: Install latest MariaDB ${{ env.MARIADB_MAJOR }}.x server and client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends curl ca-certificates apt-transport-https
+          sudo install -d /etc/apt/keyrings
+          sudo curl -fsSL -o /etc/apt/keyrings/mariadb-keyring.asc \
+            https://mariadb.org/mariadb_release_signing_key.pgp
+          MARIADB_VERSION="$(curl -fsSL https://downloads.mariadb.org/rest-api/mariadb/ \
+            | jq -r --arg m "${MARIADB_MAJOR}." \
+              '[.major_releases[] | select(.release_id | startswith($m)) | select(.release_status | IN("Stable","RC"))][0].release_id')"
+          [ -n "$MARIADB_VERSION" ] && [ "$MARIADB_VERSION" != null ] || { echo "no MariaDB ${MARIADB_MAJOR}.x series found"; exit 1; }
+          echo "Using MariaDB series ${MARIADB_VERSION}"
+          codename="$(lsb_release -cs)"
+          echo "deb [signed-by=/etc/apt/keyrings/mariadb-keyring.asc] https://archive.mariadb.org/mariadb-${MARIADB_VERSION}/repo/ubuntu ${codename} main" \
+            | sudo tee /etc/apt/sources.list.d/mariadb.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mariadb-server mariadb-client
+          # PHPUnit manages a private server.
+          sudo systemctl disable --now mariadb
+          for b in mariadb-install-db mariadbd-safe mariadb mariadb-dump; do
+            command -v "$b" || { echo "missing $b"; exit 1; }
+          done
+          mariadb --version
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ctype, curl, dom, gd, iconv, intl, json, mbstring, openssl, pdo_sqlite, posix, sqlite3, xml, zip, apcu, bcmath, gmp, imagick, fileinfo
+          coverage: none
+          tools: composer:v2
+          ini-values: apc.enable_cli=1, memory_limit=1G
+
+      - name: Install w3m for Html2Text tests
+        run: sudo apt-get install -y --no-install-recommends w3m
+
+      - name: Install Nextcloud (sqlite)
+        working-directory: server
+        run: |
+          composer install --no-interaction --no-progress
+          php occ maintenance:install --database=sqlite \
+            --admin-user=admin --admin-pass=admin --no-interaction
+          php occ config:system:set debug --value=true --type=boolean
+
+      - name: Install app PHP dependencies
+        working-directory: server/apps/${{ env.APP_NAME }}
+        run: make dev-setup
+
+      - name: Verify namespace-wrapped Doctrine
+        working-directory: server/apps/${{ env.APP_NAME }}
+        run: php tests/phpunit/verify-scoped-doctrine.php
+
+      - name: Enable app
+        working-directory: server
+        run: php occ app:enable ${{ env.APP_NAME }}
+
+      - name: Run PHPUnit integration suite
+        working-directory: server/apps/${{ env.APP_NAME }}
+        run: vendor-bin/phpunit/vendor/bin/phpunit -c phpunit.integration.xml
