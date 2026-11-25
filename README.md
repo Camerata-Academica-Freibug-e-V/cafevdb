@@ -80,6 +80,13 @@ and app-localized document folder names. Unresolved paths, including broken
 directory chains or roots without a known participant mount, are `null`, never
 misleading partial paths. Names and paths may identify people, so keep such
 reports private.
+Findings with associated participant fields include `participant_fields`, one
+entry per datum/reference, with field ID, type, multiplicity, participant access,
+relation (`supporting_document_id` or `option_value`), entry ID, musician,
+project and option key. Associations follow all directory links to the same
+file, so an association may belong to another project or musician. Only `db-file`
+option values are treated as entry IDs. Use `--include-field-names` to include
+the stored field name; it can identify people and should be kept private.
 They include retained soft-deleted records, since ownership-based views do not
 filter those records, and show each referenced record's `deleted` value.
 Links to a club-members-project mandate in the same musician's other participant
@@ -96,17 +103,76 @@ maintenance window; it scans file/directory metadata and uses the database's
 configured transaction isolation. It does not check deployed view definitions,
 connector grants, encryption identities or Nextcloud's file cache.
 
-Each finding has `repairable`; `true` currently identifies only a missing
-ownership grant backed by an active, participant-readable supporting-document
-reference in that participant's own storage and project. Participant-only
-fields must match the participant's context. Deleted records, invalid files
+Each finding has `repairable`; `true` identifies missing ownership supported by
+an active, participant-readable supporting-document reference in that
+participant's own storage and project, an active invoice, donation receipt or
+composite-payment supporting document, or an active debit mandate. Financial
+documents qualify only for their own musician and project, and only when a
+link to the same encrypted file already exists in that participant's storage;
+the financial document may use a separate directory entry. Financial documents
+are not excluded solely because the participant's status is `associated`.
+An invoice, donation receipt, composite-payment document or debit mandate may
+also qualify when its participant link is missing:
+the destination must be an existing, unambiguous participant-storage root in
+the document's own project. A mandate's source entry must not be misplaced in
+another participant's or project's storage. The proposed
+steps include `add-participant-link`, and include `add-ownership` and
+`reconcile-encryption-seal` when ownership is missing. The existing source
+entry is preserved; a future repair must check destination names and conflicts.
+Tax exemption notices do not qualify. A club-members-project mandate also
+justifies links in the same musician's other active project storages; other
+mandates justify only their own project.
+The same missing-link classification applies to active participant-readable
+supporting documents of participant fields, subject to their access and context
+rules. Existing ownership alone does not establish that the seal includes the
+participant or that the participant can decrypt it.
+For active `db-file` participant fields, a missing participant-storage link may
+qualify for `add-participant-link` alone, even when `participant_access` is `none`.
+This restores the administrative storage link without granting ownership or
+participant access. The destination must be valid and unambiguous, and broken
+source trees are excluded.
+If a financial link is also associated with a participant field, the
+personalized view's field-access filter still applies; the suggested ownership
+repair alone does not override it.
+Participant-only fields must match the participant's context. Deleted records, invalid files
 and ambiguous links are not candidates. Such findings include `repairsteps`:
 `add-ownership` and `reconcile-encryption-seal`. These are proposed steps, not
 repairs performed or proof that encryption keys and seals are usable. The audit
-does not validate decryption; a future backfill must verify it and preserve
-existing recipients.
+does not validate decryption.
+Run `occ cafevdb:storage:database --repair-access --dry-run --json` to preview
+the audit-approved metadata backfill, then omit `--dry-run` to apply it. The
+audit action itself remains read-only. Run during a quiet maintenance window:
+the executor owns a transaction and locks the audit's input rows before
+classifying them. Unexpected errors roll back the transaction; filename and
+one-to-one-reference conflicts are reported as `blocked` without replacing
+entries. Independent ownership repairs may still proceed when a link conflicts.
+The JSON report lists applied, planned, blocked and deferred operations and
+includes the remaining audit findings. A blocked operation gives a failing exit
+status; remaining findings and deferred seal work must still be reviewed.
+
+New links use the existing entry's filename and the app's localized document
+folders. Participant fields use their field folder path. The backfill never
+creates missing storage roots, deletes source entries, resurrects soft-deleted
+records, or grants ownership for a private field's link-only repair.
+Participant-field, composite-payment and debit-mandate references are pointed
+to their new participant entries; dedicated invoice/receipt entries are retained.
+Metadata is updated directly to avoid ORM orphan removal deleting shared source
+entries; the command clears the ORM identity map afterward.
+
+A missing or unusable participant public key does not prevent recording
+ownership. Seal reconciliation is explicitly deferred and reported, and no
+encrypted payload is read or rewritten. The owner list and the recipients of
+the currently stored seal can therefore differ. Repeating the operation creates
+no duplicate ownership grants or links. A subsequent run may repair newly
+eligible findings, such as club-mandate cross-project links after their canonical
+source link has been restored.
 `false` means this audit has not identified a safe automatic repair; it does not
-mean that the inconsistency is irreparable.
+mean that the inconsistency is irreparable. When known, `repair_reasons` lists
+specific blockers, such as `musician-deleted`, `participant-storage-shared` or
+`field-access-not-readable`. `club-mandate-source-link-missing` means that no
+active club mandate for that file has its canonical entry in the musician's
+club-project storage; other blockers may still apply. The reasons are not
+exhaustive; their absence does not imply that a finding is safe to repair.
 
 Database-backed files and Collabora
 -----------------------------------

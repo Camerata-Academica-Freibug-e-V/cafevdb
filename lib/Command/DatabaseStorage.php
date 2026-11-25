@@ -5,7 +5,7 @@
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
  * @author Claus-Justus Heine <himself@claus-justus-heine.de>
- * @copyright 2022, 2023 Claus-Justus Heine
+ * @copyright 2022, 2023, 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
@@ -24,6 +24,8 @@
 
 namespace OCA\CAFEVDB\Command;
 
+use RuntimeException;
+
 use OCP\IL10N;
 use Psr\Log\LoggerInterface as ILogger;
 use OCP\IUserSession;
@@ -34,9 +36,17 @@ use OCP\IDateTimeFormatter;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumProjectTemporalType;
+use OCA\CAFEVDB\Service\ConfigService;
+use OCA\CAFEVDB\Service\ParticipantFileAuditService;
+use OCA\CAFEVDB\Service\ParticipantFileRepairService;
+use OCA\CAFEVDB\Service\ProjectService;
+use OCA\CAFEVDB\Settings\ConfigConstants;
 
 /** Maintenance for the database file-system backend. */
 class DatabaseStorage extends Command
@@ -62,6 +72,22 @@ class DatabaseStorage extends Command
       ->setName($this->appName . ':storage:database')
       ->setDescription('Maintenance for DB File-System Backend')
       ->addOption(
+        'audit-access',
+        null,
+        InputOption::VALUE_NONE,
+        'Read-only audit of musician file ownership, business references and participant-storage links.',
+      )
+      ->addOption('repair-access', null, InputOption::VALUE_NONE, 'Backfill audit-approved participant links and ownership; does not reconcile seals.')
+      ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Preview --repair-access without changing records.')
+      ->addOption('json', null, InputOption::VALUE_NONE, 'Output the access audit, repair report or orphan-tree listing as JSON.')
+      ->addOption(
+        'include-file-names',
+        null,
+        InputOption::VALUE_NONE,
+        'Include potentially identifying file names and full mounted paths in the access audit.',
+      )
+      ->addOption('include-field-names', null, InputOption::VALUE_NONE, 'Include potentially identifying participant field names in the access audit.')
+      ->addOption(
         'list-storages',
         'l',
         InputOption::VALUE_OPTIONAL,
@@ -86,9 +112,37 @@ class DatabaseStorage extends Command
   /** {@inheritdoc} */
   protected function execute(InputInterface $input, OutputInterface $output):int
   {
-    $result = $this->authenticate($input, $output);
+    $audit = $input->getOption('audit-access');
+    $repair = $input->getOption('repair-access');
+    $orphanTrees = $input->getOption('find-orphan-trees');
+    if (($repair && ($audit || $orphanTrees || $input->getOption('list-storages') !== false
+                     || $input->getOption('find-orphans') || $input->getOption('remove-orphans')
+                     || $input->getOption('include-file-names') || $input->getOption('include-field-names')))
+        || ($input->getOption('dry-run') && !$repair)
+        || (($input->getOption('json') || $input->getOption('include-file-names')) && !$audit && !$orphanTrees && !$repair)
+        || ($input->getOption('include-field-names') && !$audit)
+        || ($orphanTrees && ($audit || $input->getOption('list-storages') !== false
+                            || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))
+        || ($audit && ($input->getOption('list-storages') !== false
+                      || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))) {
+      $output->writeln('<error>Use --audit-access or --find-orphan-trees alone, optionally with --json and --include-file-names. --include-field-names requires --audit-access. Use --repair-access alone, optionally with --dry-run and --json.</error>');
+      return self::INVALID;
+    }
+    $authenticationOutput = ($audit || $orphanTrees || $repair) && $input->getOption('json') && $output instanceof ConsoleOutputInterface
+      ? $output->getErrorOutput()
+      : $output;
+    $result = $this->authenticate($input, $authenticationOutput);
     if ($result != 0) {
       return $result;
+    }
+    if ($audit) {
+      return $this->auditAccess($input, $output);
+    }
+    if ($repair) {
+      return $this->repairAccess($input, $output);
+    }
+    if ($orphanTrees) {
+      return $this->findOrphanTrees($input, $output);
     }
     $storageWildcard = $input->getOption('list-storages');
     if ($storageWildcard !== false) {
@@ -168,5 +222,125 @@ class DatabaseStorage extends Command
       $output->writeln('Removed ' . count($orphans) . ' orphans.');
     }
     return 0;
+  }
+
+  /**
+   * @param InputInterface $input
+   * @param OutputInterface $output
+   *
+   * @return int
+   */
+  private function auditAccess(InputInterface $input, OutputInterface $output): int
+  {
+    $config = $this->appContainer->get(ConfigService::class);
+    $clubProjectId = (int)$config->getConfigValue(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0);
+    $includeFileNames = $input->getOption('include-file-names');
+    $report = (new ParticipantFileAuditService($this->entityManager->getConnection(), $clubProjectId))->audit(
+      $includeFileNames,
+      $includeFileNames ? $this->auditMountPaths($config) : [],
+      $input->getOption('include-field-names'),
+    );
+    if ($input->getOption('json')) {
+      $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
+    } else {
+      $output->writeln('Participant file access audit (read-only; includes soft-deleted records).');
+      $output->writeln(json_encode($report['summary'], JSON_THROW_ON_ERROR));
+      foreach ($report['findings'] as $finding) {
+        $output->writeln(OutputFormatter::escape(json_encode($finding, JSON_THROW_ON_ERROR)));
+      }
+    }
+    return $report['findings'] === [] ? self::SUCCESS : self::FAILURE;
+  }
+
+  /**
+   * @param InputInterface $input
+   * @param OutputInterface $output
+   *
+   * @return int
+   */
+  private function repairAccess(InputInterface $input, OutputInterface $output): int
+  {
+    $config = $this->appContainer->get(ConfigService::class);
+    $l10n = $config->getAppL10n();
+    $service = new ParticipantFileRepairService(
+      $this->entityManager->getConnection(),
+      (int)$config->getConfigValue(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0),
+      function(array $finding) use ($l10n): array {
+        if (in_array($finding['source'], ['participant-field', 'participant-field-support'], true)) {
+          $field = $this->getDatabaseRepository(Entities\ProjectParticipantField::class)->find($finding['source_id']);
+          if ($field === null) {
+            throw new RuntimeException('The participant field disappeared during repair.');
+          }
+          $path = $this->appContainer->get(ProjectService::class)->getParticipantFieldFolderPath($field);
+          if ($path === null) {
+            throw new RuntimeException('The participant field has no destination path.');
+          }
+          return $path === '' ? [] : explode('/', $path);
+        }
+        return match ($finding['source']) {
+          'invoice' => [$l10n->t('Invoices')],
+          'donation-receipt' => [$l10n->t('DonationReceipts')],
+          'debit-mandate' => [$l10n->t('DebitMandates')],
+          'composite-payment' => [$l10n->t('SupportingDocuments'), $l10n->t('BankTransactions')],
+          default => throw new RuntimeException('Unsupported participant document source.'),
+        };
+      },
+    );
+    try {
+      $report = $service->repair($input->getOption('dry-run'));
+    } finally {
+      // The metadata backfill bypasses ORM orphan-removal on shared source entries.
+      $this->entityManager->clear();
+    }
+    if ($input->getOption('json')) {
+      $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
+    } else {
+      $output->writeln($report['dry_run'] ? 'Participant document repair preview (read-only).' : 'Participant document repair (seals deferred).');
+      $output->writeln(json_encode($report['summary'], JSON_THROW_ON_ERROR));
+      foreach ($report['repairs'] as $repair) {
+        $output->writeln(OutputFormatter::escape(json_encode($repair, JSON_THROW_ON_ERROR)));
+      }
+      $output->writeln('Remaining access findings: ' . count($report['remaining']['findings']));
+    }
+    return isset($report['summary']['blocked']) ? self::FAILURE : self::SUCCESS;
+  }
+
+  /**
+   * @param ConfigService $config
+   *
+   * @return array<int, string> Participant mount paths, without a Nextcloud user's files prefix.
+   */
+  private function auditMountPaths(ConfigService $config): array
+  {
+    $sharedFolder = $config->getConfigValue(ConfigConstants::SHARED_FOLDER);
+    $projectsFolder = $config->getConfigValue(ConfigConstants::PROJECTS_FOLDER);
+    $participantsFolder = $config->getConfigValue(ConfigConstants::PROJECT_PARTICIPANTS_FOLDER);
+    if (empty($sharedFolder) || empty($projectsFolder) || empty($participantsFolder)) {
+      return [];
+    }
+    $projectService = $this->appContainer->get(ProjectService::class);
+    $documentsFolder = $config->getAppL10n()->t('Documents');
+    $paths = [];
+    foreach ($this->entityManager->getConnection()->fetchAllAssociative(
+      'SELECT s.root_id, p.name, p.year, p.type, m.user_id_slug
+       FROM ProjectParticipants pp
+       JOIN DatabaseStorages s ON s.id = pp.database_documents_id
+       LEFT JOIN Projects p ON p.id = pp.project_id
+       LEFT JOIN Musicians m ON m.id = pp.musician_id',
+    ) as $participant) {
+      if ($participant['root_id'] === null || $participant['name'] === null || empty($participant['user_id_slug'])) {
+        continue;
+      }
+      $participant['type'] = EnumProjectTemporalType::from($participant['type']);
+      $paths[(int)$participant['root_id']] = '/' . implode('/', [
+        trim($sharedFolder, '/'),
+        trim($projectsFolder, '/'),
+        $projectService->getProjectPathPrefix($participant),
+        trim($participantsFolder, '/'),
+        $participant['user_id_slug'],
+        $documentsFolder,
+      ]);
+    }
+    return $paths;
   }
 }
