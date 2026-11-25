@@ -167,8 +167,10 @@ class DatabaseStorageTimestampTest extends TestCase
       $subId = $sub->getId();
       $this->entityManager->clear();
 
+      $cachedTime = $this->now->getTimestamp();
       $revision = $this->revision($storageId);
-      self::assertSame($this->now->getTimestamp(), $revision);
+      self::assertSame($cachedTime + 1, $revision);
+      self::assertGreaterThan($cachedTime, max($cachedTime, $revision));
 
       // Changes within the same second still advance the revision.
       $this->folder($subId)->setName('first');
@@ -192,12 +194,15 @@ class DatabaseStorageTimestampTest extends TestCase
       $this->entityManager->clear();
       self::assertSame($revision + 2, $this->revision($storageId));
 
-      // Once the clock moves on, the revision follows it.
+      // When the clock catches up, the revision stays ahead of the cached time.
       $this->advanceClock();
+      $cachedTime = $this->now->getTimestamp();
       $this->folder($subId)->setName('third');
       $this->flushTransaction();
       $this->entityManager->clear();
-      self::assertSame($this->now->getTimestamp(), $this->revision($storageId));
+      $revision = $this->revision($storageId);
+      self::assertSame($cachedTime + 1, $revision);
+      self::assertGreaterThan($cachedTime, max($cachedTime, $revision));
     } finally {
       $this->unapplyMigrations();
     }

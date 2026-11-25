@@ -128,8 +128,8 @@ class DatabaseStorageTimestampListener implements EventSubscriber
   /**
    * Advance the revision of the changed storages after the data has been
    * written. A reader which sees the new revision thus also sees the new
-   * data. The revision never falls behind the clock in order to stay larger
-   * than the cached time-stamps of the file-cache.
+   * data. The revision stays ahead of the clock to distinguish changes from
+   * cache entries recorded in the same second.
    *
    * @param PostFlushEventArgs $args
    *
@@ -145,15 +145,15 @@ class DatabaseStorageTimestampListener implements EventSubscriber
     $entityManager = $args->getObjectManager();
     $table = $entityManager->getClassMetadata(Entities\DatabaseStorage::class)->getTableName();
     $connection = $entityManager->getConnection();
-    $now = $this->clock->now()->getTimestamp();
+    $nextTimestamp = $this->clock->now()->getTimestamp() + 1;
     foreach ($roots as $root) {
       $rootId = $root->getId();
       if (empty($rootId)) {
         continue; // deleted root
       }
       $connection->executeStatement(
-        'UPDATE ' . $table . ' SET revision = CASE WHEN revision >= :now THEN revision + 1 ELSE :now END WHERE root_id = :rootId',
-        [ 'now' => $now, 'rootId' => $rootId ],
+        'UPDATE ' . $table . ' SET revision = CASE WHEN revision >= :nextTimestamp THEN revision + 1 ELSE :nextTimestamp END WHERE root_id = :rootId',
+        [ 'nextTimestamp' => $nextTimestamp, 'rootId' => $rootId ],
       );
     }
   }

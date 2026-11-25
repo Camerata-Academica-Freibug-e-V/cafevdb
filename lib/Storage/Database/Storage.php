@@ -559,7 +559,7 @@ class Storage extends AbstractStorage
    *
    * The cloud file-cache stores the "storage_mtime" for cache invalidation,
    * and its resolution is one second. Hence we record the storage revision
-   * (which is never smaller than the time of the last change) in its place
+   * (which is ahead of the time of the last change) in its place
    * such that changes within the same second as the last scan are detected
    * by hasUpdated(). The revision is read before the data, so that a
    * concurrent change can only lead to a superfluous rescan.
