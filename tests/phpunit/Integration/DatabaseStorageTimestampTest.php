@@ -14,8 +14,16 @@ use DateTimeImmutable;
 use ReflectionProperty;
 use PHPUnit\Framework\TestCase;
 
+use OC\Files\Cache\Scanner;
+use OC\Files\Cache\Watcher;
+use OC\Files\Filesystem;
+use OC\Files\Mount\MountPoint;
+use OC\Files\View;
+
 use OCA\CAFEVDB\Common\TimeFactory;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Storage\Database\InvoicesStorage;
+use OCA\CAFEVDB\Storage\Database\ReadMeFactoryInterface;
 use OCA\CAFEVDB\Tests\MockProvider;
 use OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
 
@@ -206,6 +214,122 @@ class DatabaseStorageTimestampTest extends TestCase
     } finally {
       $this->unapplyMigrations();
     }
+  }
+
+  /** @return void */
+  public function testSameSecondChangeThroughShallowScans(): void
+  {
+    $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
+    $this->mockProvider = MockProvider::create($this);
+    $clock = $this->createStub(TimeFactory::class);
+    $clock->method('now')->willReturnCallback(fn() => $this->now);
+    $this->mockProvider->registerClassInstance(TimeFactory::class, $clock, global: true);
+    $this->applyMigrations('latest');
+
+    $storageId = 'integration/shallow-scan/' . bin2hex(random_bytes(8));
+    $mountPath = '/cafevdb-shallow-scan-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $deep = $root->addSubFolder('branch')->addSubFolder('deep');
+      $file = new Entities\EncryptedFile('document.txt', 'first', 'text/plain');
+      $deep->addDocument($file);
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+      $fileId = $file->getId();
+      $this->entityManager->clear();
+
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+      $initialRoot = $cache->get('');
+      $initialBranch = $cache->get('branch');
+      $initialDeep = $cache->get('branch/deep');
+      $initialFile = $cache->get('branch/deep/document.txt');
+      self::assertNotFalse($initialRoot);
+      self::assertNotFalse($initialBranch);
+      self::assertNotFalse($initialDeep);
+      self::assertNotFalse($initialFile);
+      self::assertGreaterThanOrEqual(0, $initialBranch['size']);
+      self::assertGreaterThanOrEqual(0, $initialDeep['size']);
+      $initialMtime = $initialFile['mtime'];
+      $initialEtag = $initialFile['etag'];
+      $initialRootRevision = $initialRoot['storage_mtime'];
+
+      // Keep the content size and the clock unchanged.
+      $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
+      $file->getFileData()->setData('other');
+      $this->flushTransaction();
+      $this->entityManager->clear();
+
+      // A new storage instance models a new request and its empty path cache.
+      $storage = $this->createScanStorage($storageId);
+      $storage->getWatcher()->setPolicy(Watcher::CHECK_ONCE);
+      $cache = $storage->getCache();
+      self::assertSame($initialMtime, $storage->filemtime('branch/deep/document.txt'));
+      self::assertTrue($storage->hasUpdated('', $initialRootRevision));
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      $view = new View($mountPath);
+
+      self::assertNotFalse($view->getFileInfo('/', false));
+      self::assertSame(-1, $cache->get('branch')['size']);
+      self::assertSame($initialEtag, $cache->get('branch/deep/document.txt')['etag']);
+
+      self::assertNotFalse($view->getFileInfo('/branch', false));
+      self::assertSame(-1, $cache->get('branch/deep')['size']);
+      $listing = $view->getDirectoryContent('/branch/deep');
+      self::assertCount(1, $listing);
+      self::assertSame('document.txt', $listing[0]->getName());
+      self::assertNotSame($initialEtag, $listing[0]->getEtag());
+      self::assertSame($initialMtime, $listing[0]->getMtime());
+      self::assertSame('other', $storage->file_get_contents('branch/deep/document.txt'));
+    } finally {
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /**
+   * @param string $storageId
+   *
+   * @return InvoicesStorage
+   */
+  private function createScanStorage(string $storageId): InvoicesStorage
+  {
+    $readMeFactory = $this->createStub(ReadMeFactoryInterface::class);
+    return new class(
+      ['configService' => $this->mockProvider->getConfigService()],
+      $storageId,
+      $readMeFactory,
+    ) extends InvoicesStorage {
+      public function __construct(
+        array $params,
+        private string $testStorageId,
+        private ReadMeFactoryInterface $testReadMeFactory,
+      ) {
+        parent::__construct($params);
+      }
+
+      public function getShortId(): string
+      {
+        return $this->testStorageId;
+      }
+
+      protected function getReadMeFactory(): ReadMeFactoryInterface
+      {
+        return $this->testReadMeFactory;
+      }
+    };
   }
 
   /**
