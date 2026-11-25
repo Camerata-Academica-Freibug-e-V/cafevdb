@@ -606,6 +606,83 @@ class DatabaseStorageTimestampTest extends TestCase
   }
 
   /** @return void */
+  public function testDeferredInterleavedRenamesPreserveFileIds(): void
+  {
+    $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
+    $this->mockProvider = MockProvider::create($this);
+    $clock = $this->createStub(TimeFactory::class);
+    $clock->method('now')->willReturnCallback(fn() => $this->now);
+    $this->mockProvider->registerClassInstance(TimeFactory::class, $clock, global: true);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+
+    $storageId = 'integration/interleaved-renames/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-interleaved-renames-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $first = $root->addDocument(new Entities\EncryptedFile('a.txt', 'first', 'text/plain'));
+      $second = $root->addDocument(new Entities\EncryptedFile('x.txt', 'second', 'text/plain'));
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+      $firstCached = $cache->get('a.txt');
+      $secondCached = $cache->get('x.txt');
+      self::assertNotFalse($firstCached);
+      self::assertNotFalse($secondCached);
+      $firstId = $firstCached->getId();
+      $secondId = $secondCached->getId();
+
+      // Separate commits while the storage is unmounted leave ordered outbox work.
+      $first->setName('b.txt');
+      $this->flushTransaction();
+      $second->setName('y.txt');
+      $this->flushTransaction();
+      $first->setName('c.txt');
+      $this->flushTransaction();
+      $pending = $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+        ->findBy(['storageId' => $storageId], ['id' => 'ASC']);
+      self::assertSame(
+        [['a.txt', 'b.txt'], ['x.txt', 'y.txt'], ['b.txt', 'c.txt']],
+        array_map(fn($change) => [$change->getOldPath(), $change->getPath()], $pending),
+      );
+      self::assertNotFalse($cache->get('a.txt'));
+      self::assertNotFalse($cache->get('x.txt'));
+
+      $storage = $this->createScanStorage($storageId);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      $storage->hasUpdated('', $this->now->getTimestamp());
+      self::assertFalse($cache->get('a.txt'));
+      self::assertFalse($cache->get('b.txt'));
+      self::assertFalse($cache->get('x.txt'));
+      $firstCached = $cache->get('c.txt');
+      $secondCached = $cache->get('y.txt');
+      self::assertNotFalse($firstCached);
+      self::assertNotFalse($secondCached);
+      self::assertSame($firstId, $firstCached->getId());
+      self::assertSame($secondId, $secondCached->getId());
+      self::assertSame('first', $storage->file_get_contents('c.txt'));
+      self::assertSame('second', $storage->file_get_contents('y.txt'));
+    } finally {
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
   public function testCacheNotificationWaitsForOutermostCommitAndDiscardsRollback(): void
   {
     $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
