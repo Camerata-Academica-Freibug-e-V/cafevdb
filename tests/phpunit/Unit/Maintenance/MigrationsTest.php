@@ -51,6 +51,7 @@ use OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
 #[Attributes\CoversClass(MigrationsNamespace\Version20261101120000::class)]
 #[Attributes\CoversClass(MigrationsNamespace\Version20261118191044::class)]
 #[Attributes\CoversClass(MigrationsNamespace\Version20261125155000::class)]
+#[Attributes\CoversClass(MigrationsNamespace\Version20261125161000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\AppInfo\Application::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\ConsoleLogger::class)]

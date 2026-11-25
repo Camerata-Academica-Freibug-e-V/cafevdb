@@ -40,21 +40,27 @@ class DatabaseStorageCacheChange
   #[ORM\Column(type: 'string', length: 255, options: ['default' => 'unknown'])]
   protected string $createdBy;
 
+  #[ORM\Column(type: 'integer', nullable: true)]
+  protected ?int $entryId;
+
   /**
    * @param string $storageId
    * @param string $path
    * @param null|string $oldPath
+   * @param null|int $entryId
    * @param null|string $createdBy
    */
   public function __construct(
     string $storageId,
     string $path,
     ?string $oldPath = null,
+    ?int $entryId = null,
     ?string $createdBy = null,
   ) {
     $this->storageId = $storageId;
     $this->path = $path;
     $this->oldPath = $oldPath;
+    $this->entryId = $entryId;
     $this->createdBy = $createdBy === null || $createdBy === '' ? 'unknown' : $createdBy;
   }
 
@@ -80,5 +86,11 @@ class DatabaseStorageCacheChange
   public function getCreatedBy(): string
   {
     return $this->createdBy;
+  }
+
+  /** @return null|int */
+  public function getEntryId(): ?int
+  {
+    return $this->entryId;
   }
 }

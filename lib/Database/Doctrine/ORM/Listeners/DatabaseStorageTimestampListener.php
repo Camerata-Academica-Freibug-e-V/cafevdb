@@ -136,7 +136,7 @@ class DatabaseStorageTimestampListener implements EventSubscriber
    * @param UnitOfWork $unitOfWork
    * @param array<int, Entities\DatabaseStorageDirEntry> $entries
    *
-   * @return array<string, array<string, ?string>>
+   * @return array<string, array<string, array{oldPath: ?string, entryId: ?int}>>
    */
   private function recordChanges(UnitOfWork $unitOfWork, array $entries): array
   {
@@ -178,12 +178,12 @@ class DatabaseStorageTimestampListener implements EventSubscriber
       }
       if ($newPath === null) {
         if ($oldPath !== null) {
-          $changes[$storageId][$oldPath] = null;
+          $changes[$storageId][$oldPath] = ['oldPath' => null, 'entryId' => $entry->getId()];
           $this->collector?->record($storageId, $oldPath);
         }
       } else {
         $moveFrom = $oldPath !== $newPath ? $oldPath : null;
-        $changes[$storageId][$newPath] = $moveFrom;
+        $changes[$storageId][$newPath] = ['oldPath' => $moveFrom, 'entryId' => $entry->getId()];
         $this->collector?->record($storageId, $newPath, $moveFrom);
       }
     }
