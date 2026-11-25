@@ -227,7 +227,8 @@ class DatabaseStorageTimestampTest extends TestCase
     $this->applyMigrations('latest');
 
     $storageId = 'integration/shallow-scan/' . bin2hex(random_bytes(8));
-    $mountPath = '/cafevdb-shallow-scan-' . bin2hex(random_bytes(8));
+    // This prefix avoids initializing unrelated user-specific mount providers.
+    $mountPath = '/files_external/cafevdb-shallow-scan-' . bin2hex(random_bytes(8));
     $storage = null;
     $mounted = false;
     try {
