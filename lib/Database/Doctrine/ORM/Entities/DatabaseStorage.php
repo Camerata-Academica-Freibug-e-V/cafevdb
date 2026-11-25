@@ -59,6 +59,17 @@ class DatabaseStorage implements \ArrayAccess
   #[ORM\OneToOne(targetEntity: DatabaseStorageFolder::class, inversedBy: 'storage')]
   protected $root;
 
+  /**
+   * @var int Monotonically increasing change counter of the storage. It is
+   * advanced by the database-storage listener after every flush which
+   * touches the directory tree of the storage and is used for cache
+   * invalidation by the storage backend. In contrast to the "updated"
+   * time-stamps it is not subject to the one-second granularity of the cloud
+   * file-cache.
+   */
+  #[ORM\Column(type: 'bigint', nullable: false, options: ['default' => 0, 'unsigned' => true])]
+  protected $revision = 0;
+
   // phpcs:disable Squiz.Commenting.FunctionComment.Missing
   public function __construct()
   {
@@ -99,6 +110,12 @@ class DatabaseStorage implements \ArrayAccess
     $this->root = $root;
 
     return $this;
+  }
+
+  /** @return integer */
+  public function getRevision():int
+  {
+    return (int)$this->revision;
   }
 
   /** {@inheritdoc} */

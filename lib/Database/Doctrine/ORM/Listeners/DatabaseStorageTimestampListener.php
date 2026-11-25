@@ -15,12 +15,19 @@ use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Wrapped\Doctrine\Common\EventSubscriber;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\EntityManagerInterface;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Event\OnFlushEventArgs;
+use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Event\PostFlushEventArgs;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Events;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\UnitOfWork;
 
-/** Propagate database-backed file changes to all affected directory ancestors. */
+/**
+ * Propagate database-backed file changes to all affected directory ancestors
+ * and advance the change revision of the affected storages.
+ */
 class DatabaseStorageTimestampListener implements EventSubscriber
 {
+  /** @var array<int, Entities\DatabaseStorageFolder> Root folders of changed storages. */
+  private array $changedRoots = [];
+
   /**
    * @param TimeFactory $clock
    */
@@ -31,7 +38,7 @@ class DatabaseStorageTimestampListener implements EventSubscriber
   /** {@inheritdoc} */
   public function getSubscribedEvents(): array
   {
-    return [Events::onFlush];
+    return [Events::onFlush, Events::postFlush];
   }
 
   /** {@inheritdoc} */
@@ -93,6 +100,12 @@ class DatabaseStorageTimestampListener implements EventSubscriber
       }
     }
 
+    foreach ($entries + $folders as $folder) {
+      if ($folder instanceof Entities\DatabaseStorageFolder && $folder->getParent() === null) {
+        $this->changedRoots[spl_object_id($folder)] = $folder;
+      }
+    }
+
     if (!$folders && !$linkedEntries && !$dataFiles) {
       return;
     }
@@ -109,6 +122,39 @@ class DatabaseStorageTimestampListener implements EventSubscriber
         $entry->setUpdated($now);
         $this->recompute($unitOfWork, $entityManager, $entry);
       }
+    }
+  }
+
+  /**
+   * Advance the revision of the changed storages after the data has been
+   * written. A reader which sees the new revision thus also sees the new
+   * data. The revision never falls behind the clock in order to stay larger
+   * than the cached time-stamps of the file-cache.
+   *
+   * @param PostFlushEventArgs $args
+   *
+   * @return void
+   */
+  public function postFlush(PostFlushEventArgs $args): void
+  {
+    $roots = $this->changedRoots;
+    $this->changedRoots = [];
+    if (!$roots) {
+      return;
+    }
+    $entityManager = $args->getObjectManager();
+    $table = $entityManager->getClassMetadata(Entities\DatabaseStorage::class)->getTableName();
+    $connection = $entityManager->getConnection();
+    $now = $this->clock->now()->getTimestamp();
+    foreach ($roots as $root) {
+      $rootId = $root->getId();
+      if (empty($rootId)) {
+        continue; // deleted root
+      }
+      $connection->executeStatement(
+        'UPDATE ' . $table . ' SET revision = CASE WHEN revision >= :now THEN revision + 1 ELSE :now END WHERE root_id = :rootId',
+        [ 'now' => $now, 'rootId' => $rootId ],
+      );
     }
   }
 

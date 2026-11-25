@@ -551,7 +551,46 @@ class Storage extends AbstractStorage
   public function hasUpdated(string $path, int $time): bool
   {
     $mtime = $this->filemtime($path);
-    return $mtime === false || ($mtime > $time);
+    return $mtime === false || (max($mtime, $this->getStorageRevision()) > $time);
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The cloud file-cache stores the "storage_mtime" for cache invalidation,
+   * and its resolution is one second. Hence we record the storage revision
+   * (which is never smaller than the time of the last change) in its place
+   * such that changes within the same second as the last scan are detected
+   * by hasUpdated(). The revision is read before the data, so that a
+   * concurrent change can only lead to a superfluous rescan.
+   */
+  public function getMetaData(string $path): ?array
+  {
+    $revision = $this->getStorageRevision();
+    $data = parent::getMetaData($path);
+    if (is_array($data) && isset($data['storage_mtime'])) {
+      $data['storage_mtime'] = max($data['storage_mtime'], $revision);
+    }
+    return $data;
+  }
+
+  /**
+   * Get the change revision of the storage as maintained by the
+   * DatabaseStorageTimestampListener. It is 0 for storages which have never
+   * been changed since the introduction of the revision.
+   *
+   * @return int
+   */
+  protected function getStorageRevision():int
+  {
+    $rows = $this->getDatabaseRepository(Entities\DatabaseStorage::class)
+      ->createQueryBuilder('s')
+      ->select('s.revision')
+      ->where('s.storageId = :storageId')
+      ->setParameter('storageId', $this->getShortId())
+      ->getQuery()
+      ->getScalarResult();
+    return (int)($rows[0]['revision'] ?? 0);
   }
 
   /** {@inheritdoc} */

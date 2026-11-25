@@ -146,6 +146,74 @@ class DatabaseStorageTimestampTest extends TestCase
   }
 
   /** @return void */
+  public function testRevisionAdvancesWithinOneSecond(): void
+  {
+    $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
+    $this->mockProvider = MockProvider::create($this);
+    $clock = $this->createStub(TimeFactory::class);
+    $clock->method('now')->willReturnCallback(fn() => $this->now);
+    $this->mockProvider->registerClassInstance(TimeFactory::class, $clock, global: true);
+    $this->applyMigrations('latest');
+
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storage = (new Entities\DatabaseStorage)->setStorageId('revision-test')->setRoot($root);
+      $root->setStorage($storage);
+      $sub = $root->addSubFolder('sub');
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storage);
+      $this->flushTransaction();
+      $storageId = $storage->getId();
+      $subId = $sub->getId();
+      $this->entityManager->clear();
+
+      $revision = $this->revision($storageId);
+      self::assertSame($this->now->getTimestamp(), $revision);
+
+      // Changes within the same second still advance the revision.
+      $this->folder($subId)->setName('first');
+      $this->flushTransaction();
+      $this->entityManager->clear();
+      self::assertSame($revision + 1, $this->revision($storageId));
+
+      $this->folder($subId)->setName('second');
+      $this->flushTransaction();
+      $this->entityManager->clear();
+      self::assertSame($revision + 2, $this->revision($storageId));
+
+      // Rolled-back changes do not advance the revision.
+      $this->entityManager->beginTransaction();
+      try {
+        $this->folder($subId)->setName('rolled-back');
+        $this->entityManager->flush();
+      } finally {
+        $this->entityManager->rollback();
+      }
+      $this->entityManager->clear();
+      self::assertSame($revision + 2, $this->revision($storageId));
+
+      // Once the clock moves on, the revision follows it.
+      $this->advanceClock();
+      $this->folder($subId)->setName('third');
+      $this->flushTransaction();
+      $this->entityManager->clear();
+      self::assertSame($this->now->getTimestamp(), $this->revision($storageId));
+    } finally {
+      $this->unapplyMigrations();
+    }
+  }
+
+  /**
+   * @param int $storageId
+   *
+   * @return int
+   */
+  private function revision(int $storageId): int
+  {
+    return $this->entityManager->find(Entities\DatabaseStorage::class, $storageId)->getRevision();
+  }
+
+  /** @return void */
   private function advanceClock(): void
   {
     $this->now = $this->now->modify('+1 minute');
