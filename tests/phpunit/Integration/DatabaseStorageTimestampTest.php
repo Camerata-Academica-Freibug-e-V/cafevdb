@@ -307,16 +307,18 @@ class DatabaseStorageTimestampTest extends TestCase
   private function createScanStorage(string $storageId): InvoicesStorage
   {
     $readMeFactory = $this->createStub(ReadMeFactoryInterface::class);
-    return new class(
-      ['configService' => $this->mockProvider->getConfigService()],
-      $storageId,
-      $readMeFactory,
-    ) extends InvoicesStorage {
-      public function __construct(
-        array $params,
-        private string $testStorageId,
-        private ReadMeFactoryInterface $testReadMeFactory,
-      ) {
+    return new class([
+      'configService' => $this->mockProvider->getConfigService(),
+      'testStorageId' => $storageId,
+      'testReadMeFactory' => $readMeFactory,
+    ]) extends InvoicesStorage {
+      private string $testStorageId;
+      private ReadMeFactoryInterface $testReadMeFactory;
+
+      public function __construct(array $params)
+      {
+        $this->testStorageId = $params['testStorageId'];
+        $this->testReadMeFactory = $params['testReadMeFactory'];
         parent::__construct($params);
       }
 
