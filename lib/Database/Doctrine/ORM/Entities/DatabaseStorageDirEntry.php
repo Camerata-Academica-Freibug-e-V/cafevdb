@@ -29,7 +29,6 @@ use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumDirEntryType as DirEntryType;
 use OCA\CAFEVDB\Database\Doctrine\ORM as CAFEVDB;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Mapping as ORM;
-use OCA\CAFEVDB\Wrapped\Gedmo\Mapping\Annotation as Gedmo;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Types\Types as DBALTypes;
 
 /**
@@ -59,7 +58,6 @@ class DatabaseStorageDirEntry implements \ArrayAccess
   protected string $name;
 
   #[ORM\ManyToOne(targetEntity: DatabaseStorageFolder::class, inversedBy: 'directoryEntries', cascade: ['persist'])]
-  #[Gedmo\Timestampable(on: ['update', 'create', 'delete'], timestampField: 'updated')]
   protected ?DatabaseStorageFolder $parent = null;
 
   /** {@inheritdoc} */

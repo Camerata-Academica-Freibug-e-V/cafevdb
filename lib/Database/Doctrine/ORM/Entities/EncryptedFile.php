@@ -28,7 +28,6 @@ use \RuntimeException;
 
 
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Mapping as ORM;
-use OCA\CAFEVDB\Wrapped\Gedmo\Mapping\Annotation as Gedmo;
 
 use OCA\CAFEVDB\Wrapped\Doctrine\Common\Collections\Collection;
 use OCA\CAFEVDB\Wrapped\Doctrine\Common\Collections\ArrayCollection;
@@ -48,7 +47,6 @@ class EncryptedFile extends File
    * @var Collection<DatabaseStorageFile>
    */
   #[ORM\OneToMany(targetEntity: DatabaseStorageFile::class, mappedBy: 'file', cascade: ['persist'])]
-  #[Gedmo\Timestampable(on: ['update', 'create', 'delete'], timestampField: 'updated')]
   private Collection $databaseStorageDirEntries;
 
   /** {@inheritdoc} */
