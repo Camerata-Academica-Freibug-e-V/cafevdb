@@ -12,6 +12,7 @@ namespace OCA\CAFEVDB\Tests\Integration;
 
 use DateTimeImmutable;
 use ReflectionProperty;
+use RuntimeException;
 use PHPUnit\Framework\TestCase;
 
 use OC\Files\Cache\Scanner;
@@ -466,11 +467,30 @@ class DatabaseStorageTimestampTest extends TestCase
       self::assertSame($fileId, $renamedFile->getId());
       self::assertSame($this->now->getTimestamp(), $renamedFile->getMtime());
 
+      $this->entityManager->beginTransaction();
+      try {
+        $entry->setName('intermediate.txt');
+        $this->entityManager->flush();
+        $entry->setName('final.txt');
+        $this->entityManager->flush();
+        self::assertNotFalse($cache->get('sub/renamed.txt'));
+        $this->entityManager->commit();
+      } finally {
+        if ($this->entityManager->isOwnTransactionActive()) {
+          $this->entityManager->rollback();
+        }
+      }
+      self::assertFalse($cache->get('sub/renamed.txt'));
+      self::assertFalse($cache->get('sub/intermediate.txt'));
+      $finalFile = $cache->get('sub/final.txt');
+      self::assertNotFalse($finalFile);
+      self::assertSame($fileId, $finalFile->getId());
+
       $entry->setParent(null);
       $entry->setFile(null);
       $this->entityManager->remove($entry);
       $this->flushTransaction();
-      self::assertFalse($cache->get('sub/renamed.txt'));
+      self::assertFalse($cache->get('sub/final.txt'));
       self::assertSame([], $view->getDirectoryContent('/sub'));
     } finally {
       Entities\DatabaseStorageFile::clearOrphans();
@@ -546,6 +566,153 @@ class DatabaseStorageTimestampTest extends TestCase
         self::assertSame($initialRootSize + 2 * $difference, $cache->get('')->getSize());
         self::assertSame($initialSubSize + $difference, $cache->get('sub')->getSize());
       }
+
+      $cache->remove('sub');
+      self::assertFalse($cache->get('sub'));
+      $file->setSize(strlen('after cache removal'));
+      $file->getFileData()->setData('after cache removal');
+      $this->flushTransaction();
+      self::assertNotFalse($cache->get('sub'));
+      $cached = $cache->get('sub/linked.txt');
+      self::assertNotFalse($cached);
+      self::assertSame(strlen('after cache removal'), $cached->getSize());
+      self::assertSame('after cache removal', $storage->file_get_contents('sub/linked.txt'));
+    } finally {
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testCacheNotificationWaitsForOutermostCommitAndDiscardsRollback(): void
+  {
+    $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
+    $this->mockProvider = MockProvider::create($this);
+    $clock = $this->createStub(TimeFactory::class);
+    $clock->method('now')->willReturnCallback(fn() => $this->now);
+    $this->mockProvider->registerClassInstance(TimeFactory::class, $clock, global: true);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+
+    $storageId = 'integration/transactions/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-transactions-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+
+      $this->entityManager->beginTransaction();
+      $this->entityManager->beginTransaction();
+      $entry = $root->addDocument(new Entities\EncryptedFile('committed.txt', 'first', 'text/plain'));
+      $this->entityManager->persist($entry);
+      $this->entityManager->flush();
+      $this->entityManager->commit();
+      self::assertFalse($cache->get('committed.txt'));
+      self::assertNotEmpty(
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+      $this->entityManager->commit();
+      self::assertNotFalse($cache->get('committed.txt'));
+      self::assertSame(
+        [],
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+
+      $this->entityManager->beginTransaction();
+      $this->entityManager->beginTransaction();
+      $entry = $root->addDocument(new Entities\EncryptedFile('rolled-back.txt', 'first', 'text/plain'));
+      $this->entityManager->persist($entry);
+      $this->entityManager->flush();
+      $this->entityManager->commit();
+      self::assertFalse($cache->get('rolled-back.txt'));
+      $this->entityManager->rollback();
+      self::assertSame(
+        [],
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+      self::assertFalse($cache->get('rolled-back.txt'));
+      self::assertNotFalse($cache->get('committed.txt'));
+    } finally {
+      while ($this->entityManager->isOwnTransactionActive()) {
+        $this->entityManager->rollback();
+      }
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testFailedNotificationIsRetriedOnLaterStorageAccess(): void
+  {
+    $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
+    $this->mockProvider = MockProvider::create($this);
+    $clock = $this->createStub(TimeFactory::class);
+    $clock->method('now')->willReturnCallback(fn() => $this->now);
+    $this->mockProvider->registerClassInstance(TimeFactory::class, $clock, global: true);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+
+    $storageId = 'integration/retry/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-retry-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId, failPath: 'retry.txt');
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+
+      $entry = $root->addDocument(new Entities\EncryptedFile('retry.txt', 'first', 'text/plain'));
+      $this->entityManager->persist($entry);
+      $this->flushTransaction();
+      self::assertFalse($cache->get('retry.txt'));
+      self::assertNotEmpty(
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+
+      Filesystem::getMountManager()->removeMount($mountPath);
+      $mounted = false;
+      $storage = $this->createScanStorage($storageId);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      $storage->hasUpdated('', $this->now->getTimestamp());
+      self::assertNotFalse($storage->getCache()->get('retry.txt'));
+      self::assertSame(
+        [],
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
     } finally {
       if ($mounted) {
         Filesystem::getMountManager()->removeMount($mountPath);
@@ -559,25 +726,38 @@ class DatabaseStorageTimestampTest extends TestCase
 
   /**
    * @param string $storageId
+   * @param null|string $failPath Simulate a transient storage error for this path.
    *
    * @return InvoicesStorage
    */
-  private function createScanStorage(string $storageId): InvoicesStorage
+  private function createScanStorage(string $storageId, ?string $failPath = null): InvoicesStorage
   {
     $readMeFactory = $this->createStub(ReadMeFactoryInterface::class);
     return new class([
       'configService' => $this->mockProvider->getConfigService(),
       'testStorageId' => $storageId,
       'testReadMeFactory' => $readMeFactory,
+      'testFailPath' => $failPath,
     ]) extends InvoicesStorage {
       private string $testStorageId;
       private ReadMeFactoryInterface $testReadMeFactory;
+      private ?string $testFailPath;
 
       public function __construct(array $params)
       {
         $this->testStorageId = $params['testStorageId'];
         $this->testReadMeFactory = $params['testReadMeFactory'];
+        $this->testFailPath = $params['testFailPath'];
         parent::__construct($params);
+      }
+
+      // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
+      public function file_exists(string $path): bool
+      {
+        if ($path === $this->testFailPath) {
+          throw new RuntimeException('Simulated storage error');
+        }
+        return parent::file_exists($path);
       }
 
       public function getShortId(): string
