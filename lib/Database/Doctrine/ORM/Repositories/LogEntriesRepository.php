@@ -25,6 +25,7 @@
 namespace OCA\CAFEVDB\Database\Doctrine\ORM\Repositories;
 
 use DateTimeInterface;
+use SortDirection;
 
 use OCA\CAFEVDB\Wrapped\Gedmo\Loggable;
 
@@ -62,7 +63,7 @@ class LogEntriesRepository extends Loggable\Entity\Repository\LogEntryRepository
   {
     $qb = $this->createQueryBuilder('l')
       ->select('l.loggedAt as modificationTime')
-      ->orderBy('l.id', 'DESC')
+      ->orderBy('l.id', SortDirection::Descending)
       ->setMaxResults(1);
     if (!empty($entityClass)) {
       $qb->andWhere('l.objectClass = :objectClass')
@@ -72,6 +73,7 @@ class LogEntriesRepository extends Loggable\Entity\Repository\LogEntryRepository
       $qb->andWhere('l.action = :action')
         ->setParameter('action', $action);
     }
-    return $qb->getQuery()->getOneOrNullResult();
+    $result = $qb->getQuery()->getOneOrNullResult();
+    return $result === null ? null : $result['modificationTime'];
   }
 }
