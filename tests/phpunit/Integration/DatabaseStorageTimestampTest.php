@@ -160,20 +160,13 @@ class DatabaseStorageTimestampTest extends TestCase
    * With the Doctrine clock fixed at T = 2040-01-01 00:00:00 UTC, create a
    * database storage containing branch/deep/document.txt with content "first".
    * Recursively scan it, verify both directories are fully scanned, and save
-   * the file's cached mtime and ETag and the root's cached storage_mtime.
+   * the file's cached mtime and ETag.
    *
    * Replace the file data with "other", keeping both its length and the clock
-   * unchanged. After the Doctrine flush, a new storage instance models a new
-   * request with an empty in-memory path cache. Its filemtime must still be T.
-   * As the mtime did not change, the change cannot be detected by comparing
-   * mtimes. Thus the cache has to be notified after the commit; until then
-   * this test is expected to fail.
-   *
-   * Mount the storage and access the root via Nextcloud's view. The watcher
-   * performs a shallow scan: branch is marked incomplete (size -1), while
-   * the cached deep file still has its original ETag. Accessing branch scans
-   * it and marks deep incomplete. Listing deep then scans its immediate
-   * contents. The listing must contain the file with a new ETag and the
+   * unchanged while the storage is mounted. A successful commit must notify
+   * the cache even though hasUpdated() cannot detect a same-second change.
+   * A new storage instance models a later request. The cached file and the
+   * listing obtained through Nextcloud's view must have a new ETag and the
    * original mtime; reading the storage must return "other".
    *
    * The mount and file-cache entries are removed and migrations unapplied in
@@ -224,30 +217,32 @@ class DatabaseStorageTimestampTest extends TestCase
       self::assertGreaterThanOrEqual(0, $initialDeep['size']);
       $initialMtime = $initialFile['mtime'];
       $initialEtag = $initialFile['etag'];
-      $initialRootRevision = $initialRoot['storage_mtime'];
+      $initialRootMtime = $initialRoot['storage_mtime'];
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
 
       // Keep the content size and the clock unchanged.
       $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
       $file->getFileData()->setData('other');
       $this->flushTransaction();
       $this->entityManager->clear();
+      self::assertNotSame($initialEtag, $cache->get('branch/deep/document.txt')['etag']);
+      self::assertSame($initialMtime, $cache->get('branch/deep/document.txt')['mtime']);
 
       // A new storage instance models a new request and its empty path cache.
+      Filesystem::getMountManager()->removeMount($mountPath);
+      $mounted = false;
       $storage = $this->createScanStorage($storageId);
       $storage->getWatcher()->setPolicy(Watcher::CHECK_ONCE);
       $cache = $storage->getCache();
       self::assertSame($initialMtime, $storage->filemtime('branch/deep/document.txt'));
-      self::assertTrue($storage->hasUpdated('', $initialRootRevision));
+      self::assertFalse($storage->hasUpdated('', $initialRootMtime));
       Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
       $mounted = true;
       $view = new View($mountPath);
 
       self::assertNotFalse($view->getFileInfo('/', false));
-      self::assertSame(-1, $cache->get('branch')['size']);
-      self::assertSame($initialEtag, $cache->get('branch/deep/document.txt')['etag']);
-
       self::assertNotFalse($view->getFileInfo('/branch', false));
-      self::assertSame(-1, $cache->get('branch/deep')['size']);
       $listing = $view->getDirectoryContent('/branch/deep');
       self::assertCount(1, $listing);
       self::assertSame('document.txt', $listing[0]->getName());

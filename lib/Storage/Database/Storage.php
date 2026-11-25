@@ -306,6 +306,17 @@ class Storage extends AbstractStorage
   }
 
   /**
+   * Forget all in-memory directory listings, e.g. after the database has
+   * been changed by someone else.
+   *
+   * @return void
+   */
+  public function clearPathCache():void
+  {
+    $this->files = [];
+  }
+
+  /**
    * Remove a "cache" entry.
    *
    * @param string $name Path-name.

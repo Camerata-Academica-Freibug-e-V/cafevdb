@@ -248,6 +248,9 @@ class EntityManager extends AbstractEntityManager
     $this->postCommitActions = clone $this->appContainer->get(UndoableRunQueue::class);
 
     $this->storageChanges = new Listeners\StorageChangeCollector;
+    $this->storageChanges->addConsumer(
+      fn(array $changes) => $this->appContainer->get(\OCA\CAFEVDB\Storage\Database\CacheNotifier::class)->notify($changes)
+    );
 
     $this->transactionNestingLevel = 0;
     $this->reopenAfterRollback = true;

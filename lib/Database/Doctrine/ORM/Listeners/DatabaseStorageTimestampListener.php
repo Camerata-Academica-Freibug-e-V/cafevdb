@@ -23,6 +23,7 @@ class DatabaseStorageTimestampListener implements EventSubscriber
 {
   /**
    * @param TimeFactory $clock
+   * @param null|StorageChangeCollector $collector
    */
   public function __construct(
     private TimeFactory $clock,
@@ -148,17 +149,17 @@ class DatabaseStorageTimestampListener implements EventSubscriber
       $storageId = null;
       if (!$inserted && $oldParent instanceof Entities\DatabaseStorageFolder) {
         $oldPath = $this->path($oldParent, $oldName);
-        $storageId = $oldParent->getStorage()->getStorageId();
+        $storageId = $oldParent->getRoot()->getAttachedStorage()?->getStorageId();
       }
       $newPath = null;
       if (!$deleted) {
         if ($parent instanceof Entities\DatabaseStorageFolder) {
           $newPath = $this->path($parent, $entry->getName());
-          $storageId = $parent->getStorage()->getStorageId();
-        } elseif ($entry instanceof Entities\DatabaseStorageFolder && $entry->getStorage() !== null) {
+          $storageId = $parent->getRoot()->getAttachedStorage()?->getStorageId();
+        } elseif ($entry instanceof Entities\DatabaseStorageFolder && $entry->getAttachedStorage() !== null) {
           // root folder
           $newPath = '';
-          $storageId = $entry->getStorage()->getStorageId();
+          $storageId = $entry->getAttachedStorage()->getStorageId();
         }
       }
 

@@ -7,6 +7,7 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Listeners;
 
+use RuntimeException;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\StorageChangeCollector;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -53,7 +54,7 @@ class StorageChangeCollectorTest extends TestCase
   {
     $collector = new StorageChangeCollector;
     $called = false;
-    $collector->addConsumer(fn() => throw new \RuntimeException('failed'));
+    $collector->addConsumer(fn() => throw new RuntimeException('failed'));
     $collector->addConsumer(function() use (&$called) {
       $called = true;
     });

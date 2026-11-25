@@ -36,7 +36,7 @@ class StorageChangeCollector
   private array $consumers = [];
 
   /**
-   * @param Closure(StorageChanges):void $consumer Called after the
+   * @param Closure $consumer Called after the
    * outermost commit with the changes of that transaction.
    *
    * @return void
