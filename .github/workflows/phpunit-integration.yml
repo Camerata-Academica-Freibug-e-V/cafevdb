@@ -65,7 +65,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ env.PHP_VERSION }}
-          extensions: ctype, curl, dom, gd, iconv, intl, json, mbstring, openssl, pdo_sqlite, posix, sqlite3, xml, zip, apcu, bcmath, gmp, imagick, fileinfo
+          extensions: ctype, curl, dom, gd, iconv, intl, json, mbstring, openssl, pdo_mysql, pdo_sqlite, posix, sqlite3, xml, zip, apcu, bcmath, gmp, imagick, fileinfo
           coverage: none
           tools: composer:v2
           ini-values: apc.enable_cli=1, memory_limit=1G
@@ -92,6 +92,10 @@ jobs:
       - name: Enable app
         working-directory: server
         run: php occ app:enable ${{ env.APP_NAME }}
+
+      - name: Enable Groupfolders
+        working-directory: server
+        run: php occ app:enable groupfolders
 
       - name: Run PHPUnit integration suite
         working-directory: server/apps/${{ env.APP_NAME }}
