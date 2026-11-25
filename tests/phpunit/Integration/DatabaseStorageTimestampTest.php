@@ -4,12 +4,14 @@
  *
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
+ * @author Copilot <223556219+Copilot@users.noreply.github.com>
  * @license AGPL-3.0-or-later
  */
 
 namespace OCA\CAFEVDB\Tests\Integration;
 
 use DateTimeImmutable;
+use ReflectionProperty;
 use PHPUnit\Framework\TestCase;
 
 use OCA\CAFEVDB\Common\TimeFactory;
@@ -79,7 +81,7 @@ class DatabaseStorageTimestampTest extends TestCase
       $this->assertFoldersUpdated($ids, ['root', 'left', 'deep', 'right']);
       foreach ([$entryId, $otherEntryId] as $id) {
         $entry = $this->entityManager->find(Entities\DatabaseStorageFile::class, $id);
-        $updated = new \ReflectionProperty(Entities\DatabaseStorageDirEntry::class, 'updated');
+        $updated = new ReflectionProperty(Entities\DatabaseStorageDirEntry::class, 'updated');
         self::assertEquals($this->now->getTimestamp(), $updated->getValue($entry)->getTimestamp());
       }
       $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);

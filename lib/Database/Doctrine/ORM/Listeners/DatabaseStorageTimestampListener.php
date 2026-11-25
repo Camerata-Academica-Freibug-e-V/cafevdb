@@ -4,6 +4,7 @@
  *
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
+ * @author Copilot <223556219+Copilot@users.noreply.github.com>
  * @license AGPL-3.0-or-later
  */
 
