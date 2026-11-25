@@ -130,6 +130,8 @@ class CacheNotifier
       return;
     }
     $this->processing[$shortId] = true;
+    $changes = null;
+    $failureLogged = false;
     try {
       $changes = $this->entityManager
         ->getRepository(Entities\DatabaseStorageCacheChange::class)
@@ -149,6 +151,7 @@ class CacheNotifier
         $path = $change->getPath();
         $oldPath = $change->getOldPath();
         $entryId = $change->getEntryId();
+        $changeIds = [$change->getId()];
         $intervening = [];
         $blocked = false;
         $lastMoveIndex = $index;
@@ -168,6 +171,7 @@ class CacheNotifier
               }
             }
             $path = $later->getPath();
+            $changeIds[] = $later->getId();
             $consumed[$next] = true;
             $lastMoveIndex = $next;
             continue;
@@ -191,17 +195,19 @@ class CacheNotifier
         if ($oldPath === $path) {
           $oldPath = null;
         }
-        $operations[] = [$path, $oldPath];
+        $operations[] = [$path, $oldPath, $changeIds];
       }
       $operations = $this->orderOperations($operations, $shortId);
-      foreach ($operations as [$path, $oldPath]) {
+      foreach ($operations as [$path, $oldPath, $changeIds]) {
         try {
           $this->reconcile($storage, $path, $oldPath);
         } catch (Throwable $t) {
           $this->logger->error(
-            'Unable to update the file cache of storage "' . $shortId . '" for path "' . $path . '".',
+            'Unable to update the file cache of storage "' . $shortId . '" for path "' . $path
+              . '"; outbox row IDs: ' . implode(', ', $changeIds) . ' (pending batch: ' . $count . ' rows).',
             [ 'exception' => $t ],
           );
+          $failureLogged = true;
           $unresolved[$shortId][$path] = $oldPath;
           if ($throwOnFailure) {
             throw new RuntimeException(
@@ -216,6 +222,16 @@ class CacheNotifier
         $this->entityManager->remove($change);
       }
       $this->entityManager->flush();
+    } catch (Throwable $t) {
+      if (!$failureLogged && $changes !== null) {
+        $ids = array_map(fn(Entities\DatabaseStorageCacheChange $change) => $change->getId(), $changes);
+        $this->logger->error(
+          'Unable to process pending cache changes for storage "' . $shortId . '"; pending batch ('
+            . count($ids) . ' rows), outbox row IDs: ' . implode(', ', $ids) . '.',
+          [ 'exception' => $t ],
+        );
+      }
+      throw $t;
     } finally {
       unset($this->processing[$shortId]);
     }
@@ -225,10 +241,10 @@ class CacheNotifier
    * Order renames such that a rename vacating a path is applied before
    * another rename moving onto that path.
    *
-   * @param array<int, array{0:string, 1:?string}> $operations
+   * @param array<int, array{0:string, 1:?string, 2:array<int, int>}> $operations
    * @param string $shortId
    *
-   * @return array<int, array{0:string, 1:?string}>
+   * @return array<int, array{0:string, 1:?string, 2:array<int, int>}>
    */
   private function orderOperations(array $operations, string $shortId): array
   {

@@ -22,11 +22,13 @@ use OC\Files\Mount\MountPoint;
 use OC\Files\View;
 
 use OCP\Files\Mount\IMountManager;
+use Psr\Log\LoggerInterface;
 
 use OCA\CAFEVDB\Common\TimeFactory;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\DatabaseStorageTimestampListener;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
+use OCA\CAFEVDB\Storage\Database\CacheNotifier;
 use OCA\CAFEVDB\Storage\Database\InvoicesStorage;
 use OCA\CAFEVDB\Storage\Database\ReadMeFactoryInterface;
 use OCA\CAFEVDB\Tests\MockProvider;
@@ -844,6 +846,68 @@ class DatabaseStorageTimestampTest extends TestCase
       if ($storage !== null) {
         $storage->getCache()->remove('');
       }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testReconciliationFailuresLogOutboxRowIds(): void
+  {
+    $this->applyMigrations('latest');
+    try {
+      foreach (['operation', 'planner'] as $failure) {
+        $storageId = 'integration/outbox-logs/' . bin2hex(random_bytes(8));
+        $moves = $failure === 'operation'
+          ? [['a.txt', 'b.txt', 1], ['b.txt', 'c.txt', 1]]
+          : [['a.txt', 'b.txt', 1], ['b.txt', 'a.txt', 2]];
+        $rows = [];
+        foreach ($moves as [$oldPath, $path, $entryId]) {
+          $row = new Entities\DatabaseStorageCacheChange($storageId, $path, $oldPath, $entryId);
+          $this->entityManager->persist($row);
+          $rows[] = $row;
+        }
+        $other = new Entities\DatabaseStorageCacheChange($storageId, 'other.txt');
+        $this->entityManager->persist($other);
+        $rows[] = $other;
+        $this->flushTransaction();
+        $ids = array_map(fn(Entities\DatabaseStorageCacheChange $row) => $row->getId(), $rows);
+        $messages = [];
+        $logger = $this->createStub(LoggerInterface::class);
+        $logger->method('error')->willReturnCallback(function ($message, array $context = []) use (&$messages): void {
+          $messages[] = [$message, $context];
+        });
+        $notifier = new CacheNotifier(
+          $this->mockProvider->getConfigService(),
+          Filesystem::getMountManager(),
+          $logger,
+          $this->entityManager,
+        );
+        $storage = $this->createScanStorage($storageId, failPath: 'c.txt');
+        try {
+          $notifier->notifyStorage($storage);
+          self::fail('Reconciliation should fail.');
+        } catch (RuntimeException $exception) {
+          self::assertStringContainsString(
+            $failure === 'operation' ? 'Unable to reconcile' : 'cyclic cache renames',
+            $exception->getMessage(),
+          );
+        }
+        self::assertCount(1, $messages);
+        self::assertStringContainsString($storageId, $messages[0][0]);
+        $loggedIds = $failure === 'operation' ? array_slice($ids, 0, 2) : $ids;
+        self::assertStringContainsString(
+          'outbox row IDs: ' . implode(', ', $loggedIds) . ($failure === 'operation' ? ' (pending' : '.'),
+          $messages[0][0],
+        );
+        self::assertStringContainsString($failure === 'operation' ? 'pending batch: 3 rows' : 'pending batch (3 rows)', $messages[0][0]);
+        self::assertArrayHasKey('exception', $messages[0][1]);
+        self::assertCount(
+          3,
+          $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+            ->findBy(['storageId' => $storageId]),
+        );
+      }
+    } finally {
       $this->unapplyMigrations();
     }
   }
