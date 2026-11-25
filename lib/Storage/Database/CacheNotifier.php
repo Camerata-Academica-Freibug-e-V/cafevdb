@@ -151,6 +151,7 @@ class CacheNotifier
         $entryId = $change->getEntryId();
         $intervening = [];
         $blocked = false;
+        $lastMoveIndex = $index;
         for ($next = $index + 1; $oldPath !== null && $next < $count; ++$next) {
           if (isset($consumed[$next])) {
             continue;
@@ -158,7 +159,7 @@ class CacheNotifier
           $later = $changes[$next];
           $sameEntry = $entryId !== null && $later->getEntryId() === $entryId;
           // Legacy outbox rows can only be combined when consecutive.
-          $legacyAdjacent = $entryId === null && $later->getEntryId() === null && $next === $index + 1;
+          $legacyAdjacent = $entryId === null && $later->getEntryId() === null && $next === $lastMoveIndex + 1;
           if (($sameEntry || $legacyAdjacent) && $later->getOldPath() === $path) {
             foreach ($intervening as $other) {
               if ($this->changeTouchesPath($other, $later->getPath())) {
@@ -168,6 +169,7 @@ class CacheNotifier
             }
             $path = $later->getPath();
             $consumed[$next] = true;
+            $lastMoveIndex = $next;
             continue;
           }
           if ($sameEntry || $entryId === null
