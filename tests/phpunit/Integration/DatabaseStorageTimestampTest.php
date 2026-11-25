@@ -216,7 +216,39 @@ class DatabaseStorageTimestampTest extends TestCase
     }
   }
 
-  /** @return void */
+  /**
+   * Exercise same-second cache invalidation through Nextcloud's real view,
+   * watcher, scanner and file cache.
+   *
+   * With the Doctrine clock fixed at T = 2040-01-01 00:00:00 UTC, create a
+   * database storage containing branch/deep/document.txt with content "first".
+   * Recursively scan it, verify both directories are fully scanned, and save
+   * the file's cached mtime and ETag and the root's cached storage_mtime.
+   *
+   * Replace the file data with "other", keeping both its length and the clock
+   * unchanged. After the Doctrine flush, a new storage instance models a new
+   * request with an empty in-memory path cache. Its filemtime must still be T,
+   * but hasUpdated() must detect the change using the root's cached
+   * storage_mtime and the advanced storage-wide revision.
+   *
+   * Mount the storage and access the root via Nextcloud's view. The watcher
+   * performs a shallow scan: branch is marked incomplete (size -1), while
+   * the cached deep file still has its original ETag. Accessing branch scans
+   * it and marks deep incomplete. Listing deep then scans its immediate
+   * contents. The listing must contain the file with a new ETag and the
+   * original mtime; reading the storage must return "other".
+   *
+   * The mtime assertion currently exposes a cache interaction: when only
+   * storage_mtime changes, Nextcloud's scanner can omit the unchanged mtime
+   * from the cache update, and the cache copies storage_mtime into mtime.
+   * Thus the revision can become the client-visible mtime instead of T.
+   *
+   * The mount and file-cache entries are removed and migrations unapplied in
+   * the finally block. The test does not cover concurrent scans or generated
+   * in-memory nodes.
+   *
+   * @return void
+   */
   public function testSameSecondChangeThroughShallowScans(): void
   {
     $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
