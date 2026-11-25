@@ -11,13 +11,14 @@ use RuntimeException;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\StorageChangeCollector;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 #[CoversClass(StorageChangeCollector::class)]
 class StorageChangeCollectorTest extends TestCase
 {
   public function testCommitHandsOverAndClearsChanges(): void
   {
-    $collector = new StorageChangeCollector;
+    $collector = new StorageChangeCollector($this->createStub(LoggerInterface::class));
     $received = [];
     $collector->addConsumer(function(array $changes) use (&$received) {
       $received[] = $changes;
@@ -35,7 +36,7 @@ class StorageChangeCollectorTest extends TestCase
 
   public function testDiscardDropsChanges(): void
   {
-    $collector = new StorageChangeCollector;
+    $collector = new StorageChangeCollector($this->createStub(LoggerInterface::class));
     $collector->record('s', 'a');
     $collector->discard();
     self::assertFalse($collector->hasChanges());
@@ -43,7 +44,7 @@ class StorageChangeCollectorTest extends TestCase
 
   public function testChainOfMovesKeepsOldestPath(): void
   {
-    $collector = new StorageChangeCollector;
+    $collector = new StorageChangeCollector($this->createStub(LoggerInterface::class));
     $collector->record('s', 'b', 'a');
     $collector->record('s', 'b', 'x');
     $collector->record('s', 'b');
@@ -52,9 +53,14 @@ class StorageChangeCollectorTest extends TestCase
 
   public function testFailingConsumerDoesNotHinderOthers(): void
   {
-    $collector = new StorageChangeCollector;
+    $exception = new RuntimeException('failed');
+    $logger = $this->createMock(LoggerInterface::class);
+    $logger->expects($this->once())
+      ->method('error')
+      ->with('Unable to notify storage cache changes after commit.', ['exception' => $exception]);
+    $collector = new StorageChangeCollector($logger);
     $called = false;
-    $collector->addConsumer(fn() => throw new RuntimeException('failed'));
+    $collector->addConsumer(fn() => throw $exception);
     $collector->addConsumer(function() use (&$called) {
       $called = true;
     });

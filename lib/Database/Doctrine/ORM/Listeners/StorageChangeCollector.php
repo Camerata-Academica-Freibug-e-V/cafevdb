@@ -11,6 +11,7 @@
 namespace OCA\CAFEVDB\Database\Doctrine\ORM\Listeners;
 
 use Closure;
+use Psr\Log\LoggerInterface;
 
 /**
  * Collect the paths of database-backed storages changed by flushes of the
@@ -34,6 +35,11 @@ class StorageChangeCollector
 
   /** @var array<int, Closure(StorageChanges):void> */
   private array $consumers = [];
+
+  /** @param LoggerInterface $logger */
+  public function __construct(private LoggerInterface $logger)
+  {
+  }
 
   /**
    * @param Closure $consumer Called after the
@@ -97,7 +103,7 @@ class StorageChangeCollector
       try {
         $consumer($changes);
       } catch (\Throwable $t) {
-        // Do not hinder other consumers after a successful commit.
+        $this->logger->error('Unable to notify storage cache changes after commit.', [ 'exception' => $t ]);
       }
     }
   }

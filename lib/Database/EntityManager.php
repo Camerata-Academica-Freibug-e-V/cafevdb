@@ -247,7 +247,7 @@ class EntityManager extends AbstractEntityManager
     $this->preCommitActions = [];
     $this->postCommitActions = clone $this->appContainer->get(UndoableRunQueue::class);
 
-    $this->storageChanges = new Listeners\StorageChangeCollector;
+    $this->storageChanges = new Listeners\StorageChangeCollector($this->logger);
     $this->storageChanges->addConsumer(
       fn(array $changes) => $this->appContainer->get(\OCA\CAFEVDB\Storage\Database\CacheNotifier::class)->notify($changes)
     );
