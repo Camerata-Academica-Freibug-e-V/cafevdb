@@ -139,17 +139,59 @@ class CacheNotifier
       }
       $this->clearPathCache($storage);
       $count = count($changes);
+      $consumed = [];
+      $operations = [];
       for ($index = 0; $index < $count; ++$index) {
+        if (isset($consumed[$index])) {
+          continue;
+        }
         $change = $changes[$index];
         $path = $change->getPath();
         $oldPath = $change->getOldPath();
-        // Intermediate paths may no longer exist after several flushes.
-        while ($oldPath !== null && $index + 1 < $count && $changes[$index + 1]->getOldPath() === $path) {
-          $path = $changes[++$index]->getPath();
+        $entryId = $change->getEntryId();
+        $intervening = [];
+        $blocked = false;
+        for ($next = $index + 1; $oldPath !== null && $next < $count; ++$next) {
+          if (isset($consumed[$next])) {
+            continue;
+          }
+          $later = $changes[$next];
+          $sameEntry = $entryId !== null && $later->getEntryId() === $entryId;
+          // Legacy outbox rows can only be combined when consecutive.
+          $legacyAdjacent = $entryId === null && $later->getEntryId() === null && $next === $index + 1;
+          if (($sameEntry || $legacyAdjacent) && $later->getOldPath() === $path) {
+            foreach ($intervening as $other) {
+              if ($this->changeTouchesPath($other, $later->getPath())) {
+                $blocked = true;
+                break 2;
+              }
+            }
+            $path = $later->getPath();
+            $consumed[$next] = true;
+            continue;
+          }
+          if ($sameEntry || $entryId === null
+              || $this->changeTouchesPath($later, $oldPath)
+              || $this->changeTouchesPath($later, $path)) {
+            $blocked = true;
+            break;
+          }
+          $intervening[] = $later;
+        }
+        if ($blocked && $entryId !== null) {
+          for (; $next < $count; ++$next) {
+            if (!isset($consumed[$next]) && $changes[$next]->getEntryId() === $entryId
+                && $changes[$next]->getOldPath() === $path) {
+              throw new RuntimeException('Cannot safely reconcile interleaved cache renames for storage "' . $shortId . '".');
+            }
+          }
         }
         if ($oldPath === $path) {
           $oldPath = null;
         }
+        $operations[] = [$path, $oldPath];
+      }
+      foreach ($operations as [$path, $oldPath]) {
         try {
           $this->reconcile($storage, $path, $oldPath);
         } catch (Throwable $t) {
@@ -174,6 +216,23 @@ class CacheNotifier
     } finally {
       unset($this->processing[$shortId]);
     }
+  }
+
+  /**
+   * @param Entities\DatabaseStorageCacheChange $change
+   * @param string $path
+   *
+   * @return bool
+   */
+  private function changeTouchesPath(Entities\DatabaseStorageCacheChange $change, string $path): bool
+  {
+    foreach ([$change->getPath(), $change->getOldPath()] as $other) {
+      if ($other !== null && ($path === '' || $other === '' || $path === $other
+          || str_starts_with($path, $other . '/') || str_starts_with($other, $path . '/'))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

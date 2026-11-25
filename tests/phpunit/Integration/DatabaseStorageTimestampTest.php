@@ -653,6 +653,10 @@ class DatabaseStorageTimestampTest extends TestCase
         [['a.txt', 'b.txt'], ['x.txt', 'y.txt'], ['b.txt', 'c.txt']],
         array_map(fn($change) => [$change->getOldPath(), $change->getPath()], $pending),
       );
+      self::assertSame(
+        [$first->getId(), $second->getId(), $first->getId()],
+        array_map(fn($change) => $change->getEntryId(), $pending),
+      );
       self::assertNotFalse($cache->get('a.txt'));
       self::assertNotFalse($cache->get('x.txt'));
 
@@ -671,6 +675,39 @@ class DatabaseStorageTimestampTest extends TestCase
       self::assertSame($secondId, $secondCached->getId());
       self::assertSame('first', $storage->file_get_contents('c.txt'));
       self::assertSame('second', $storage->file_get_contents('y.txt'));
+
+      // Reusing the original path is not independent of the rename chain.
+      Filesystem::getMountManager()->removeMount($mountPath);
+      $mounted = false;
+      $first->setName('d.txt');
+      $this->flushTransaction();
+      $second->setName('c.txt');
+      $this->flushTransaction();
+      $first->setName('e.txt');
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      try {
+        $storage->hasUpdated('', $this->now->getTimestamp());
+        self::fail('Conflicting path reuse must not be reconciled as independent renames.');
+      } catch (RuntimeException $exception) {
+        self::assertStringContainsString('Cannot safely reconcile interleaved cache renames', $exception->getMessage());
+      }
+      try {
+        $storage->hasUpdated('', $this->now->getTimestamp());
+        self::fail('A failed reconciliation must be retried on the same storage instance.');
+      } catch (RuntimeException $exception) {
+        self::assertStringContainsString('Cannot safely reconcile interleaved cache renames', $exception->getMessage());
+      }
+      self::assertSame($firstId, $cache->get('c.txt')->getId());
+      self::assertSame($secondId, $cache->get('y.txt')->getId());
+      self::assertFalse($cache->get('e.txt'));
+      self::assertCount(
+        3,
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
     } finally {
       if ($mounted) {
         Filesystem::getMountManager()->removeMount($mountPath);

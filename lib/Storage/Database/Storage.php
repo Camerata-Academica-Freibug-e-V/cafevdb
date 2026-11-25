@@ -580,7 +580,12 @@ class Storage extends AbstractStorage
       return;
     }
     $this->checkedPendingCacheChanges = true;
-    $this->appContainer()->get(CacheNotifier::class)->notifyStorage($this);
+    try {
+      $this->appContainer()->get(CacheNotifier::class)->notifyStorage($this);
+    } catch (\Throwable $t) {
+      $this->checkedPendingCacheChanges = false;
+      throw $t;
+    }
   }
 
   /** {@inheritdoc} */
