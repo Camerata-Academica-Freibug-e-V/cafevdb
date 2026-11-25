@@ -162,7 +162,7 @@ class CacheNotifier
           $legacyAdjacent = $entryId === null && $later->getEntryId() === null && $next === $lastMoveIndex + 1;
           if (($sameEntry || $legacyAdjacent) && $later->getOldPath() === $path) {
             foreach ($intervening as $other) {
-              if ($this->changeTouchesPath($other, $later->getPath())) {
+              if ($this->changeOverlapsPath($other, $later->getPath())) {
                 $blocked = true;
                 break 2;
               }
@@ -173,8 +173,8 @@ class CacheNotifier
             continue;
           }
           if ($sameEntry || $entryId === null
-              || $this->changeTouchesPath($later, $oldPath)
-              || $this->changeTouchesPath($later, $path)) {
+              || $this->changeOverlapsPath($later, $oldPath)
+              || $this->changeOverlapsPath($later, $path)) {
             $blocked = true;
             break;
           }
@@ -193,6 +193,7 @@ class CacheNotifier
         }
         $operations[] = [$path, $oldPath];
       }
+      $operations = $this->orderOperations($operations, $shortId);
       foreach ($operations as [$path, $oldPath]) {
         try {
           $this->reconcile($storage, $path, $oldPath);
@@ -221,15 +222,57 @@ class CacheNotifier
   }
 
   /**
+   * Order renames such that a rename vacating a path is applied before
+   * another rename moving onto that path.
+   *
+   * @param array<int, array{0:string, 1:?string}> $operations
+   * @param string $shortId
+   *
+   * @return array<int, array{0:string, 1:?string}>
+   */
+  private function orderOperations(array $operations, string $shortId): array
+  {
+    $ordered = [];
+    $pending = $operations;
+    while (!empty($pending)) {
+      $progress = false;
+      foreach ($pending as $index => [$path, $oldPath]) {
+        $blocked = false;
+        if ($oldPath !== null) {
+          foreach ($pending as $otherIndex => [, $otherOld]) {
+            if ($otherIndex !== $index && $otherOld === $path) {
+              $blocked = true;
+              break;
+            }
+          }
+        }
+        if (!$blocked) {
+          $ordered[] = $pending[$index];
+          unset($pending[$index]);
+          $progress = true;
+          break;
+        }
+      }
+      if (!$progress) {
+        throw new RuntimeException('Cannot safely reconcile cyclic cache renames for storage "' . $shortId . '".');
+      }
+    }
+    return $ordered;
+  }
+
+  /**
+   * Whether a change affects a different path in the same subtree. Identical
+   * paths are not reported as they are handled by re-ordering.
+   *
    * @param Entities\DatabaseStorageCacheChange $change
    * @param string $path
    *
    * @return bool
    */
-  private function changeTouchesPath(Entities\DatabaseStorageCacheChange $change, string $path): bool
+  private function changeOverlapsPath(Entities\DatabaseStorageCacheChange $change, string $path): bool
   {
     foreach ([$change->getPath(), $change->getOldPath()] as $other) {
-      if ($other !== null && ($path === '' || $other === '' || $path === $other
+      if ($other !== null && $other !== $path && ($path === '' || $other === ''
           || str_starts_with($path, $other . '/') || str_starts_with($other, $path . '/'))) {
         return true;
       }

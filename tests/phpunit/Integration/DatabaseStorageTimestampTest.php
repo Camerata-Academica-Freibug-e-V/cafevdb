@@ -676,7 +676,7 @@ class DatabaseStorageTimestampTest extends TestCase
       self::assertSame('first', $storage->file_get_contents('c.txt'));
       self::assertSame('second', $storage->file_get_contents('y.txt'));
 
-      // Reusing the original path is not independent of the rename chain.
+      // Reusing a path vacated by another chain needs ordered application.
       Filesystem::getMountManager()->removeMount($mountPath);
       $mounted = false;
       $first->setName('d.txt');
@@ -688,23 +688,16 @@ class DatabaseStorageTimestampTest extends TestCase
       $storage = $this->createScanStorage($storageId);
       Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
       $mounted = true;
-      try {
-        $storage->hasUpdated('', $this->now->getTimestamp());
-        self::fail('Conflicting path reuse must not be reconciled as independent renames.');
-      } catch (RuntimeException $exception) {
-        self::assertStringContainsString('Cannot safely reconcile interleaved cache renames', $exception->getMessage());
-      }
-      try {
-        $storage->hasUpdated('', $this->now->getTimestamp());
-        self::fail('A failed reconciliation must be retried on the same storage instance.');
-      } catch (RuntimeException $exception) {
-        self::assertStringContainsString('Cannot safely reconcile interleaved cache renames', $exception->getMessage());
-      }
-      self::assertSame($firstId, $cache->get('c.txt')->getId());
-      self::assertSame($secondId, $cache->get('y.txt')->getId());
-      self::assertFalse($cache->get('e.txt'));
+      $storage->hasUpdated('', $this->now->getTimestamp());
+      // The rename vacating "c.txt" must be applied before the one reusing it.
+      self::assertFalse($cache->get('d.txt'));
+      self::assertFalse($cache->get('y.txt'));
+      self::assertSame($firstId, $cache->get('e.txt')->getId());
+      self::assertSame($secondId, $cache->get('c.txt')->getId());
+      self::assertSame('first', $storage->file_get_contents('e.txt'));
+      self::assertSame('second', $storage->file_get_contents('c.txt'));
       self::assertCount(
-        3,
+        0,
         $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
           ->findBy(['storageId' => $storageId]),
       );
