@@ -48,6 +48,7 @@ use OCP\Server;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use ReflectionProperty;
 
 class AuthenticatedMountMockProvider extends MockProvider
 {
@@ -102,6 +103,9 @@ class AuthenticatedDebitMandateMountTest extends TestCase
     $user = null;
     $folderId = null;
     $mockProvider = null;
+    $migrationsApplied = false;
+    $providerRegistry = null;
+    $previousProvider = null;
     try {
       self::assertInstanceOf(IGroup::class, $group);
       $user = $users->createUser($uid, $password);
@@ -150,6 +154,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       $mockProvider->useKeyService($keyService);
       $this->generateCalendarBackend();
       $this->applyMigrations('latest');
+      $migrationsApplied = true;
       $this->generateProjectParticipant(persist: true, now: new DateTimeImmutable('2099-01-01'), delete: false);
       $entityManager = $this->getEntityManager();
       self::assertSame($uid, $entityManager->getUserId());
@@ -216,6 +221,8 @@ class AuthenticatedDebitMandateMountTest extends TestCase
         $session,
         $authentication,
       );
+      $providerRegistry = new ReflectionProperty($providers, 'providers');
+      $previousProvider = $providerRegistry->getValue($providers)[MountProvider::class] ?? null;
       $providers->registerProvider($provider);
       Filesystem::initMountPoints($user);
 
@@ -242,21 +249,39 @@ class AuthenticatedDebitMandateMountTest extends TestCase
         self::assertSame('signed mandate', $mountedFile->getContent());
       }
     } finally {
-      Filesystem::tearDown();
-      if ($mockProvider !== null) {
-        $mockProvider->registerClassInstance(IUserConfig::class, $userConfig, global: true);
+      try {
+        Filesystem::tearDown();
+        if ($mockProvider !== null) {
+          $mockProvider->registerClassInstance(IUserConfig::class, $userConfig, global: true);
+        }
+        if ($folderId !== null) {
+          $folderManager->removeFolder($folderId);
+        }
+        if ($user instanceof IUser) {
+          $user->delete();
+        }
+        if ($group instanceof IGroup) {
+          $group->delete();
+        }
+        $session->logout();
+        Entities\DatabaseStorageFile::clearOrphans();
+      } finally {
+        try {
+          if ($providerRegistry !== null) {
+            $registeredProviders = $providerRegistry->getValue($providers);
+            if ($previousProvider === null) {
+              unset($registeredProviders[MountProvider::class]);
+            } else {
+              $registeredProviders[MountProvider::class] = $previousProvider;
+            }
+            $providerRegistry->setValue($providers, $registeredProviders);
+          }
+        } finally {
+          if ($migrationsApplied) {
+            $this->unapplyMigrations();
+          }
+        }
       }
-      if ($folderId !== null) {
-        $folderManager->removeFolder($folderId);
-      }
-      if ($user instanceof IUser) {
-        $user->delete();
-      }
-      if ($group instanceof IGroup) {
-        $group->delete();
-      }
-      $session->logout();
-      Entities\DatabaseStorageFile::clearOrphans();
     }
   }
 }
