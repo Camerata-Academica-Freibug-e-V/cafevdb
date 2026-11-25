@@ -24,8 +24,10 @@ class DatabaseStorageTimestampListener implements EventSubscriber
   /**
    * @param TimeFactory $clock
    */
-  public function __construct(private TimeFactory $clock)
-  {
+  public function __construct(
+    private TimeFactory $clock,
+    private ?StorageChangeCollector $collector = null,
+  ) {
   }
 
   /** {@inheritdoc} */
@@ -67,6 +69,8 @@ class DatabaseStorageTimestampListener implements EventSubscriber
         $linkedEntries[spl_object_id($entry)] = $entry;
       }
     }
+
+    $this->recordChanges($unitOfWork, $entries);
 
     // Collect both paths before recomputing any change set.
     $folders = [];
@@ -110,6 +114,76 @@ class DatabaseStorageTimestampListener implements EventSubscriber
         $this->recompute($unitOfWork, $entityManager, $entry);
       }
     }
+  }
+
+  /**
+   * Record old and new paths of all changed entries, including all links of
+   * changed files, before any change set is recomputed.
+   *
+   * @param UnitOfWork $unitOfWork
+   * @param array<int, Entities\DatabaseStorageDirEntry> $entries
+   *
+   * @return void
+   */
+  private function recordChanges(UnitOfWork $unitOfWork, array $entries): void
+  {
+    if ($this->collector === null) {
+      return;
+    }
+    foreach ($entries as $entry) {
+      $changeSet = $unitOfWork->getEntityChangeSet($entry);
+      $original = $unitOfWork->getOriginalEntityData($entry);
+      $inserted = $unitOfWork->isScheduledForInsert($entry);
+      $deleted = $unitOfWork->isScheduledForDelete($entry);
+
+      $oldParent = array_key_exists('parent', $changeSet)
+        ? $changeSet['parent'][0]
+        : ($original['parent'] ?? null);
+      $oldName = array_key_exists('name', $changeSet)
+        ? $changeSet['name'][0]
+        : ($original['name'] ?? null);
+      $parent = $entry->getParent();
+
+      $oldPath = null;
+      $storageId = null;
+      if (!$inserted && $oldParent instanceof Entities\DatabaseStorageFolder) {
+        $oldPath = $this->path($oldParent, $oldName);
+        $storageId = $oldParent->getStorage()->getStorageId();
+      }
+      $newPath = null;
+      if (!$deleted) {
+        if ($parent instanceof Entities\DatabaseStorageFolder) {
+          $newPath = $this->path($parent, $entry->getName());
+          $storageId = $parent->getStorage()->getStorageId();
+        } elseif ($entry instanceof Entities\DatabaseStorageFolder && $entry->getStorage() !== null) {
+          // root folder
+          $newPath = '';
+          $storageId = $entry->getStorage()->getStorageId();
+        }
+      }
+
+      if ($storageId === null) {
+        continue;
+      }
+      if ($newPath === null) {
+        if ($oldPath !== null) {
+          $this->collector->record($storageId, $oldPath);
+        }
+      } else {
+        $this->collector->record($storageId, $newPath, $oldPath !== $newPath ? $oldPath : null);
+      }
+    }
+  }
+
+  /**
+   * @param Entities\DatabaseStorageFolder $parent
+   * @param null|string $name
+   *
+   * @return string Path below the storage root without leading slash.
+   */
+  private function path(Entities\DatabaseStorageFolder $parent, ?string $name): string
+  {
+    return ltrim($parent->getPathName() . '/' . ($name ?? ''), '/');
   }
 
   /**
