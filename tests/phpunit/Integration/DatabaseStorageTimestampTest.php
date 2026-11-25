@@ -20,6 +20,8 @@ use OC\Files\Filesystem;
 use OC\Files\Mount\MountPoint;
 use OC\Files\View;
 
+use OCP\Files\Mount\IMountManager;
+
 use OCA\CAFEVDB\Common\TimeFactory;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\DatabaseStorageTimestampListener;
@@ -372,6 +374,178 @@ class DatabaseStorageTimestampTest extends TestCase
       self::assertNotSame($initialEtag, $listing[0]->getEtag());
       self::assertSame($initialMtime, $listing[0]->getMtime());
       self::assertSame('other', $storage->file_get_contents('branch/deep/document.txt'));
+    } finally {
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /**
+   * Exercise create, mkdir, move, rename and delete in separate commits within
+   * one second.
+   *
+   * @return void
+   */
+  public function testSameSecondCreateFolderMoveRenameAndDelete(): void
+  {
+    $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
+    $this->mockProvider = MockProvider::create($this);
+    $clock = $this->createStub(TimeFactory::class);
+    $clock->method('now')->willReturnCallback(fn() => $this->now);
+    $this->mockProvider->registerClassInstance(TimeFactory::class, $clock, global: true);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+
+    $storageId = 'integration/create-move/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-create-move-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+      $rootId = $root->getId();
+      $this->entityManager->clear();
+
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      $view = new View($mountPath);
+      self::assertNotEmpty(Filesystem::getMountManager()->findByStorageId($storage->getId()));
+      $root = $this->folder($rootId);
+      $entry = $root->addDocument(new Entities\EncryptedFile('document.txt', 'first', 'text/plain'));
+      $this->entityManager->persist($entry);
+      $this->flushTransaction();
+      $entryId = $entry->getId();
+      $pending = $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+        ->findBy(['storageId' => $storageId]);
+      self::assertSame([], $pending, 'Mounted storage cache updates should be processed after commit.');
+      $cachedFile = $cache->get('document.txt');
+      self::assertNotFalse($cachedFile);
+      $fileId = $cachedFile->getId();
+      self::assertSame($this->now->getTimestamp(), $cachedFile->getMtime());
+      self::assertSame('document.txt', $view->getDirectoryContent('/')[0]->getName());
+
+      $folder = $root->addSubFolder('sub');
+      $this->entityManager->persist($folder);
+      $this->flushTransaction();
+      self::assertNotFalse($cache->get('sub'));
+
+      $entry->setParent($folder);
+      $this->flushTransaction();
+      self::assertFalse($cache->get('document.txt'));
+      $movedFile = $cache->get('sub/document.txt');
+      self::assertNotFalse($movedFile);
+      self::assertSame($fileId, $movedFile->getId());
+      self::assertSame($this->now->getTimestamp(), $movedFile->getMtime());
+      self::assertSame($this->now->getTimestamp(), $this->entityManager->find(
+        Entities\DatabaseStorageFile::class,
+        $entryId,
+      )->getUpdated()->getTimestamp());
+      $listing = $view->getDirectoryContent('/sub');
+      self::assertCount(1, $listing);
+      self::assertSame('document.txt', $listing[0]->getName());
+      self::assertSame($fileId, $listing[0]->getId());
+      self::assertSame('first', $storage->file_get_contents('sub/document.txt'));
+
+      $entry->setName('renamed.txt');
+      $this->flushTransaction();
+      self::assertFalse($cache->get('sub/document.txt'));
+      $renamedFile = $cache->get('sub/renamed.txt');
+      self::assertNotFalse($renamedFile);
+      self::assertSame($fileId, $renamedFile->getId());
+      self::assertSame($this->now->getTimestamp(), $renamedFile->getMtime());
+
+      $entry->setParent(null);
+      $entry->setFile(null);
+      $this->entityManager->remove($entry);
+      $this->flushTransaction();
+      self::assertFalse($cache->get('sub/renamed.txt'));
+      self::assertSame([], $view->getDirectoryContent('/sub'));
+    } finally {
+      Entities\DatabaseStorageFile::clearOrphans();
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testSameSecondChangesRefreshEveryLinkedFile(): void
+  {
+    $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
+    $this->mockProvider = MockProvider::create($this);
+    $clock = $this->createStub(TimeFactory::class);
+    $clock->method('now')->willReturnCallback(fn() => $this->now);
+    $this->mockProvider->registerClassInstance(TimeFactory::class, $clock, global: true);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+
+    $storageId = 'integration/linked-files/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-linked-files-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $folder = $root->addSubFolder('sub');
+      $file = new Entities\EncryptedFile('document.txt', 'first', 'text/plain');
+      $root->addDocument($file);
+      $folder->addDocument($file, 'linked.txt');
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      $paths = ['document.txt', 'sub/linked.txt'];
+      $ids = [];
+      $etags = [];
+      foreach ($paths as $path) {
+        $cached = $cache->get($path);
+        self::assertNotFalse($cached);
+        $ids[$path] = $cached->getId();
+        $etags[$path] = $cached->getEtag();
+      }
+      $initialRootSize = $cache->get('')->getSize();
+      $initialSubSize = $cache->get('sub')->getSize();
+
+      foreach (['other', 'longer content'] as $contents) {
+        $file->setSize(strlen($contents));
+        $file->getFileData()->setData($contents);
+        $this->flushTransaction();
+        foreach ($paths as $path) {
+          $cached = $cache->get($path);
+          self::assertNotFalse($cached);
+          self::assertSame($ids[$path], $cached->getId());
+          self::assertNotSame($etags[$path], $cached->getEtag());
+          self::assertSame(strlen($contents), $cached->getSize());
+          self::assertSame($this->now->getTimestamp(), $cached->getMtime());
+          self::assertSame($contents, $storage->file_get_contents($path));
+          $etags[$path] = $cached->getEtag();
+        }
+        $difference = strlen($contents) - strlen('first');
+        self::assertSame($initialRootSize + 2 * $difference, $cache->get('')->getSize());
+        self::assertSame($initialSubSize + $difference, $cache->get('sub')->getSize());
+      }
     } finally {
       if ($mounted) {
         Filesystem::getMountManager()->removeMount($mountPath);
