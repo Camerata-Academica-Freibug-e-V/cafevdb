@@ -48,7 +48,7 @@ class DatabaseStorageFolder extends DatabaseStorageDirEntry
   protected static $type = DirEntryType::FOLDER;
 
   #[ORM\OneToOne(targetEntity: DatabaseStorage::class, mappedBy: 'root')]
-  protected DatabaseStorage $storage;
+  protected ?DatabaseStorage $storage = null;
 
   /**
    * @var Collection<DatabaseStorageDirEntry>
@@ -76,6 +76,12 @@ class DatabaseStorageFolder extends DatabaseStorageDirEntry
     $this->storage = $storage;
 
     return $this;
+  }
+
+  /** @return null|DatabaseStorage The storage attached to this root, if any. */
+  public function getAttachedStorage():?DatabaseStorage
+  {
+    return $this->storage;
   }
 
   /**

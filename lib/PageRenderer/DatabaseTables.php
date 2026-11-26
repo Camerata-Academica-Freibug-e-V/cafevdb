@@ -36,6 +36,7 @@ class DatabaseTables
 
   const COMPOSITE_PAYMENTS_TABLE = 'CompositePayments';
   const DATABASE_STORAGES_TABLE = 'DatabaseStorages';
+  const DATABASE_STORAGE_CACHE_CHANGES_TABLE = 'DatabaseStorageCacheChanges';
   const DATABASE_STORAGE_DIR_ENTRIES_TABLE = 'DatabaseStorageDirEntries';
   const DONATION_RECEIPTS_TABLE = 'DonationReceipts';
   const FIELD_TRANSLATIONS_TABLE = 'TableFieldTranslations';

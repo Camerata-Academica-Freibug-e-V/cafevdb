@@ -23,9 +23,14 @@ class DatabaseStorageTimestampListener implements EventSubscriber
 {
   /**
    * @param TimeFactory $clock
+   * @param null|StorageChangeCollector $collector
+   * @param null|string $userId
    */
-  public function __construct(private TimeFactory $clock)
-  {
+  public function __construct(
+    private TimeFactory $clock,
+    private ?StorageChangeCollector $collector = null,
+    private ?string $userId = null,
+  ) {
   }
 
   /** {@inheritdoc} */
@@ -65,6 +70,18 @@ class DatabaseStorageTimestampListener implements EventSubscriber
       foreach ($file->getDatabaseStorageDirEntries() as $entry) {
         $entries[spl_object_id($entry)] = $entry;
         $linkedEntries[spl_object_id($entry)] = $entry;
+      }
+    }
+
+    $changes = $this->recordChanges($unitOfWork, $entries);
+    foreach ($changes as $storageId => $paths) {
+      foreach ($paths as $path => $details) {
+        $change = new Entities\DatabaseStorageCacheChange($storageId, $path, $details['oldPath'], $details['entryId'], $this->userId);
+        $entityManager->persist($change);
+        $unitOfWork->computeChangeSet(
+          $entityManager->getClassMetadata($change::class),
+          $change,
+        );
       }
     }
 
@@ -110,6 +127,78 @@ class DatabaseStorageTimestampListener implements EventSubscriber
         $this->recompute($unitOfWork, $entityManager, $entry);
       }
     }
+  }
+
+  /**
+   * Record old and new paths of all changed entries, including all links of
+   * changed files, before any change set is recomputed.
+   *
+   * @param UnitOfWork $unitOfWork
+   * @param array<int, Entities\DatabaseStorageDirEntry> $entries
+   *
+   * @return array<string, array<string, array{oldPath: ?string, entryId: ?int}>>
+   */
+  private function recordChanges(UnitOfWork $unitOfWork, array $entries): array
+  {
+    $changes = [];
+    foreach ($entries as $entry) {
+      $changeSet = $unitOfWork->getEntityChangeSet($entry);
+      $original = $unitOfWork->getOriginalEntityData($entry);
+      $inserted = $unitOfWork->isScheduledForInsert($entry);
+      $deleted = $unitOfWork->isScheduledForDelete($entry);
+
+      $oldParent = array_key_exists('parent', $changeSet)
+        ? $changeSet['parent'][0]
+        : ($original['parent'] ?? null);
+      $oldName = array_key_exists('name', $changeSet)
+        ? $changeSet['name'][0]
+        : ($original['name'] ?? null);
+      $parent = $entry->getParent();
+
+      $oldPath = null;
+      $storageId = null;
+      if (!$inserted && $oldParent instanceof Entities\DatabaseStorageFolder) {
+        $oldPath = $this->path($oldParent, $oldName);
+        $storageId = $oldParent->getRoot()->getAttachedStorage()?->getStorageId();
+      }
+      $newPath = null;
+      if (!$deleted) {
+        if ($parent instanceof Entities\DatabaseStorageFolder) {
+          $newPath = $this->path($parent, $entry->getName());
+          $storageId = $parent->getRoot()->getAttachedStorage()?->getStorageId();
+        } elseif ($entry instanceof Entities\DatabaseStorageFolder && $entry->getAttachedStorage() !== null) {
+          // root folder
+          $newPath = '';
+          $storageId = $entry->getAttachedStorage()->getStorageId();
+        }
+      }
+
+      if ($storageId === null) {
+        continue;
+      }
+      if ($newPath === null) {
+        if ($oldPath !== null) {
+          $changes[$storageId][$oldPath] = ['oldPath' => null, 'entryId' => $entry->getId()];
+          $this->collector?->record($storageId, $oldPath);
+        }
+      } else {
+        $moveFrom = $oldPath !== $newPath ? $oldPath : null;
+        $changes[$storageId][$newPath] = ['oldPath' => $moveFrom, 'entryId' => $entry->getId()];
+        $this->collector?->record($storageId, $newPath, $moveFrom);
+      }
+    }
+    return $changes;
+  }
+
+  /**
+   * @param Entities\DatabaseStorageFolder $parent
+   * @param null|string $name
+   *
+   * @return string Path below the storage root without leading slash.
+   */
+  private function path(Entities\DatabaseStorageFolder $parent, ?string $name): string
+  {
+    return ltrim($parent->getPathName() . '/' . ($name ?? ''), '/');
   }
 
   /**

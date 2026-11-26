@@ -199,6 +199,8 @@ class EntityManager extends AbstractEntityManager
   /** @var null|GedmoTranslatableListener */
   protected ?Listeners\GedmoTranslatableListener $translatable = null;
 
+  protected Listeners\StorageChangeCollector $storageChanges;
+
   /**
    * Locale -provider of the translatable listener.
    */
@@ -244,6 +246,11 @@ class EntityManager extends AbstractEntityManager
     $this->preFlushActions = clone $this->appContainer->get(UndoableRunQueue::class);
     $this->preCommitActions = [];
     $this->postCommitActions = clone $this->appContainer->get(UndoableRunQueue::class);
+
+    $this->storageChanges = new Listeners\StorageChangeCollector($this->logger);
+    $this->storageChanges->addConsumer(
+      fn(array $changes) => $this->appContainer->get(\OCA\CAFEVDB\Storage\Database\CacheNotifier::class)->notifyStorageIds(array_keys($changes))
+    );
 
     $this->transactionNestingLevel = 0;
     $this->reopenAfterRollback = true;
@@ -422,6 +429,7 @@ class EntityManager extends AbstractEntityManager
     $this->preFlushActions->clearActionQueue();
     $this->preCommitActions = [];
     $this->postCommitActions->clearActionQueue();
+    $this->storageChanges->discard();
     $this->transactionNestingLevel = 0;
     $this->bind();
   }
@@ -785,7 +793,11 @@ class EntityManager extends AbstractEntityManager
     $evm->addEventSubscriber($foreignKeyListener);
 
     // Run after Sluggable so file-data hash updates are visible in this flush.
-    $evm->addEventSubscriber(new Listeners\DatabaseStorageTimestampListener($timeFactory));
+    $evm->addEventSubscriber(new Listeners\DatabaseStorageTimestampListener(
+      $timeFactory,
+      $this->storageChanges,
+      $this->encryptionService->getUserId() === null ? null : $this->getUserId(),
+    ));
 
     return [ $config, $evm, $attributeReader ];
   }
@@ -1145,6 +1157,7 @@ class EntityManager extends AbstractEntityManager
     if (!$this->isTransactionActive()) {
       // execute non-undoable actions after the final commit succeeded.
       $this->executePostCommitActions();
+      $this->storageChanges->commit();
     }
   }
 
@@ -1165,6 +1178,9 @@ class EntityManager extends AbstractEntityManager
     // @todo we probably have to check if there is something to roll-back.
     parent::rollback();
     $level = --$this->transactionNestingLevel;
+    if (!$this->isTransactionActive()) {
+      $this->storageChanges->discard();
+    }
 
     // the post-commit actions cannot be undone
     if ($this->preCommitActions[$level]->active()) {
@@ -1262,9 +1278,31 @@ class EntityManager extends AbstractEntityManager
    */
   public function flush():void
   {
+    if (!$this->isOwnTransactionActive()) {
+      // Flush inside an own transaction, otherwise the commit performed by
+      // the unit of work bypasses the post-commit hooks.
+      $this->beginTransaction();
+      try {
+        $this->flush();
+        $this->commit();
+      } catch (Throwable $t) {
+        $this->rollback();
+        throw $t;
+      }
+      return;
+    }
     $this->executePreFlushActions();
     parent::flush();
     $this->executePreFlushActions(); // in case the pre-flush handlers added to the list ...
+  }
+
+  /**
+   * @return Listeners\StorageChangeCollector The collector for changes of
+   * database-backed storages, consumers are called after the outermost commit.
+   */
+  public function getStorageChangeCollector():Listeners\StorageChangeCollector
+  {
+    return $this->storageChanges;
   }
 
   /**

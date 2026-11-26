@@ -161,6 +161,48 @@ retry. Unregistered legacy credentials remain subject to Nextcloud's token
 cleanup. The richdocuments WOPI tokens themselves are not deleted; leave its
 standard WOPI and template cleanup enabled.
 
+Database-storage cache outbox
+-----------------------------
+
+Committed database-storage changes are queued in `DatabaseStorageCacheChanges`
+until the Nextcloud file cache has been updated. A mounted storage is notified
+after commit; otherwise, the queue is retried on later authorized access. There
+is no background retry job. Reconciliation errors are logged with the storage
+ID and relevant outbox row IDs; a batch-planning failure logs the entire pending
+batch, not necessarily only the conflicting rows.
+
+On storage access, reconciliation failures are logged. By default, unsafe cyclic
+or interleaved rename batches block access; other failures allow access to
+continue. The cache may be stale or partially updated until a retry succeeds.
+Set the app configuration key `database_storage_cache_failure_policy` with
+`occ config:app:set cafevdb database_storage_cache_failure_policy --value=VALUE`:
+`fail` blocks access on every reconciliation failure, `continue` continues on
+every failure, and `fail-on-conflict` (default) blocks on unsafe cyclic or
+interleaved rename batches but continues on other failures. All modes retry on
+later access. Invalid values block access until corrected. This setting does not change post-commit
+notification or the outbox command.
+
+Run `occ cafevdb:storage:cache-outbox` to list pending rows, including their
+IDs, paths, creation times and creators. Use `--storage=ID` to select a storage,
+`--summary` for counts and oldest creation times, or `--json` for a JSON listing.
+The storage ID is the short ID shown by the listing, not a Nextcloud mount path.
+The command requires credentials for an account that can decrypt the app database.
+
+`--process` attempts reconciliation for the selected storage, or all pending
+storages if no filter is given. It requires the storage to be mounted in the
+command's context; remaining rows produce an error. If a batch cannot be
+reconciled, inspect the logs and rows first. As a last resort, stop writes and
+other reconciliation attempts for the affected storage, then use
+`--clear --storage=ID --dry-run` to preview and `--clear --storage=ID` to delete
+its pending rows. `--all` selects all storages instead; `--force` skips the
+confirmation. Clearing discards pending updates and can leave the cache stale.
+
+After clearing, rescan each affected mount with
+`occ cafevdb:files-scan --path="/USER/files/MOUNT_PATH"` while it is accessible
+to that user, before resuming normal access. A rescan may assign new file IDs to
+renamed entries. Historical deletions outside the outbox also require a manual
+file scan.
+
 User database recryption
 ------------------------
 

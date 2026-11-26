@@ -26,6 +26,7 @@ namespace OCA\CAFEVDB\Storage\Database;
 
 use \DateTimeInterface;
 use \DateTimeImmutable;
+use \UnexpectedValueException;
 
 use OCP\Files\IMimeTypeDetector;
 use OCP\EventDispatcher\IEventDispatcher;
@@ -52,7 +53,7 @@ use OCA\CAFEVDB\Constants;
  * Storage implementation for data-base storage, including access to
  * encrypted entities.
  */
-class Storage extends AbstractStorage
+abstract class Storage extends AbstractStorage
 {
   use CopyDirectory;
   use \OCA\CAFEVDB\Traits\ConfigTrait;
@@ -69,6 +70,8 @@ class Storage extends AbstractStorage
 
   const PATH_SEPARATOR = Constants::PATH_SEP;
 
+  public const CACHE_FAILURE_POLICY_CONFIG = 'database_storage_cache_failure_policy';
+
   /** @var \OCA\CAFEVDB\Wrapped\Doctrine\ORM\EntityRepository */
   protected $filesRepository;
 
@@ -83,6 +86,8 @@ class Storage extends AbstractStorage
 
   /** @var ReadMeFactory */
   protected ?ReadMeFactory $readMeFactory = null;
+
+  private bool $checkedPendingCacheChanges = false;
 
   /** {@inheritdoc} */
   public function __construct($params)
@@ -160,6 +165,7 @@ class Storage extends AbstractStorage
    */
   protected function findFiles(string $dirName, bool $rootIsMandatory = false):array
   {
+    $this->processPendingCacheChanges();
     $dirName = self::normalizeDirectoryName($dirName);
     if (!empty($this->files[$dirName])) {
       return $this->files[$dirName];
@@ -306,6 +312,27 @@ class Storage extends AbstractStorage
   }
 
   /**
+   * Forget all in-memory directory listings, e.g. after the database has
+   * been changed by someone else.
+   *
+   * @return void
+   */
+  public function clearPathCache():void
+  {
+    $this->files = [];
+  }
+
+  /**
+   * Retry pending cache changes on the next access.
+   *
+   * @return void
+   */
+  public function invalidatePendingCacheChangesCheck(): void
+  {
+    $this->checkedPendingCacheChanges = false;
+  }
+
+  /**
    * Remove a "cache" entry.
    *
    * @param string $name Path-name.
@@ -373,11 +400,11 @@ class Storage extends AbstractStorage
   /**
    * Return the overall modification time of the entire storage.
    *
-   * @return null|DateTimeInterface
+   * @return ?DateTimeInterface
    */
-  protected function getStorageModificationDateTime():?DateTimeInterface
+  protected function getStorageModificationDateTime(): ?DateTimeInterface
   {
-    return self::ensureDate($this->getDatabaseRepository(Entities\LogEntry::class)->modificationTime());
+    return self::ensureDate(empty($this->rootFolder) ? null : $this->rootFolder->getUpdated());
   }
 
   /**
@@ -396,11 +423,8 @@ class Storage extends AbstractStorage
     return $this->appName() . self::STORAGE_ID_TAG . self::PATH_SEPARATOR . $this->getShortId();
   }
 
-  /** @return string The shot storage id without the base prefix. */
-  public function getShortId():string
-  {
-    return '';
-  }
+  /** @return string The short storage id without the base prefix. */
+  abstract public function getShortId():string;
 
   /**
    * @param null|string $path The path to work on.
@@ -550,8 +574,35 @@ class Storage extends AbstractStorage
    */
   public function hasUpdated(string $path, int $time): bool
   {
+    $this->processPendingCacheChanges();
     $mtime = $this->filemtime($path);
     return $mtime === false || ($mtime > $time);
+  }
+
+  /**
+   * Retry durable cache updates on first access to this authenticated mount.
+   *
+   * @return void
+   */
+  private function processPendingCacheChanges(): void
+  {
+    if ($this->checkedPendingCacheChanges) {
+      return;
+    }
+    $policy = $this->cloudConfig()->getAppValue($this->appName(), self::CACHE_FAILURE_POLICY_CONFIG, 'fail-on-conflict');
+    if (!in_array($policy, ['fail', 'continue', 'fail-on-conflict'], true)) {
+      throw new UnexpectedValueException('Invalid database storage cache failure policy: ' . $policy);
+    }
+    $notifier = $this->appContainer()->get(CacheNotifier::class);
+    $this->checkedPendingCacheChanges = true;
+    try {
+      $notifier->notifyStorage($this);
+    } catch (\Throwable $t) {
+      $this->checkedPendingCacheChanges = false;
+      if ($policy === 'fail' || ($policy === 'fail-on-conflict' && $t instanceof CacheReconciliationConflictException)) {
+        throw $t;
+      }
+    }
   }
 
   /** {@inheritdoc} */

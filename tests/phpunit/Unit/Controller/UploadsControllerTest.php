@@ -77,6 +77,8 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261031220000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261101120000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261118191044::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261125155000::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261125161000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\Migrations\DependencyFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\DatabaseStorageDirEntry::class)]

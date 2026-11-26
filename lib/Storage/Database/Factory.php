@@ -49,12 +49,6 @@ class Factory
   ) {
   }
 
-  /** @return Storage */
-  public function getBaseStorage():Storage
-  {
-    return $this->di(Storage::class);
-  }
-
   /** @return BankTransactionsStorage */
   public function getBankTransactionsStorage():BankTransactionsStorage
   {

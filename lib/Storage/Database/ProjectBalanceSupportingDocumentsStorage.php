@@ -5,7 +5,7 @@
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
  * @author Claus-Justus Heine <himself@claus-justus-heine.de>
- * @copyright 2011-2014, 2016, 2020-2025, Claus-Justus Heine <himself@claus-justus-heine.de>
+ * @copyright 2011-2014, 2016, 2020-2026, Claus-Justus Heine <himself@claus-justus-heine.de>
  * @license AGPL-3.0-or-later
  *
  * This program is free software: you can redistribute it and/or modify
@@ -98,12 +98,6 @@ class ProjectBalanceSupportingDocumentsStorage extends Storage
   protected function findFiles(string $dirName, bool $ignored = false):array
   {
     return parent::findFiles($dirName, rootIsMandatory: false);
-  }
-
-  /**  {@inheritdoc} */
-  protected function getStorageModificationDateTime():\DateTimeInterface
-  {
-    return self::ensureDate(empty($this->rootFolder) ? null : $this->rootFolder->getUpdated());
   }
 
   /** {@inheritdoc} */
