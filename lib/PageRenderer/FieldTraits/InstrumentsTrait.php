@@ -60,12 +60,13 @@ trait InstrumentsTrait
   protected function getNonInstruments():array
   {
     if ($this->nonInstruments === null) {
-      $instrumentInfo = $this->getInstrumentInfo();
-      $ids = array_filter(
-        $instrumentInfo['idGroups'],
-        fn(string $families) => !empty(in_array($this->l->t(Entities\ProjectInstrument::NOT_AN_INSTRUMENT_FAMILY), explode(',', $families))),
-      );
-      $this->nonInstruments = array_intersect_key($instrumentInfo['byId'], $ids);
+      $nonInstruments = [];
+      foreach ($this->getDatabaseRepository(Entities\Instrument::class)->findAll() as $instrument) {
+        if ($instrument->isNotAnInstrument()) {
+          $nonInstruments[$instrument->getId()] = $instrument->getName();
+        }
+      }
+      $this->nonInstruments = $nonInstruments;
     }
 
     if (empty($this->nonInstruments)) {
