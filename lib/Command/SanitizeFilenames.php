@@ -38,7 +38,6 @@ use OCP\IL10N;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\L10N\IFactory as IL10NFactory;
-use OC\Files\FilenameValidator;
 use Psr\Container\ContainerInterface;
 
 use OCA\Files\Service\SettingsService;
