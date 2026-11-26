@@ -30,12 +30,16 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 
+use OC\Security\Crypto;
+use OCP\IConfig;
+
 use OCA\RotDrop\Tests\DatabaseProvider;
 use OCA\RotDrop\Tests\EnumDatabasePurpose;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
+use OCA\CAFEVDB\Service\ConnectorDatabaseCredentials;
 use OCA\CAFEVDB\Service\EventsService;
 use OCA\CAFEVDB\Service\WopiCredentialsViewService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
@@ -187,7 +191,9 @@ use OCA\CAFEVDB\Tests\MockProvider;
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\UserPreferencesTrait::class)]
 class ArtifactsTest extends TestCase
 {
-  use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\EnableDeprecationsTrait;
+  use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\EnableDeprecationsTrait {
+    tearDown as private restoreDeprecationHandler;
+  }
   use \OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
   use \OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Entities\EntityGeneratorTrait;
   use \OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
@@ -203,6 +209,18 @@ class ArtifactsTest extends TestCase
     if (!$this->databaseProvider->getDatabaseConfig()) {
       // echo 'STARTING DB SERVER' . PHP_EOL;
       $this->databaseProvider->startServer();
+    }
+  }
+
+  /** {@inheritdoc} */
+  public function tearDown(): void
+  {
+    try {
+      if (self::$appliedVersions !== []) {
+        $this->unapplyMigrations();
+      }
+    } finally {
+      $this->restoreDeprecationHandler();
     }
   }
 
@@ -242,7 +260,6 @@ class ArtifactsTest extends TestCase
       if ($this->entityManager->isTransactionActive()) {
         $this->entityManager->rollback();
       }
-      $this->unapplyMigrations();
       throw $t;
     }
 
@@ -256,7 +273,31 @@ class ArtifactsTest extends TestCase
     $cloudConnectorDatabase = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
     $cloudUserConnectorService->updateUserSqlViews($cloudConnectorDatabase);
     $cloudUserConnectorService->updateMusicianPersonalizedViews($cloudConnectorDatabase);
-    $this->appContainer->get(WopiCredentialsViewService::class)->updateWopiCredentialsView($cloudConnectorDatabase);
+
+    $connection = $this->entityManager->getConnection();
+    $cryptoConfig = $this->createStub(IConfig::class);
+    $testSecret = bin2hex(random_bytes(32));
+    $cryptoConfig->method('getSystemValueString')->willReturnMap([['secret', '', $testSecret]]);
+    $cryptoConfig->method('getSystemValue')->willReturnMap([['secret', '', $testSecret]]);
+    $connectorCredentials = new ConnectorDatabaseCredentials(
+      config: $cloudConfig,
+      crypto: new Crypto($cryptoConfig),
+      cloudConnection: $this->createStub(\OCP\IDBConnection::class),
+      l: $this->mockProvider->getL10N(),
+      appName: $this->mockProvider->appName,
+    );
+    $credentials = $connectorCredentials->prepare($connection, DatabaseProvider::CLOUD_DB_USER, $dbConfig->databasePassword);
+    $wopiViewService = new WopiCredentialsViewService(
+      encryptionService: $this->mockProvider->getEncryptionService(),
+      cloudConfig: $cloudConfig,
+      l: $this->mockProvider->getL10N(),
+      appName: $this->mockProvider->appName,
+      connection: $connection,
+      connectorCredentials: $connectorCredentials,
+    );
+    $this->mockProvider->registerClassInstance(WopiCredentialsViewService::class, $wopiViewService);
+    $wopiViewService->updateWopiCredentialsView($cloudConnectorDatabase, $credentials, checkAccess: true);
+    self::assertSame($credentials, $connectorCredentials->load(ConnectorDatabaseCredentials::WOPI));
 
     $this->databaseProvider->dumpDatabase(
       EnumDatabasePurpose::APP,
@@ -268,7 +309,5 @@ class ArtifactsTest extends TestCase
     );
 
     // this should be enhanced by further data ...
-
-    $this->unapplyMigrations();
   }
 }

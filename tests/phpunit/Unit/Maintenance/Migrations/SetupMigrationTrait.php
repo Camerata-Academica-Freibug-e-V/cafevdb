@@ -31,11 +31,13 @@ use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 
 use OCP\IL10N;
+use Psr\Container\ContainerInterface;
 
 use OCA\RotDrop\Tests\DatabaseProvider;
 
 use OCA\CAFEVDB\Common\ConsoleLogger;
 use OCA\CAFEVDB\Database\Doctrine\Migrations;
+use OCA\CAFEVDB\Database\Doctrine\Migrations\AbstractMigration;
 use OCA\CAFEVDB\Database\Doctrine\Migrations\EnumMigrationDirection;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\DoctrineMigrationsListener;
 use OCA\CAFEVDB\Database\EntityManager;
@@ -99,11 +101,34 @@ trait SetupMigrationTrait
     );
 
     $appContainer = $this->mockProvider->getAppContainer();
+    // Migration hooks must not use previously cached production dependencies.
+    $migrationContainer = new class($appContainer, $this->entityManager, $this->mockProvider->getL10N()) implements ContainerInterface {
+      public function __construct(
+        private ContainerInterface $appContainer,
+        private EntityManager $entityManager,
+        private IL10N $l,
+      ) {
+      }
+
+      public function get(string $id): mixed
+      {
+        if (str_starts_with($id, MigrationsNamespace::class . '\\') && is_subclass_of($id, AbstractMigration::class)) {
+          return new $id($this->entityManager, $this->appContainer, $this->l);
+        }
+        return $this->appContainer->get($id);
+      }
+
+      public function has(string $id): bool
+      {
+        return (str_starts_with($id, MigrationsNamespace::class . '\\') && is_subclass_of($id, AbstractMigration::class))
+          || $this->appContainer->has($id);
+      }
+    };
 
     self::$migrationsService = new DoctrineMigrationsService(
       logger: $consoleLogger,
       entityManager: $this->entityManager,
-      appContainer: $appContainer,
+      appContainer: $migrationContainer,
       l: $this->mockProvider->getL10N(),
     );
 
