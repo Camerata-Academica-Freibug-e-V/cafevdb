@@ -38,37 +38,21 @@ use OCA\CAFEVDB\Wrapped\Doctrine\ORM\EntityRepository;
 /** Test the role lookup shared by the page renderers. */
 #[Attributes\CoversTrait(InstrumentsTrait::class)]
 #[Attributes\UsesClass(Entities\Instrument::class)]
-#[Attributes\UsesClass(Entities\InstrumentFamily::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\ArrayTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\AutoIncrementTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\EntityManagerTrait::class)]
 class InstrumentsTraitTest extends TestCase
 {
   /** @return void */
-  public function testRolesAreIdentifiedIndependentlyOfDisplayLanguage(): void
+  public function testRolesAreMappedAndCached(): void
   {
-    $translatedFamily = $this->createStub(Entities\InstrumentFamily::class);
-    $translatedFamily->method('getFamily')->willReturn('Translated role family');
-    $translatedFamily->method('getUntranslatedFamily')->willReturn(Entities\ProjectInstrument::NOT_AN_INSTRUMENT_FAMILY);
-
-    $originalFamily = $this->createStub(Entities\InstrumentFamily::class);
-    $originalFamily->method('getFamily')->willReturn(Entities\ProjectInstrument::NOT_AN_INSTRUMENT_FAMILY);
-
-    $instrumentFamily = $this->createStub(Entities\InstrumentFamily::class);
-    $instrumentFamily->method('getFamily')->willReturn('Strings');
-
     $translatedRole = new Entities\Instrument();
     $translatedRole->setId(1)->setName('Role in another language');
-    $translatedRole->getFamilies()->add($translatedFamily);
     $originalRole = new Entities\Instrument();
     $originalRole->setId(2)->setName('Role');
-    $originalRole->getFamilies()->add($originalFamily);
-    $violin = new Entities\Instrument();
-    $violin->setId(3)->setName('Violin');
-    $violin->getFamilies()->add($instrumentFamily);
 
     $repository = $this->createMock(InstrumentsRepository::class);
-    $repository->expects($this->once())->method('findAll')->willReturn([$translatedRole, $originalRole, $violin]);
+    $repository->expects($this->once())->method('findNonInstruments')->willReturn([$translatedRole, $originalRole]);
     $renderer = $this->renderer($repository);
 
     $expected = [1 => 'Role in another language', 2 => 'Role'];
@@ -80,7 +64,7 @@ class InstrumentsTraitTest extends TestCase
   public function testMissingRolesStillRaiseAnError(): void
   {
     $repository = $this->createStub(InstrumentsRepository::class);
-    $repository->method('findAll')->willReturn([]);
+    $repository->method('findNonInstruments')->willReturn([]);
     $renderer = $this->renderer($repository);
 
     $this->expectException(UnexpectedValueException::class);

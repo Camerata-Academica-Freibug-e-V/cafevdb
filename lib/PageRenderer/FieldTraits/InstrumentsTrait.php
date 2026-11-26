@@ -61,10 +61,8 @@ trait InstrumentsTrait
   {
     if ($this->nonInstruments === null) {
       $nonInstruments = [];
-      foreach ($this->getDatabaseRepository(Entities\Instrument::class)->findAll() as $instrument) {
-        if ($instrument->isNotAnInstrument()) {
-          $nonInstruments[$instrument->getId()] = $instrument->getName();
-        }
+      foreach ($this->getDatabaseRepository(Entities\Instrument::class)->findNonInstruments() as $instrument) {
+        $nonInstruments[$instrument->getId()] = $instrument->getName();
       }
       $this->nonInstruments = $nonInstruments;
     }
