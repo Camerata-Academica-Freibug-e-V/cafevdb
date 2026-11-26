@@ -77,8 +77,7 @@ trait RootFolderStubTrait
   private int $nodeId = 1;
 
   /**
-   * @param Node $path
-   *
+   * @param Node $node
    * @param int $permissions
    *
    * @return void

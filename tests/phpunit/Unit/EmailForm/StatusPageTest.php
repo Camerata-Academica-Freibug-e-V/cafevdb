@@ -4,6 +4,7 @@
  *
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -22,6 +23,9 @@ class StatusPageTest extends TestCase
 {
   /**
    * The included template uses the local variables below.
+   *
+   * @param array $message
+   * @param array $attachmentValidation
    *
    * @return DOMXPath
    *
@@ -47,11 +51,24 @@ class StatusPageTest extends TestCase
       Composer::DIAGNOSTICS_MESSAGE => $message,
     ];
     $l = new class {
+      /**
+       * @param string $message
+       * @param mixed $parameters
+       *
+       * @return string
+       */
       public function t(string $message, mixed $parameters = []):string
       {
         return $message;
       }
 
+      /**
+       * @param string $singular
+       * @param string $plural
+       * @param integer $count
+       *
+       * @return string
+       */
       public function n(string $singular, string $plural, int $count):string
       {
         return $count === 1 ? $singular : $plural;

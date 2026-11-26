@@ -820,7 +820,8 @@ END:VCALENDAR',
   {
     return array_map(
       function(array $row) use ($projectName, $calendars, $l)  {
-        $calendarData = $row['calendardata'];
+        // iCalendar content uses CRLF even though the fixture source uses LF.
+        $calendarData = str_replace("\n", "\r\n", $row['calendardata']);
         $calendarData = str_replace('%PROJECT_NAME%', $projectName, $calendarData);
         $found = false;
         foreach ($calendars as $uri => $calendarId) {

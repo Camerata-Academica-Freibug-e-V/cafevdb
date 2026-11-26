@@ -62,7 +62,7 @@ use OCA\CAFEVDB\Wrapped\Doctrine\Common\Collections\ArrayCollection;
 /**
  * Mock around s.t. the EventsService class can be instantiated and used.
  *
- * @todo Currently this covers only the generation of the ProjectEvent
+ * Currently this covers only the generation of the ProjectEvent
  * matrix. It should be extended to also cover the various events emitted by
  * the dav app.
  */

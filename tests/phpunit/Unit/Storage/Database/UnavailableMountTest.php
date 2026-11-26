@@ -41,6 +41,7 @@ use OCA\CAFEVDB\Storage\Database\UnavailableMount;
 #[Attributes\UsesClass(MountProvider::class)]
 class UnavailableMountTest extends TestCase
 {
+  /** @return void */
   public function testPreservesCachedIdentityAndDeniesFilesystemAccess():void
   {
     $mount = $this->createMount();
@@ -61,6 +62,7 @@ class UnavailableMountTest extends TestCase
     $storage->file_get_contents('invoice.pdf');
   }
 
+  /** @return void */
   public function testCannotMoveMount():void
   {
     $mount = $this->createMount();
@@ -69,6 +71,7 @@ class UnavailableMountTest extends TestCase
     $mount->setMountPoint('/alice/files/renamed/');
   }
 
+  /** @return void */
   public function testCacheListingsFailInsteadOfAppearingEmpty():void
   {
     $mount = $this->createMount();
@@ -77,6 +80,7 @@ class UnavailableMountTest extends TestCase
     $mount->getStorage()->getCache()->getFolderContents('');
   }
 
+  /** @return UnavailableMount */
   private function createMount():UnavailableMount
   {
     $cachedMount = $this->createStub(ICachedMountInfo::class);

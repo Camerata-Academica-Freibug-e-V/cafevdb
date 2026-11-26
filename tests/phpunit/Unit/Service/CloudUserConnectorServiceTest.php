@@ -57,7 +57,7 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\RequestService;
 /**
  * Test aspects of the CloudUserConnectorService.
  *
- * @todo Testing the DB access requires excessive mocking or a real DB. The
+ * Testing the DB access requires excessive mocking or a real DB. The
  * latter has not yet been fully set up but that will be the way to go in the
  * future.
  */
@@ -239,6 +239,7 @@ class CloudUserConnectorServiceTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testGrantToRevokeStatementHandlesFieldAndFunctionGrants(): void
   {
     $method = new ReflectionMethod(CloudUserConnectorService::class, 'grantToRevokeStatement');
@@ -489,6 +490,7 @@ class CloudUserConnectorServiceTest extends TestCase
     }
   }
 
+  /** @return void */
   public function testMigrationUsesTestConnectorConfiguration(): void
   {
     $database = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
@@ -546,6 +548,14 @@ class CloudUserConnectorServiceTest extends TestCase
     }
   }
 
+  /**
+   * @param array $credentials
+   * @param string $cloudHost
+   * @param string $safeStore
+   * @param null|string $expectedHost
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('userSqlEndpoints')]
   public function testDedicatedCredentialsConfigureUserSqlWithoutChangingSafeStore(
     array $credentials,

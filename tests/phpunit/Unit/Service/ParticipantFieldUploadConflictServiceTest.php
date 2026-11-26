@@ -2,7 +2,8 @@
 /**
  * Orchestra member, musician and project management application.
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
+ * @license AGPL-3.0-or-later
  */
 
 namespace OCA\CAFEVDB\Tests\Unit\Service;
@@ -28,7 +29,11 @@ final class ParticipantFieldUploadConflictServiceTest extends TestCase
   private const SOURCE = 'Participants/Details.pdf';
   private const DESTINATION = 'Participants/recovered.pdf';
 
-  /** A successful move reports the new path, not just the reserved name. */
+  /**
+   * A successful move reports the new path, not just the reserved name.
+   *
+   * @return void
+   */
   public function testRenamesUploadAndNotifiesItsUploader(): void
   {
     $file = $this->conflictingFile();
@@ -46,7 +51,11 @@ final class ParticipantFieldUploadConflictServiceTest extends TestCase
     $this->service($file, $this->notificationManager(self::DESTINATION))->reconcile('alice', self::HOME . '/' . self::SOURCE, 42, 'uploaded');
   }
 
-  /** A permission failure leaves the upload in place and tells the uploader what to do. */
+  /**
+   * A permission failure leaves the upload in place and tells the uploader what to do.
+   *
+   * @return void
+   */
   public function testReportsFailedRename(): void
   {
     $file = $this->conflictingFile();
@@ -60,7 +69,11 @@ final class ParticipantFieldUploadConflictServiceTest extends TestCase
     $this->service($file, $this->notificationManager(null))->reconcile('alice', self::HOME . '/' . self::SOURCE, 42, 'uploaded');
   }
 
-  /** An independently replaced item must not be moved or generate a notification. */
+  /**
+   * An independently replaced item must not be moved or generate a notification.
+   *
+   * @return void
+   */
   public function testLeavesReplacementUntouched(): void
   {
     $replacement = $this->conflictingFile(43);
@@ -71,7 +84,11 @@ final class ParticipantFieldUploadConflictServiceTest extends TestCase
     $this->service($replacement, $notifications)->reconcile('alice', self::HOME . '/' . self::SOURCE, 42, 'uploaded');
   }
 
-  /** @return File&\PHPUnit\Framework\MockObject\MockObject */
+  /**
+   * @param integer $id
+   *
+   * @return File&\PHPUnit\Framework\MockObject\MockObject
+   */
   private function conflictingFile(int $id = 42): File
   {
     $file = $this->createMock(File::class);
@@ -81,7 +98,13 @@ final class ParticipantFieldUploadConflictServiceTest extends TestCase
     return $file;
   }
 
-  /** Prepare the expected notification, addressed only to the uploader. */
+  /**
+   * Prepare the expected notification, addressed only to the uploader.
+   *
+   * @param null|string $destination
+   *
+   * @return IManager
+   */
   private function notificationManager(?string $destination): IManager
   {
     $notification = $this->createMock(INotification::class);
@@ -100,7 +123,14 @@ final class ParticipantFieldUploadConflictServiceTest extends TestCase
     return $notifications;
   }
 
-  /** Return a service resolving only the uploader's own file path. */
+  /**
+   * Return a service resolving only the uploader's own file path.
+   *
+   * @param File $file
+   * @param IManager $notifications
+   *
+   * @return ParticipantFieldUploadConflictService
+   */
   private function service(File $file, IManager $notifications): ParticipantFieldUploadConflictService
   {
     $folder = $this->createMock(Folder::class);

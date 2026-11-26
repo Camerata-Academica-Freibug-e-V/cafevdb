@@ -114,6 +114,11 @@ class OrchestraSettingsControllerTest extends TestCase
     );
   }
 
+  /**
+   * @param bool $configurationFails
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('userSqlConfigurationResults')]
   public function testRecreateViewsReportsConfigurationFailureAsWarning(bool $configurationFails): void
   {
@@ -140,11 +145,13 @@ class OrchestraSettingsControllerTest extends TestCase
     }
   }
 
+  /** @return array */
   public static function userSqlConfigurationResults(): array
   {
     return ['configured' => [false], 'unavailable' => [true]];
   }
 
+  /** @return void */
   public function testRecreateViewsReportsEndpointWarning(): void
   {
     $connector = $this->createMock(CloudUserConnectorService::class);
@@ -159,6 +166,7 @@ class OrchestraSettingsControllerTest extends TestCase
     self::assertSame(['Check user_sql endpoint'], $data->hints);
   }
 
+  /** @return void */
   public function testRecreateViewsStillReportsDatabaseErrors(): void
   {
     $connector = $this->createMock(CloudUserConnectorService::class);
@@ -172,6 +180,7 @@ class OrchestraSettingsControllerTest extends TestCase
     $this->controller->setApp('userSqlBackendRecreateViews');
   }
 
+  /** @return void */
   public function testConnectorAccountStoresValidatedCredentialsWithoutReturningPassword(): void
   {
     $account = ['user' => 'restricted', 'accountHost' => '%'];
@@ -194,6 +203,7 @@ class OrchestraSettingsControllerTest extends TestCase
     self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
   }
 
+  /** @return void */
   public function testConnectorAccountRejectsWrongAuthenticatedHost(): void
   {
     restore_error_handler();
@@ -214,6 +224,7 @@ class OrchestraSettingsControllerTest extends TestCase
     self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
   }
 
+  /** @return void */
   public function testWopiAccountKeepsPasswordAndValidatesHost(): void
   {
     $credentials = ['user' => 'restricted', 'accountHost' => '%', 'password' => 'private-password'];
@@ -233,6 +244,7 @@ class OrchestraSettingsControllerTest extends TestCase
     self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
   }
 
+  /** @return void */
   public function testWopiAccountRejectsWrongAuthenticatedHost(): void
   {
     restore_error_handler();
@@ -248,6 +260,7 @@ class OrchestraSettingsControllerTest extends TestCase
     self::assertStringNotContainsString('private-password', json_encode($response->getData(), JSON_THROW_ON_ERROR));
   }
 
+  /** @return void */
   public function testResetClearsSharedCredentialsAndMarksAccountManaged(): void
   {
     $connector = $this->createMock(CloudUserConnectorService::class);
@@ -266,6 +279,7 @@ class OrchestraSettingsControllerTest extends TestCase
     self::assertSame(200, $response->getStatus());
   }
 
+  /** @return void */
   public function testFailedAccountSaveRestoresCredentialsAndAccount(): void
   {
     restore_error_handler();

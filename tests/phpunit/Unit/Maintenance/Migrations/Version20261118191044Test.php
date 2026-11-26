@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -30,11 +31,13 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
+/** Version20261118191044Test. */
 #[CoversClass(Version20261118191044::class)]
 #[UsesClass(AbstractMigration::class)]
 #[UsesClass(DoctrineMigrationsListener::class)]
 class Version20261118191044Test extends TestCase
 {
+  /** @return void */
   public function testDryRunDoesNotCreateOrRemoveConnectorObjects(): void
   {
     $container = $this->createMock(ContainerInterface::class);
@@ -47,6 +50,13 @@ class Version20261118191044Test extends TestCase
     $migration->preDown(new Schema());
   }
 
+  /**
+   * @param string $cloudUsers
+   * @param string $personalized
+   * @param null|string $database
+   *
+   * @return void
+   */
   #[DataProvider('connectorSettings')]
   public function testProvisioningFollowsExistingConnectorSettings(string $cloudUsers, string $personalized, ?string $database): void
   {
@@ -75,6 +85,7 @@ class Version20261118191044Test extends TestCase
     $migration->postUp(new Schema());
   }
 
+  /** @return array */
   public static function connectorSettings(): array
   {
     return [
@@ -84,6 +95,11 @@ class Version20261118191044Test extends TestCase
     ];
   }
 
+  /**
+   * @param string $database
+   *
+   * @return void
+   */
   #[DataProvider('rollbackDatabases')]
   public function testRollbackDelegatesConnectorCleanupOnlyWhenConfigured(string $database): void
   {
@@ -108,6 +124,7 @@ class Version20261118191044Test extends TestCase
     $migration->preDown(new Schema());
   }
 
+  /** @return array */
   public static function rollbackDatabases(): array
   {
     return [
@@ -116,6 +133,11 @@ class Version20261118191044Test extends TestCase
     ];
   }
 
+  /**
+   * @param ContainerInterface $container
+   *
+   * @return Version20261118191044
+   */
   private function migration(ContainerInterface $container): Version20261118191044
   {
     return new Version20261118191044(
@@ -125,6 +147,13 @@ class Version20261118191044Test extends TestCase
     );
   }
 
+  /**
+   * @param Version20261118191044 $migration
+   * @param string $direction
+   * @param bool $dryRun
+   *
+   * @return void
+   */
   private function startMigration(Version20261118191044 $migration, string $direction, bool $dryRun): void
   {
     $listener = new DoctrineMigrationsListener($this->createStub(ConsoleLogger::class), false);

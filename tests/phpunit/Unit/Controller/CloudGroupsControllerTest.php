@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -24,9 +25,16 @@ use OCA\CAFEVDB\Attributes\NoGroupMemberRequired;
 use OCA\CAFEVDB\Controller\CloudGroupsController;
 use OCA\CAFEVDB\Service\ConfigService;
 
+/** Cloud Groups Controller Test. */
 #[CoversClass(CloudGroupsController::class)]
 final class CloudGroupsControllerTest extends TestCase
 {
+  /**
+   * @param string $id
+   * @param string $displayName
+   *
+   * @return IGroup
+   */
   private function group(string $id, string $displayName): IGroup
   {
     $group = $this->createStub(IGroup::class);
@@ -40,6 +48,13 @@ final class CloudGroupsControllerTest extends TestCase
     return $group;
   }
 
+  /**
+   * @param IGroupManager $groups
+   * @param ConfigService $config
+   * @param null|IUser $user
+   *
+   * @return CloudGroupsController
+   */
   private function controller(IGroupManager $groups, ConfigService $config, ?IUser $user): CloudGroupsController
   {
     $session = $this->createStub(IUserSession::class);
@@ -49,6 +64,7 @@ final class CloudGroupsControllerTest extends TestCase
     return new CloudGroupsController('cafevdb', $this->createStub(IRequest::class), $groups, $session, $cloudConfig, $config);
   }
 
+  /** @return IUser */
   private function user(): IUser
   {
     $user = $this->createStub(IUser::class);
@@ -56,6 +72,7 @@ final class CloudGroupsControllerTest extends TestCase
     return $user;
   }
 
+  /** @return void */
   public function testRoutePermitsSubadminsButRequiresExplicitAuthorization(): void
   {
     $method = new ReflectionMethod(CloudGroupsController::class, 'getDetails');
@@ -76,6 +93,7 @@ final class CloudGroupsControllerTest extends TestCase
     self::assertSame(Http::STATUS_FORBIDDEN, $this->controller($groups, $config, null)->getDetails()->getStatus());
   }
 
+  /** @return void */
   public function testAdminSearchReturnsBackendDetails(): void
   {
     $groups = $this->createMock(IGroupManager::class);
@@ -96,6 +114,7 @@ final class CloudGroupsControllerTest extends TestCase
     ]]], $response->getData());
   }
 
+  /** @return void */
   public function testSubadminSearchIsRestrictedAndPagedAfterFiltering(): void
   {
     $known = [

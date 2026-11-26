@@ -41,11 +41,13 @@ use OCA\CAFEVDB\Service\Finance\BankAgency;
 use OCA\CAFEVDB\Service\Finance\BAVConfiguration;
 use OCA\CAFEVDB\Service\Registration;
 
+/** Bank Account Validator Test. */
 #[Attributes\CoversClass(BankAccountValidator::class)]
 #[Attributes\CoversClass(Registration::class)]
 #[Attributes\UsesClass(BankAgency::class)]
 class BankAccountValidatorTest extends TestCase
 {
+  /** @return void */
   public function testRegisteredBavUsesDatabaseConfiguration(): void
   {
     $factory = null;
@@ -87,9 +89,15 @@ class BankAccountValidatorTest extends TestCase
     }
   }
 
+  /** @return void */
   public function testIsValidBankUsesBavFacade(): void
   {
     $bav = new class {
+      /**
+       * @param string $blz
+       *
+       * @return bool
+       */
       public function isValidBank(string $blz): bool
       {
         return $blz === '70010080';
@@ -100,9 +108,15 @@ class BankAccountValidatorTest extends TestCase
     self::assertTrue($validator->isValidBank('70010080'));
   }
 
+  /** @return void */
   public function testIsValidAccountUsesBavFacade(): void
   {
     $bav = new class {
+      /**
+       * @param string $account
+       *
+       * @return bool
+       */
       public function isValidAccount(string $account): bool
       {
         return $account === '0030876808';
@@ -113,22 +127,31 @@ class BankAccountValidatorTest extends TestCase
     self::assertTrue($validator->isValidAccount('0030876808'));
   }
 
+  /** @return void */
   public function testGetMainAgencyMapsBavAgency(): void
   {
     $bav = new class {
+      /**
+       * @param string $blz
+       *
+       * @return object
+       */
       public function getMainAgency(string $blz): object
       {
         return new class {
+          /** @return string */
           public function getBIC(): string
           {
             return 'PBNKDEFFXXX';
           }
 
+          /** @return string */
           public function getName(): string
           {
             return 'Postbank';
           }
 
+          /** @return string */
           public function getCity(): string
           {
             return 'Bonn';
@@ -145,6 +168,11 @@ class BankAccountValidatorTest extends TestCase
     self::assertSame('Bonn', $agency->getCity());
   }
 
+  /**
+   * @param object $bav
+   *
+   * @return BankAccountValidator
+   */
   private function validator(object $bav): BankAccountValidator
   {
     $container = $this->createMock(ContainerInterface::class);

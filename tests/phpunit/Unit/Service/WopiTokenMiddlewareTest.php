@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -21,10 +22,7 @@ use Psr\Log\LoggerInterface;
 use RuntimeException;
 use stdClass;
 
-class TokenDocumentControllerFixture
-{
-}
-
+/** Wopi Token Middleware Test. */
 #[Attributes\CoversClass(WopiTokenMiddleware::class)]
 #[Attributes\RunTestsInSeparateProcesses]
 #[Attributes\PreserveGlobalState(false)]
@@ -37,6 +35,7 @@ class WopiTokenMiddlewareTest extends TestCase
   private LoggerInterface $logger;
   private object $controller;
 
+  /** {@inheritdoc} */
   protected function setUp(): void
   {
     if (!class_exists(DocumentController::class)) {
@@ -50,6 +49,7 @@ class WopiTokenMiddlewareTest extends TestCase
     $this->middleware = new WopiTokenMiddleware($this->container, $this->logger);
   }
 
+  /** @return void */
   public function testTokenAndBothTemplateEndpointsAreIntercepted(): void
   {
     $this->service->expects($this->exactly(3))->method('provideCredentials')->with('issued-token');
@@ -62,6 +62,7 @@ class WopiTokenMiddlewareTest extends TestCase
     }
   }
 
+  /** @return void */
   public function testUnrelatedFailedAndFederatedResponsesAreUntouched(): void
   {
     $this->container->expects($this->never())->method('get');
@@ -76,6 +77,7 @@ class WopiTokenMiddlewareTest extends TestCase
     }
   }
 
+  /** @return void */
   public function testProvisioningFailureDoesNotReturnOrLogToken(): void
   {
     $this->service->method('provideCredentials')->willThrowException(new RuntimeException('secret-token'));

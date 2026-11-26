@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -40,6 +41,13 @@ class OrchestraSettingsAuthorizationTest extends TestCase
     ];
   }
 
+  /**
+   * @param string $method
+   * @param string $url
+   * @param bool $allowed
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('endpoints')]
   public function testExistingRoutesStillRequireOrchestraSubAdmin(string $method, string $url, bool $allowed):void
   {

@@ -52,7 +52,7 @@ class ApplicationTest extends TestCase
 {
   private MockProvider $mockProvider;
 
-  /** {@inheritcod} */
+  /** {@inheritdoc} */
   public function setup(): void
   {
     $this->mockProvider = $this->MockProvider ?? MockProvider::create($this);

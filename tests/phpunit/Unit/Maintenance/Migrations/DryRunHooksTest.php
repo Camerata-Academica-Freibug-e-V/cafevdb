@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -18,11 +19,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
+/** Dry Run Hooks Test. */
 #[CoversClass(Version19700101000002::class)]
 #[CoversClass(Version20260131090857::class)]
 #[CoversClass(Version20260207000624::class)]
 class DryRunHooksTest extends TestCase
 {
+  /** @return void */
   public function testRegistrationEventHookReturnsBeforeResolvingServicesOrChangingFilters(): void
   {
     $entityManager = $this->createMock(EntityManager::class);
@@ -37,6 +40,7 @@ class DryRunHooksTest extends TestCase
     $migration->preUp(new Schema());
   }
 
+  /** @return void */
   public function testInstrumentSeedHookReturnsBeforeChangingLocaleOrPersisting(): void
   {
     $entityManager = $this->createMock(EntityManager::class);
@@ -53,6 +57,7 @@ class DryRunHooksTest extends TestCase
     $migration->preUp(new Schema());
   }
 
+  /** @return void */
   public function testTestOnlyRollbackDeleteIsSkippedDuringDryRun(): void
   {
     $entityManager = $this->createMock(EntityManager::class);

@@ -4,6 +4,7 @@
  *
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -25,44 +26,7 @@ use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 
-class MountTestWopi
-{
-  public const TOKEN_TYPE_USER = 0;
-
-  public function __construct(
-    private int $type = self::TOKEN_TYPE_USER,
-    private string $editor = 'alice',
-    private string $fileUser = 'alice',
-    private int $expiry = 2000000000,
-  ) {
-  }
-
-  public function getTokenType(): int
-  {
-    return $this->type;
-  }
-  public function getEditorUid(): string
-  {
-    return $this->editor;
-  }
-  public function getUserForFileAccess(): string
-  {
-    return $this->fileUser;
-  }
-  public function getExpiry(): int
-  {
-    return $this->expiry;
-  }
-}
-
-class MountTestWopiMapper
-{
-  public function getWopiForToken(string $token): MountTestWopi
-  {
-    return new MountTestWopi();
-  }
-}
-
+/** Mount Authentication Service Test. */
 #[CoversClass(MountAuthenticationService::class)]
 #[AllowMockObjectsWithoutExpectations]
 class MountAuthenticationServiceTest extends TestCase
@@ -78,6 +42,7 @@ class MountAuthenticationServiceTest extends TestCase
   private WopiRequestService $wopiRequest;
   private MountAuthenticationService $service;
 
+  /** {@inheritdoc} */
   protected function setUp(): void
   {
     $this->session = $this->createMock(IUserSession::class);
@@ -104,6 +69,7 @@ class MountAuthenticationServiceTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testOrdinaryRequestsRetainSessionCheck(): void
   {
     $this->wopiRequest->method('isWopiRoute')->willReturn(false);
@@ -115,6 +81,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testVolatileWopiUserGetsAppKeyWithoutPasswordLogin(): void
   {
     $this->wopiRequest();
@@ -135,6 +102,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertTrue($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testAlreadyBoundWopiUserDoesNotLogInAgain(): void
   {
     $this->wopiRequest();
@@ -146,6 +114,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertTrue($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testUnvalidatedRequestCannotRecoverCredentials(): void
   {
     $this->wopiRequest->method('isWopiRoute')->willReturn(true);
@@ -155,6 +124,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testDifferentWopiIdentitiesAndGuestAreRejected(): void
   {
     $this->wopiRequest(
@@ -168,6 +138,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testUnregisteredTokenCannotBindEncryption(): void
   {
     $this->wopiRequest();
@@ -177,6 +148,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testDifferentActiveUserCannotBeReplaced(): void
   {
     $this->wopiRequest();
@@ -188,6 +160,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testEncryptionBoundToAnotherUserCannotBeReplaced(): void
   {
     $this->wopiRequest();
@@ -197,6 +170,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testExpiredRecordCannotRecoverCredentials(): void
   {
     $this->wopiRequest(new MountTestWopi(expiry: time() - 1));
@@ -205,6 +179,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testExpiredWopiTokenCannotRecoverCredentials(): void
   {
     $this->wopiRequest->method('isWopiRoute')->willReturn(true);
@@ -216,6 +191,7 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /** @return void */
   public function testTokenErrorsDoNotLeakSecrets(): void
   {
     $this->wopiRequest();
@@ -226,6 +202,11 @@ class MountAuthenticationServiceTest extends TestCase
     self::assertFalse($this->service->authenticate($this->user));
   }
 
+  /**
+   * @param MountTestWopi ...$wopis
+   *
+   * @return void
+   */
   private function wopiRequest(MountTestWopi ...$wopis): void
   {
     $this->wopiRequest->method('isWopiRoute')->willReturn(true);

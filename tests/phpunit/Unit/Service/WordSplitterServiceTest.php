@@ -39,6 +39,7 @@ use Psr\Log\LoggerInterface;
 use OCA\CAFEVDB\Service\WordSplitterNotificationService;
 use OCA\CAFEVDB\Service\WordSplitterService;
 
+/** Word Splitter Service Test. */
 #[Attributes\CoversClass(WordSplitterService::class)]
 class WordSplitterServiceTest extends TestCase
 {
@@ -87,6 +88,7 @@ class WordSplitterServiceTest extends TestCase
     }
   }
 
+  /** @return void */
   public function testSplitUsesCharsplitByDefault(): void
   {
     $client = $this->createMock(IClient::class);
@@ -117,6 +119,7 @@ class WordSplitterServiceTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testSplitPassesRequestedMethodAndFallsBackToOriginalWord(): void
   {
     $client = $this->createMock(IClient::class);
@@ -139,6 +142,7 @@ class WordSplitterServiceTest extends TestCase
     $this->assertSame(['Handschuh'], $service->split('Handschuh', 'german_compound_splitter'));
   }
 
+  /** @return void */
   public function testLocalServiceStartsWithInstalledLocalesOnly(): void
   {
     $client = $this->createStub(IClient::class);
@@ -175,6 +179,7 @@ class WordSplitterServiceTest extends TestCase
     $this->assertStringContainsString('/python/german-word-splitter.pyz', $command);
   }
 
+  /** @return void */
   public function testSplitUsesRunningSystemServiceWithoutStartingAppService(): void
   {
     $client = $this->createMock(IClient::class);
@@ -198,6 +203,7 @@ class WordSplitterServiceTest extends TestCase
     $this->assertSame(['Haus', 'Tür'], $service->split('Haustür'));
   }
 
+  /** @return void */
   public function testInfoReturnsServiceInformation(): void
   {
     $client = $this->createMock(IClient::class);
@@ -221,6 +227,13 @@ class WordSplitterServiceTest extends TestCase
     );
   }
 
+  /**
+   * @param string $appLocale
+   * @param WordSplitterNotificationService $notifications
+   * @param null|LoggerInterface $logger
+   *
+   * @return WordSplitterService
+   */
   private function createServiceWithMisconfiguredSystemService(
     string $appLocale,
     WordSplitterNotificationService $notifications,
@@ -244,6 +257,7 @@ class WordSplitterServiceTest extends TestCase
     return $service;
   }
 
+  /** @return void */
   public function testSystemServiceWithoutAppLocaleFallsBackToLocalServiceAndNotifiesOnce(): void
   {
     $logger = $this->createMock(LoggerInterface::class);
@@ -269,6 +283,7 @@ class WordSplitterServiceTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testUninstalledAppLocaleThrowsAfterNotifyingAboutBothProblemsOnce(): void
   {
     $notifications = $this->createMock(WordSplitterNotificationService::class);
@@ -286,6 +301,7 @@ class WordSplitterServiceTest extends TestCase
     (new ReflectionMethod($service, 'ensureStarted'))->invoke($service);
   }
 
+  /** @return void */
   public function testUninstalledAppLocaleWithoutRunningServiceNotifiesAboutLocalProblemOnly(): void
   {
     $notifications = $this->createMock(WordSplitterNotificationService::class);
@@ -302,6 +318,7 @@ class WordSplitterServiceTest extends TestCase
     (new ReflectionMethod($service, 'ensureStarted'))->invoke($service);
   }
 
+  /** @return void */
   public function testSplitWrapsHttpClientFailures(): void
   {
     $client = $this->createMock(IClient::class);
@@ -316,6 +333,16 @@ class WordSplitterServiceTest extends TestCase
     $service->split('Handschuh');
   }
 
+  /**
+   * @param IClient $client
+   * @param bool $useDefaultSocket
+   * @param string $transliterationLocales
+   * @param string $appLocale
+   * @param null|LoggerInterface $logger
+   * @param null|WordSplitterNotificationService $notifications
+   *
+   * @return WordSplitterService
+   */
   private function createService(
     IClient $client,
     bool $useDefaultSocket = false,
@@ -342,6 +369,13 @@ class WordSplitterServiceTest extends TestCase
     $clientService = $this->createStub(IClientService::class);
     $clientService->method('newClient')->willReturn($client);
 
-    return new WordSplitterService($config, $clientService, 'testapp', $appLocale, $logger ?? $this->createStub(LoggerInterface::class), $notifications ?? $this->createStub(WordSplitterNotificationService::class));
+    return new WordSplitterService(
+      $config,
+      $clientService,
+      'testapp',
+      $appLocale,
+      $logger ?? $this->createStub(LoggerInterface::class),
+      $notifications ?? $this->createStub(WordSplitterNotificationService::class),
+    );
   }
 }

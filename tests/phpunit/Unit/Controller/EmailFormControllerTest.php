@@ -1021,7 +1021,11 @@ class EmailFormControllerTest extends TestCase
     $this->assertEquals(self::$templates[self::MAIL_MERGE_TAG]->getSubject(), $data->requestData->subject);
   }
 
-  /** @return void */
+  /**
+   * @param bool $fillDownloads
+   *
+   * @return void
+   */
   private function composerPreviewSetup(bool $fillDownloads = true): void
   {
     $this->mockHttpClient();
@@ -1090,7 +1094,12 @@ class EmailFormControllerTest extends TestCase
     ];
   }
 
-  /** @return void */
+  /**
+   * @param string $subject
+   * @param bool $personal
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('subjectSubstitutionProvider')]
   public function testComposerSubjectSubstitutions(string $subject, bool $personal): void
   {
@@ -1144,7 +1153,12 @@ class EmailFormControllerTest extends TestCase
     ];
   }
 
-  /** @return void */
+  /**
+   * @param string $subject
+   * @param string $errorKey
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('invalidSubjectSubstitutionProvider')]
   public function testComposerInvalidSubjectSubstitution(string $subject, string $errorKey): void
   {
@@ -1391,6 +1405,8 @@ class EmailFormControllerTest extends TestCase
   /**
    * Test that templates with personal substitution keys are not sent to the
    * mailing lists.
+   *
+   * @param string $location
    *
    * @return void
    */

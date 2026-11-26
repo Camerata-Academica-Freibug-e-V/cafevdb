@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -25,6 +26,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
+/** Legacy Wopi Credential Migration Test. */
 #[CoversClass(Version100201Date20261118215646::class)]
 #[AllowMockObjectsWithoutExpectations]
 class LegacyWopiCredentialMigrationTest extends TestCase
@@ -36,6 +38,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
   private IOutput $output;
   private Version100201Date20261118215646 $migration;
 
+  /** {@inheritdoc} */
   protected function setUp(): void
   {
     $this->db = $this->createMock(IDBConnection::class);
@@ -46,6 +49,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     $this->migration = new Version100201Date20261118215646($this->db, $this->provider, $this->jobs);
   }
 
+  /** @return void */
   public function testRevokesEveryRegisteredCredentialBeforeDroppingTableAndRemovingJob(): void
   {
     $this->schema->expects($this->atLeastOnce())->method('hasTable')->with('cafevdb_wopi_credentials')->willReturn(true);
@@ -76,6 +80,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     $this->runMigration();
   }
 
+  /** @return void */
   public function testMissingTableStillRemovesPersistedJob(): void
   {
     $this->schema->method('hasTable')->willReturn(false);
@@ -87,6 +92,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     $this->runMigration();
   }
 
+  /** @return void */
   public function testEmptyRegistryCanBeDropped(): void
   {
     $this->schema->method('hasTable')->willReturn(true);
@@ -96,6 +102,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     $this->runMigration();
   }
 
+  /** @return void */
   public function testMissingCredentialsAndConcurrentRemovalDoNotBlockUpgrade(): void
   {
     $this->schema->method('hasTable')->willReturn(true);
@@ -110,6 +117,13 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     $this->runMigration();
   }
 
+  /**
+   * @param string $uid
+   * @param string $name
+   * @param integer $type
+   *
+   * @return void
+   */
   #[DataProvider('mismatchedIdentities')]
   public function testMismatchedIdentityPreservesCredentialAndRegistry(string $uid, string $name, int $type): void
   {
@@ -123,6 +137,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     $this->runMigration();
   }
 
+  /** @return array */
   public static function mismatchedIdentities(): array
   {
     return [
@@ -132,6 +147,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     ];
   }
 
+  /** @return void */
   public function testFailedRevocationIsSanitizedAndCanBeRetriedAfterPartialProgress(): void
   {
     $this->schema->method('hasTable')->willReturn(true);
@@ -169,6 +185,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     $this->runMigration();
   }
 
+  /** @return void */
   public function testProviderLookupFailureDoesNotDropRegistryOrLeakCredentials(): void
   {
     $this->schema->method('hasTable')->willReturn(true);
@@ -186,6 +203,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     }
   }
 
+  /** @return void */
   public function testScansBeyondOneBatchWithoutOffsetOrExpiryFiltering(): void
   {
     $this->schema->method('hasTable')->willReturn(true);
@@ -203,6 +221,11 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     self::assertSame([0, 1000], $lastIds);
   }
 
+  /**
+   * @param array ...$batches
+   *
+   * @return IQueryBuilder
+   */
   private function query(array ...$batches): IQueryBuilder
   {
     $query = $this->createMock(IQueryBuilder::class);
@@ -226,6 +249,14 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     return $query;
   }
 
+  /**
+   * @param integer $id
+   * @param string $uid
+   * @param string $name
+   * @param integer $type
+   *
+   * @return IToken
+   */
   private function token(
     int $id,
     string $uid = 'issued-token',
@@ -240,6 +271,7 @@ class LegacyWopiCredentialMigrationTest extends TestCase
     return $token;
   }
 
+  /** @return void */
   private function runMigration(): void
   {
     $closure = fn() => $this->schema;

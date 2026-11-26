@@ -2,7 +2,8 @@
 /**
  * Orchestra member, musician and project management application.
  *
- * SPDX-License-Identifier: AGPL-3.0-or-later
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
+ * @license AGPL-3.0-or-later
  */
 
 namespace OCA\CAFEVDB\Tests\Unit\Listener;
@@ -29,7 +30,11 @@ use OCA\Files_Trashbin\Events\NodeRestoredEvent;
 #[CoversTrait(ParticipantFieldNodeEventsTrait::class)]
 final class ParticipantFieldCloudFolderListenerTest extends TestCase
 {
-  /** The target of a pre-rename event need not exist yet. */
+  /**
+   * The target of a pre-rename event need not exist yet.
+   *
+   * @return void
+   */
   public function testBeforeRenameUsesSourceType(): void
   {
     $source = $this->createMock(Node::class);
@@ -42,7 +47,11 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
     $this->listenerWithoutUser()->handle(new BeforeNodeRenamedEvent($source, $target));
   }
 
-  /** The source of a post-rename event need not exist anymore. */
+  /**
+   * The source of a post-rename event need not exist anymore.
+   *
+   * @return void
+   */
   public function testAfterRenameUsesTargetType(): void
   {
     $source = $this->createMock(Node::class);
@@ -55,7 +64,11 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
     $this->listenerWithoutUser()->handle(new NodeRenamedEvent($source, $target));
   }
 
-  /** Before a trash restore, only the trash item has metadata. */
+  /**
+   * Before a trash restore, only the trash item has metadata.
+   *
+   * @return void
+   */
   public function testBeforeRestoreUsesTrashItemType(): void
   {
     $source = $this->createMock(Node::class);
@@ -67,7 +80,11 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
     $this->listenerWithoutUser()->handle(new BeforeNodeRestoredEvent($source, $target, $run));
   }
 
-  /** A restore synchronizes the destination without looking up the now-missing trash item. */
+  /**
+   * A restore synchronizes the destination without looking up the now-missing trash item.
+   *
+   * @return void
+   */
   public function testAfterRestoreUsesRestoredNode(): void
   {
     $source = $this->createMock(Node::class);
@@ -79,7 +96,11 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
     $this->listenerWithoutUser()->handle(new NodeRestoredEvent($source, $target));
   }
 
-  /** Use only the trashbin event if a patched server also emits a rename event. */
+  /**
+   * Use only the trashbin event if a patched server also emits a rename event.
+   *
+   * @return void
+   */
   public function testRestoreRenameDoesNotRunTwice(): void
   {
     $source = $this->createStub(Node::class);
@@ -92,7 +113,11 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
     );
   }
 
-  /** Files and folders are indistinguishable until the stock create event completes. */
+  /**
+   * Files and folders are indistinguishable until the stock create event completes.
+   *
+   * @return void
+   */
   public function testBeforeCreateDoesNotReadPlaceholderType(): void
   {
     $node = $this->createMock(Node::class);
@@ -101,7 +126,11 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
     $this->listenerWithoutUser()->handle(new BeforeNodeCreatedEvent($node));
   }
 
-  /** A completed mkdir must not be handled as a file upload. */
+  /**
+   * A completed mkdir must not be handled as a file upload.
+   *
+   * @return void
+   */
   public function testAfterCreateReadsActualNodeType(): void
   {
     $node = $this->createMock(Node::class);
@@ -111,7 +140,11 @@ final class ParticipantFieldCloudFolderListenerTest extends TestCase
     $this->listenerWithoutUser()->handle(new NodeCreatedEvent($node));
   }
 
-  /** Stop handling after extracting the node information. */
+  /**
+   * Stop handling after extracting the node information.
+   *
+   * @return ParticipantFieldCloudFolderListener
+   */
   private function listenerWithoutUser(): ParticipantFieldCloudFolderListener
   {
     $session = $this->createStub(IUserSession::class);

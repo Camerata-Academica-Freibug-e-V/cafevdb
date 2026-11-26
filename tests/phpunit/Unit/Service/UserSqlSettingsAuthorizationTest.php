@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -29,9 +30,11 @@ use OCA\CAFEVDB\Service\EncryptionService;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\RequestService;
 use OCA\UserSQL\Settings\Admin as UserSqlAdminSettings;
 
+/** User Sql Settings Authorization Test. */
 #[Attributes\CoversClass(CloudUserConnectorService::class)]
 class UserSqlSettingsAuthorizationTest extends TestCase
 {
+  /** @return array */
   public static function permissions(): array
   {
     return [
@@ -43,6 +46,15 @@ class UserSqlSettingsAuthorizationTest extends TestCase
     ];
   }
 
+  /**
+   * @param bool $admin
+   * @param bool $delegated
+   * @param bool $ipAllowed
+   * @param bool $appEnabled
+   * @param bool $allowed
+   *
+   * @return void
+   */
   #[Attributes\RunInSeparateProcess]
   #[Attributes\DataProvider('permissions')]
   public function testSettingsAccess(
