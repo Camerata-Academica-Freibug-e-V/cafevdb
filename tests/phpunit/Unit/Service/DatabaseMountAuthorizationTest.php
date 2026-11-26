@@ -185,7 +185,14 @@ class DatabaseMountAuthorizationTest extends TestCase
     $config = $this->createStub(ConfigService::class);
     $config->method('getL10n')->willReturn($l10n);
     $config->method('getAppL10n')->willReturn($l10n);
-    $config->method('logger')->willReturn($this->createStub(LoggerInterface::class));
+    $exceptions = [];
+    $logger = $this->createStub(LoggerInterface::class);
+    $logger->method('log')->willReturnCallback(static function ($level, $message, array $context) use (&$exceptions): void {
+      if (isset($context['exception'])) {
+        $exceptions[] = $context['exception'];
+      }
+    });
+    $config->method('logger')->willReturn($logger);
     $config->method('getConfigValue')->willReturnCallback(
       fn(string $key) => match ($key) {
         ConfigConstants::SHARED_FOLDER => 'Shared',
@@ -263,7 +270,7 @@ class DatabaseMountAuthorizationTest extends TestCase
 
     $provider = new MountProvider($config, $authorization, $factory, $mountCache, $connection, $session, $authentication);
     $mounts = $provider->getMountsForUser($user, $loader);
-    self::assertCount($expectedMounts, $mounts);
+    self::assertCount($expectedMounts, $mounts, implode("\n", array_map(strval(...), $exceptions)));
     if (!$hasCachedMount) {
       return;
     }

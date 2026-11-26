@@ -32,6 +32,7 @@ use OCP\Files\StorageNotAvailableException;
 /** Fail cache reads instead of presenting an offline mount as an empty folder. */
 class UnavailableCache extends FailedCache
 {
+  /** @param string $message Reason the storage is unavailable. */
   public function __construct(private string $message = 'Database storage requires the user\'s authorization credentials.')
   {
     parent::__construct();
