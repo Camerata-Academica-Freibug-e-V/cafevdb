@@ -40,8 +40,8 @@ use OCP\IL10N;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
+use OCP\Security\ISecureRandom;
 use OC\Authentication\TwoFactorAuth\ProviderLoader as TFAProviderLoader;
-use OC\Security\SecureRandom;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Service\ConfigService;
@@ -173,8 +173,8 @@ class ExecutiveBoard extends Command
     /** @var IAccountManager $accountManager */
     $accountManager = $this->appContainer->get(IAccountManager::class);
 
-    /** @var SecureRandom $secureRandom */
-    $secureRandom = $this->appContainer->get(SecureRandom::class);
+    /** @var ISecureRandom $secureRandom */
+    $secureRandom = $this->appContainer->get(ISecureRandom::class);
 
     $boardUserBackend = null;
     foreach ($this->userManager->getBackends() as $backend) {
