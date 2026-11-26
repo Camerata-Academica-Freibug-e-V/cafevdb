@@ -68,6 +68,10 @@ class BankTransactionsStorage extends Storage
    */
   public function findDocument(Entities\SepaBulkTransaction $transaction, Entities\EncryptedFile $file):?Entities\DatabaseStorageFile
   {
+    if ($this->rootFolder === null) {
+      return null;
+    }
+
     $year = $transaction->getCreated()->format('Y');
 
     /** @var Entities\DatabaseStorageFile $dirEntry */
