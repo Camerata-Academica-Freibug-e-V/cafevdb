@@ -249,7 +249,7 @@ class EntityManager extends AbstractEntityManager
 
     $this->storageChanges = new Listeners\StorageChangeCollector($this->logger);
     $this->storageChanges->addConsumer(
-      fn(array $changes) => $this->appContainer->get(\OCA\CAFEVDB\Storage\Database\CacheNotifier::class)->notify($changes)
+      fn(array $changes) => $this->appContainer->get(\OCA\CAFEVDB\Storage\Database\CacheNotifier::class)->notifyStorageIds(array_keys($changes))
     );
 
     $this->transactionNestingLevel = 0;

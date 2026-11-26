@@ -64,8 +64,20 @@ class CacheNotifier
    */
   public function notify(array $changes): array
   {
+    return $this->notifyStorageIds(array_keys($changes));
+  }
+
+  /**
+   * Process the durable outbox for mounted storages.
+   *
+   * @param array<int, string> $storageIds Storage short IDs.
+   *
+   * @return array<string, array<string, ?string>> Changes which could not be applied.
+   */
+  public function notifyStorageIds(array $storageIds): array
+  {
     $unresolved = [];
-    foreach (array_keys($changes) as $shortId) {
+    foreach ($storageIds as $shortId) {
       $mounts = $this->mountManager->findByStorageId(
         $this->configService->getAppName() . Storage::STORAGE_ID_TAG . Storage::PATH_SEPARATOR . $shortId
       );

@@ -241,7 +241,7 @@ class DatabaseStorageCacheOutbox extends Command
     }
     /** @var CacheNotifier $notifier */
     $notifier = $this->appContainer->get(CacheNotifier::class);
-    $notifier->notify(array_fill_keys($storageIds, []));
+    $notifier->notifyStorageIds($storageIds);
 
     $this->entityManager->clear();
     $status = 0;

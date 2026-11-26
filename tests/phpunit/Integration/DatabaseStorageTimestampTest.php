@@ -851,6 +851,70 @@ class DatabaseStorageTimestampTest extends TestCase
   }
 
   /** @return void */
+  public function testNotifyStorageIdsProcessesOnlyMountedStorages(): void
+  {
+    $this->mockProvider = MockProvider::create($this);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+    $storageId = 'integration/notify-ids/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-notify-ids-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+
+      $entry = $root->addDocument(new Entities\EncryptedFile('pending.txt', 'content', 'text/plain'));
+      $this->entityManager->persist($entry);
+      $this->flushTransaction();
+      $notifier = $this->mockProvider->getAppContainer()->get(CacheNotifier::class);
+      $notifier->notifyStorageIds([$storageId]);
+      self::assertNotEmpty(
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+      self::assertFalse($cache->get('pending.txt'));
+
+      $storage = $this->createScanStorage($storageId, failPath: 'pending.txt');
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      self::assertArrayHasKey($storageId, $notifier->notifyStorageIds([$storageId]));
+      self::assertNotEmpty(
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+
+      Filesystem::getMountManager()->removeMount($mountPath);
+      $mounted = false;
+      $storage = $this->createScanStorage($storageId);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      self::assertSame([], $notifier->notifyStorageIds([$storageId]));
+      self::assertNotFalse($cache->get('pending.txt'));
+      self::assertSame(
+        [],
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+    } finally {
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
   public function testReconciliationFailuresLogOutboxRowIds(): void
   {
     $this->applyMigrations('latest');
