@@ -915,6 +915,80 @@ class DatabaseStorageTimestampTest extends TestCase
   }
 
   /** @return void */
+  public function testStorageAccessRetriesAfterPartialCacheFailure(): void
+  {
+    $this->now = new DateTimeImmutable('2040-01-01 00:00:00 UTC');
+    $this->mockProvider = MockProvider::create($this);
+    $clock = $this->createStub(TimeFactory::class);
+    $clock->method('now')->willReturnCallback(fn() => $this->now);
+    $this->mockProvider->registerClassInstance(TimeFactory::class, $clock, global: true);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+
+    $storageId = 'integration/partial-retry/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-partial-retry-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+
+      $first = $root->addDocument(new Entities\EncryptedFile('first.txt', 'first', 'text/plain'));
+      $second = $root->addDocument(new Entities\EncryptedFile('second.txt', 'second', 'text/plain'));
+      $this->entityManager->persist($first);
+      $this->entityManager->persist($second);
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId, failPath: 'second.txt');
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+
+      for ($attempt = 0; $attempt < 2; ++$attempt) {
+        try {
+          $storage->hasUpdated('', $this->now->getTimestamp());
+          self::fail('A failed reconciliation must fail storage access.');
+        } catch (RuntimeException $exception) {
+          self::assertStringContainsString('Unable to reconcile pending cache changes', $exception->getMessage());
+        }
+        self::assertNotFalse($cache->get('first.txt'));
+        self::assertFalse($cache->get('second.txt'));
+        self::assertCount(
+          2,
+          $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+            ->findBy(['storageId' => $storageId]),
+        );
+      }
+
+      $firstId = $cache->get('first.txt')->getId();
+      $storage->setTestFailPath(null);
+      $storage->hasUpdated('', $this->now->getTimestamp());
+      self::assertSame($firstId, $cache->get('first.txt')->getId());
+      self::assertNotFalse($cache->get('second.txt'));
+      self::assertSame(
+        [],
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+      $view = new View($mountPath);
+      self::assertCount(2, $view->getDirectoryContent('/'));
+    } finally {
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
   public function testReconciliationFailuresLogOutboxRowIds(): void
   {
     $this->applyMigrations('latest');
@@ -1015,6 +1089,11 @@ class DatabaseStorageTimestampTest extends TestCase
       public function getShortId(): string
       {
         return $this->testStorageId;
+      }
+
+      public function setTestFailPath(?string $path): void
+      {
+        $this->testFailPath = $path;
       }
 
       protected function getReadMeFactory(): ReadMeFactoryInterface
