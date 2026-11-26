@@ -746,6 +746,7 @@ class DatabaseStorageTimestampTest extends TestCase
       self::assertSame($rootId, $entry->getParent()->getId());
       self::assertSame('document.txt', $entry->getName());
     } finally {
+      Entities\DatabaseStorageFile::clearOrphans();
       $this->unapplyMigrations();
     }
   }
