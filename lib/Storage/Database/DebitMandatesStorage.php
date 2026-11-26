@@ -91,7 +91,6 @@ class DebitMandatesStorage extends Storage
           unset($existing[$path]);
           if ($entry->getFile() !== $target['file']) {
             $entry->setFile($target['file']);
-            $this->markChanged($entry->getParent(), $now);
           }
           continue;
         }
@@ -103,17 +102,14 @@ class DebitMandatesStorage extends Storage
           $this->persist($folder);
         }
         $this->persist($folder->addDocument($target['file'], $name));
-        $this->markChanged($folder, $now);
       }
       foreach ($existing as $entry) {
-        $this->markChanged($entry->getParent(), $now);
         $entry->setFile(null);
         $entry->setParent(null);
         $this->entityManager->remove($entry);
       }
       foreach (array_reverse($folders) as $folder) {
         if ($folder->isEmpty()) {
-          $this->markChanged($folder->getParent(), $now);
           $folder->setParent(null);
           $this->entityManager->remove($folder);
         }
@@ -174,20 +170,6 @@ class DebitMandatesStorage extends Storage
     $this->storageEntity = $storage;
     $this->rootFolder = $root;
     return $root;
-  }
-
-  /**
-   * @param Entities\DatabaseStorageFolder $folder
-   * @param DateTimeImmutable $now
-   *
-   * @return void
-   */
-  private function markChanged(Entities\DatabaseStorageFolder $folder, DateTimeImmutable $now):void
-  {
-    do {
-      $folder->setUpdated($now);
-      $folder = $folder->getParent();
-    } while ($folder !== null);
   }
 
   /**
