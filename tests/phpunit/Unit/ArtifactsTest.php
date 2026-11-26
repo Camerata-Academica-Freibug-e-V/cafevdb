@@ -36,6 +36,7 @@ use OCA\RotDrop\Tests\EnumDatabasePurpose;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\EntityManager;
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
+use OCA\CAFEVDB\Service\ConnectorDatabaseCredentials;
 use OCA\CAFEVDB\Service\EventsService;
 use OCA\CAFEVDB\Service\WopiCredentialsViewService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
@@ -256,7 +257,25 @@ class ArtifactsTest extends TestCase
     $cloudConnectorDatabase = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
     $cloudUserConnectorService->updateUserSqlViews($cloudConnectorDatabase);
     $cloudUserConnectorService->updateMusicianPersonalizedViews($cloudConnectorDatabase);
-    $this->appContainer->get(WopiCredentialsViewService::class)->updateWopiCredentialsView($cloudConnectorDatabase);
+
+    $connection = $this->entityManager->getConnection();
+    $connectorCredentials = new ConnectorDatabaseCredentials(
+      config: $cloudConfig,
+      crypto: \OCP\Server::get(\OCP\Security\ICrypto::class),
+      cloudConnection: $this->createStub(\OCP\IDBConnection::class),
+      l: $this->mockProvider->getL10N(),
+      appName: $this->mockProvider->appName,
+    );
+    $credentials = $connectorCredentials->prepare($connection, DatabaseProvider::CLOUD_DB_USER, $dbConfig->databasePassword);
+    $wopiViewService = new WopiCredentialsViewService(
+      encryptionService: $this->mockProvider->getEncryptionService(),
+      cloudConfig: $cloudConfig,
+      l: $this->mockProvider->getL10N(),
+      appName: $this->mockProvider->appName,
+      connection: $connection,
+      connectorCredentials: $connectorCredentials,
+    );
+    $wopiViewService->updateWopiCredentialsView($cloudConnectorDatabase, $credentials, checkAccess: true);
 
     $this->databaseProvider->dumpDatabase(
       EnumDatabasePurpose::APP,
