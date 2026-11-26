@@ -163,10 +163,10 @@ class InstrumentsRepositoryTest extends TestCase
     $violin->setName('Violin');
     $violin->getFamilies()->add($strings);
 
-    $repository = $this->getMockBuilder(InstrumentsRepository::class)
+    $repository = $this->getStubBuilder(InstrumentsRepository::class)
       ->disableOriginalConstructor()
       ->onlyMethods(['findAll'])
-      ->getMock();
+      ->getStub();
     $repository->method('findAll')->willReturn([$violin, $translatedRole, $originalRole]);
 
     $this->assertSame([$translatedRole, $originalRole], $repository->findNonInstruments());
