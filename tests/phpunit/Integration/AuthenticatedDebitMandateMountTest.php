@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -50,21 +51,6 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use ReflectionProperty;
 
-class AuthenticatedMountMockProvider extends MockProvider
-{
-  private ?AsymmetricKeyService $keyService = null;
-
-  public function useKeyService(AsymmetricKeyService $keyService): void
-  {
-    $this->keyService = $keyService;
-  }
-
-  public function getAsymmetricKeyService(): AsymmetricKeyService
-  {
-    return $this->keyService ?? parent::getAsymmetricKeyService();
-  }
-}
-
 /** @SuppressWarnings(PHPMD.CouplingBetweenObjects) */
 #[CoversNothing]
 class AuthenticatedDebitMandateMountTest extends TestCase
@@ -74,6 +60,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
   use \OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
   use \OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
 
+  /** @return void */
   public function testAuthenticatedFinanceMountThroughFilesystem(): void
   {
     self::enableDeprecations();

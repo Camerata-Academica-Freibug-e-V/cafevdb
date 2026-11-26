@@ -154,6 +154,7 @@ class DatabaseMountAuthorizationTest extends TestCase
     self::assertSame([], $provider->getMountsForUser($user, $this->createStub(IStorageFactory::class)));
   }
 
+  /** @return array */
   public static function synchronizationFailures(): array
   {
     return [
@@ -165,6 +166,15 @@ class DatabaseMountAuthorizationTest extends TestCase
     ];
   }
 
+  /**
+   * @param bool $hasCachedMount
+   * @param bool $hadTransaction
+   * @param bool $transactionActive
+   * @param bool $managerOpen
+   * @param int $expectedMounts
+   *
+   * @return void
+   */
   #[DataProvider('synchronizationFailures')]
   public function testSynchronizationFailureRestoresUnavailableCachedMount(
     bool $hasCachedMount,

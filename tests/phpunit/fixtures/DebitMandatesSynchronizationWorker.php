@@ -2,52 +2,17 @@
 /**
  * Concurrent debit-mandate reconciliation worker for the database-backed tests.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @license AGPL-3.0-or-later
  */
 
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../MockProvider.php';
 
-use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Storage\Database\DebitMandatesStorage;
 use OCA\CAFEVDB\Storage\UserStorage;
-use OCA\CAFEVDB\Tests\MockProvider;
-use OCA\RotDrop\Tests\EnumConfigSection;
-use PHPUnit\Framework\TestCase;
-
-class DebitMandatesWorkerProvider extends MockProvider
-{
-  public static array $databaseConfig;
-
-  protected function cloudConfigGet(
-    EnumConfigSection $section,
-    ?string $key,
-    ?string $app = null,
-    ?string $user = null,
-  ): mixed {
-    if ($section === EnumConfigSection::APP && $app === $this->appName) {
-      $value = match ($key) {
-        ConfigConstants::APP_DB_NAME => self::$databaseConfig['databaseName'],
-        ConfigConstants::APP_DB_SERVER => self::$databaseConfig['databaseServer'],
-        ConfigConstants::APP_DB_USER => self::$databaseConfig['databaseUser'],
-        ConfigConstants::APP_DB_PASSWORD => self::$databaseConfig['databasePassword'],
-        default => null,
-      };
-      if ($value !== null) {
-        return $value;
-      }
-    }
-    return parent::cloudConfigGet($section, $key, $app, $user);
-  }
-}
-
-class DebitMandatesWorkerTestCase extends TestCase
-{
-  public function userStorage(): UserStorage
-  {
-    return $this->createStub(UserStorage::class);
-  }
-}
+use OCA\CAFEVDB\Tests\fixtures\DebitMandatesWorkerProvider;
+use OCA\CAFEVDB\Tests\fixtures\DebitMandatesWorkerTestCase;
 
 try {
   DebitMandatesWorkerProvider::$databaseConfig = json_decode(fgets(STDIN), true, 512, JSON_THROW_ON_ERROR);

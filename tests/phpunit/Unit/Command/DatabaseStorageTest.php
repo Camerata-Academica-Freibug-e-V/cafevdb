@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra Management App.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -134,7 +135,11 @@ class DatabaseStorageTest extends TestCase
     yield 'field names during tree listing' => [['--find-orphan-trees' => null, '--include-field-names' => true]];
   }
 
-  /** @param array $options */
+  /**
+   * @param array $options
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('invalidOptions')]
   public function testInvalidOptionsDoNotQueryDatabase(array $options): void
   {
@@ -170,7 +175,11 @@ class DatabaseStorageTest extends TestCase
     self::assertStringContainsString('"findings":0', $this->tester->getDisplay());
   }
 
-  /** @param bool $json */
+  /**
+   * @param bool $json
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('fileNameFormats')]
   public function testRepairReasonsAppearInBothOutputFormats(bool $json): void
   {
@@ -193,7 +202,11 @@ class DatabaseStorageTest extends TestCase
     }
   }
 
-  /** @param bool $json */
+  /**
+   * @param bool $json
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('fileNameFormats')]
   public function testRepairCandidatesAppearInBothOutputFormats(bool $json): void
   {
@@ -239,7 +252,11 @@ class DatabaseStorageTest extends TestCase
     yield 'JSON' => [true];
   }
 
-  /** @param bool $json */
+  /**
+   * @param bool $json
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('fileNameFormats')]
   public function testOrphanTreesIncludeOnlyStorageLessEntriesWithoutChangingMetadata(bool $json): void
   {
@@ -320,7 +337,11 @@ class DatabaseStorageTest extends TestCase
     $this->tester->execute(['--find-orphan-trees' => null]);
   }
 
-  /** @param bool $json */
+  /**
+   * @param bool $json
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('fileNameFormats')]
   public function testFieldNamesAreOptionalInBothOutputFormats(bool $json): void
   {
@@ -358,7 +379,11 @@ class DatabaseStorageTest extends TestCase
     }
   }
 
-  /** @param bool $json */
+  /**
+   * @param bool $json
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('fileNameFormats')]
   public function testFileNamesAreIncludedOnlyWhenRequested(bool $json): void
   {
@@ -424,7 +449,11 @@ class DatabaseStorageTest extends TestCase
     self::assertStringContainsString('"findings":0', $this->tester->getDisplay());
   }
 
-  /** @param bool $json */
+  /**
+   * @param bool $json
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('fileNameFormats')]
   public function testEncryptionDiagnosticsAreReportedAndCauseFailure(bool $json): void
   {

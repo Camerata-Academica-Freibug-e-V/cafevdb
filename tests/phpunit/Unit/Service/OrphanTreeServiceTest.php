@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra Management App.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -24,6 +25,7 @@ class OrphanTreeServiceTest extends TestCase
   private Connection $connection;
   private OrphanTreeService $service;
 
+  /** {@inheritdoc} */
   protected function setUp(): void
   {
     $this->connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
@@ -53,11 +55,13 @@ class OrphanTreeServiceTest extends TestCase
     $this->service = new OrphanTreeService($this->connection);
   }
 
+  /** {@inheritdoc} */
   protected function tearDown(): void
   {
     $this->connection->close();
   }
 
+  /** @return void */
   public function testNamesIncludeParentPathsAndSortByPathThenName(): void
   {
     $before = $this->snapshot();
@@ -70,6 +74,7 @@ class OrphanTreeServiceTest extends TestCase
     self::assertArrayNotHasKey('parent_path', $this->service->inspect()['trees'][0]['entries'][0]);
   }
 
+  /** @return void */
   public function testPruningRemovesOnlyCompleteFolderOnlyTreesAndIsIdempotent(): void
   {
     $report = $this->service->inspect(true, true);
@@ -84,6 +89,7 @@ class OrphanTreeServiceTest extends TestCase
     self::assertFalse($this->connection->isTransactionActive());
   }
 
+  /** @return void */
   public function testUnnamedRootHasNoDoubleSlashInParentPaths(): void
   {
     $this->connection->executeStatement("UPDATE DatabaseStorageDirEntries SET name = '' WHERE id = 10");
@@ -91,6 +97,7 @@ class OrphanTreeServiceTest extends TestCase
     self::assertSame(['/', '/', '/', '/z-folder', '/z-folder'], array_column($tree, 'parent_path'));
   }
 
+  /** @return void */
   public function testFailureRollsBackPreviouslyDeletedFolders(): void
   {
     $this->connection->executeStatement(
@@ -108,6 +115,7 @@ class OrphanTreeServiceTest extends TestCase
     self::assertFalse($this->connection->isTransactionActive());
   }
 
+  /** @return void */
   public function testPruningDoesNotTakeOverCallerTransaction(): void
   {
     $this->connection->beginTransaction();
@@ -121,6 +129,7 @@ class OrphanTreeServiceTest extends TestCase
     $this->connection->rollBack();
   }
 
+  /** @return array */
   private function snapshot(): array
   {
     return $this->connection->fetchAllAssociative('SELECT * FROM DatabaseStorageDirEntries ORDER BY id');

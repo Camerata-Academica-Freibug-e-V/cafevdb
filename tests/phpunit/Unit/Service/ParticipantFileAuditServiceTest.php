@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra Management App.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -45,7 +46,9 @@ class ParticipantFileAuditServiceTest extends TestCase
       'CREATE TABLE Invoices (id INTEGER PRIMARY KEY, debitor_id INTEGER, project_id INTEGER, written_invoice_id INTEGER, deleted TEXT)',
       'CREATE TABLE CompositePayments (id INTEGER PRIMARY KEY, musician_id INTEGER, project_id INTEGER, supporting_document_id INTEGER)',
       'CREATE TABLE DonationReceipts (id INTEGER PRIMARY KEY, donation_id INTEGER, supporting_document_id INTEGER, deleted TEXT)',
-      "CREATE TABLE ProjectParticipantFields (id INTEGER PRIMARY KEY, data_type TEXT, project_id INTEGER DEFAULT 20, deleted TEXT, participant_access TEXT DEFAULT 'none', participation_context TEXT DEFAULT 'unrestricted', multiplicity TEXT DEFAULT 'simple', name TEXT DEFAULT 'private field')",
+      "CREATE TABLE ProjectParticipantFields (id INTEGER PRIMARY KEY, data_type TEXT, project_id INTEGER DEFAULT 20, deleted TEXT, "
+      . "participant_access TEXT DEFAULT 'none', participation_context TEXT DEFAULT 'unrestricted', "
+      . "multiplicity TEXT DEFAULT 'simple', name TEXT DEFAULT 'private field')",
       'CREATE TABLE ProjectParticipantFieldsData (field_id INTEGER, musician_id INTEGER, project_id INTEGER, option_key BLOB, option_value TEXT, supporting_document_id INTEGER, deleted TEXT)',
       "INSERT INTO Files VALUES (1, 'encrypted')",
       'INSERT INTO EncryptedFileOwners VALUES (1, 10)',
@@ -111,6 +114,8 @@ class ParticipantFileAuditServiceTest extends TestCase
 
   /** @param null|string $data
    * @param string $expected
+   *
+   * @return void
    */
   #[Attributes\DataProvider('invalidSeals')]
   public function testUnverifiableSealsAreNotReportedAsAccessible(?string $data, string $expected): void
@@ -270,6 +275,8 @@ class ParticipantFileAuditServiceTest extends TestCase
 
   /** @param string $access
    * @param string $context
+   *
+   * @return void
    */
   #[Attributes\DataProvider('readableSupportingFields')]
   public function testMissingOwnershipForReadableSupportingDocumentIsRepairable(string $access, string $context): void
@@ -306,7 +313,11 @@ class ParticipantFileAuditServiceTest extends TestCase
     yield 'broken directory' => ['UPDATE DatabaseStorageDirEntries SET parent_id = 999 WHERE id = 101'];
   }
 
-  /** @param string $sql */
+  /**
+   * @param string $sql
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('unsafeSupportGrants')]
   public function testAmbiguousSupportGrantsAreNotMarkedRepairable(string $sql): void
   {
@@ -623,7 +634,11 @@ class ParticipantFileAuditServiceTest extends TestCase
     yield 'shared source root' => ['UPDATE DatabaseStorages SET root_id = 100 WHERE id = 3'];
   }
 
-  /** @param string $sql */
+  /**
+   * @param string $sql
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('unsafeMandateGrants')]
   public function testAmbiguousMandatesAreNotMarkedRepairable(string $sql): void
   {
@@ -646,7 +661,11 @@ class ParticipantFileAuditServiceTest extends TestCase
     yield 'shared destination root' => ['UPDATE DatabaseStorages SET root_id = 200 WHERE id = 3'];
   }
 
-  /** @param string $sql */
+  /**
+   * @param string $sql
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('unsafeMandateDestinations')]
   public function testUnsafeMandateDestinationIsNotRepairable(string $sql): void
   {
@@ -975,7 +994,11 @@ class ParticipantFileAuditServiceTest extends TestCase
     }
   }
 
-  /** @param string $sql */
+  /**
+   * @param string $sql
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('unsafeMissingFieldLinks')]
   public function testUnsafePrivateDbFileLinksAreNotRepairable(string $sql): void
   {
@@ -1038,7 +1061,12 @@ class ParticipantFileAuditServiceTest extends TestCase
     };
   }
 
-  /** @return int */
+  /**
+   * @param int $sourceId
+   * @param int $entryId
+   *
+   * @return int
+   */
   private function insertDonationReceipt(int $sourceId, int $entryId): int
   {
     $this->connection->executeStatement(
@@ -1153,7 +1181,11 @@ class ParticipantFileAuditServiceTest extends TestCase
     yield 'unknown mount' => [null];
   }
 
-  /** @param null|string $sql */
+  /**
+   * @param null|string $sql
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('unresolvedPaths')]
   public function testIncompletePathsAreNotPresentedAsFullPaths(?string $sql): void
   {

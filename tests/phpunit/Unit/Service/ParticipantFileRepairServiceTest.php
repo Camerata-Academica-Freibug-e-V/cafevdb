@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Orchestra Management App.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -26,13 +27,15 @@ class ParticipantFileRepairServiceTest extends TestCase
   private Connection $connection;
   private ParticipantFileRepairService $service;
 
+  /** {@inheritdoc} */
   protected function setUp(): void
   {
     $this->connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
     foreach ([
       'CREATE TABLE Files (id INTEGER PRIMARY KEY, type TEXT)',
       'CREATE TABLE EncryptedFileOwners (encrypted_file_id INTEGER, musician_id INTEGER, UNIQUE(encrypted_file_id, musician_id))',
-      'CREATE TABLE DatabaseStorageDirEntries (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, file_id INTEGER, type TEXT, name TEXT, created TEXT, updated TEXT, UNIQUE(parent_id, name))',
+      'CREATE TABLE DatabaseStorageDirEntries (id INTEGER PRIMARY KEY AUTOINCREMENT, parent_id INTEGER, file_id INTEGER, '
+      . 'type TEXT, name TEXT, created TEXT, updated TEXT, UNIQUE(parent_id, name))',
       'CREATE TABLE DatabaseStorages (id INTEGER PRIMARY KEY, root_id INTEGER)',
       "CREATE TABLE ProjectParticipants (musician_id INTEGER, project_id INTEGER, database_documents_id INTEGER, deleted TEXT, participation_status TEXT DEFAULT 'regular')",
       'CREATE TABLE Projects (id INTEGER PRIMARY KEY, deleted TEXT)',
@@ -44,8 +47,10 @@ class ParticipantFileRepairServiceTest extends TestCase
       'CREATE TABLE Invoices (id INTEGER PRIMARY KEY, debitor_id INTEGER, project_id INTEGER, written_invoice_id INTEGER, deleted TEXT)',
       'CREATE TABLE CompositePayments (id INTEGER PRIMARY KEY, musician_id INTEGER, project_id INTEGER, supporting_document_id INTEGER)',
       'CREATE TABLE DonationReceipts (id INTEGER PRIMARY KEY, donation_id INTEGER, supporting_document_id INTEGER, deleted TEXT)',
-      "CREATE TABLE ProjectParticipantFields (id INTEGER PRIMARY KEY, data_type TEXT, project_id INTEGER DEFAULT 20, deleted TEXT, participant_access TEXT DEFAULT 'none', participation_context TEXT DEFAULT 'unrestricted', multiplicity TEXT DEFAULT 'parallel')",
-      'CREATE TABLE ProjectParticipantFieldsData (field_id INTEGER, musician_id INTEGER, project_id INTEGER, option_key BLOB, option_value TEXT, supporting_document_id INTEGER UNIQUE, deleted TEXT, updated TEXT)',
+      "CREATE TABLE ProjectParticipantFields (id INTEGER PRIMARY KEY, data_type TEXT, project_id INTEGER DEFAULT 20, deleted TEXT, "
+      . "participant_access TEXT DEFAULT 'none', participation_context TEXT DEFAULT 'unrestricted', multiplicity TEXT DEFAULT 'parallel')",
+      'CREATE TABLE ProjectParticipantFieldsData (field_id INTEGER, musician_id INTEGER, project_id INTEGER, option_key BLOB, '
+      . 'option_value TEXT, supporting_document_id INTEGER UNIQUE, deleted TEXT, updated TEXT)',
       "INSERT INTO Files VALUES (1, 'encrypted')",
       "INSERT INTO DatabaseStorageDirEntries (id, parent_id, file_id, type, name) VALUES
        (100, NULL, NULL, 'folder', ''), (200, NULL, NULL, 'folder', ''),
@@ -60,11 +65,13 @@ class ParticipantFileRepairServiceTest extends TestCase
     $this->service = new ParticipantFileRepairService($this->connection, 20, static fn(array $f) => ['Documents']);
   }
 
+  /** {@inheritdoc} */
   protected function tearDown(): void
   {
     $this->connection->close();
   }
 
+  /** @return array */
   private function snapshot(): array
   {
     $result = [];
@@ -77,6 +84,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     return $result;
   }
 
+  /** @return void */
   public function testInvoiceOwnershipAndLinkAreIdempotentAndSourceIsPreserved(): void
   {
     $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL)');
@@ -94,6 +102,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame($snapshot, $this->snapshot());
   }
 
+  /** @return void */
   public function testPrivateFieldLinkUpdatesReferenceWithoutGrantingOwner(): void
   {
     $this->connection->executeStatement("INSERT INTO ProjectParticipantFields (id, data_type) VALUES (1, 'db-file')");
@@ -106,6 +115,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame([], $this->service->repair()['repairs']);
   }
 
+  /** @return void */
   public function testMultipleReferencesAreRepairedFromSameLockedSnapshot(): void
   {
     $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL)');
@@ -120,6 +130,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame([], $this->service->repair()['repairs']);
   }
 
+  /** @return void */
   public function testDryRunDoesNotMutateAnything(): void
   {
     $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL)');
@@ -130,12 +141,18 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertFalse($this->connection->isTransactionActive());
   }
 
+  /** @return iterable */
   public static function otherDocuments(): iterable
   {
     yield 'composite payment' => ['composite-payment'];
     yield 'donation receipt' => ['donation-receipt'];
   }
 
+  /**
+   * @param string $source
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('otherDocuments')]
   public function testOtherFinancialDocumentsAreRepaired(string $source): void
   {
@@ -159,6 +176,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame($snapshot, $this->snapshot());
   }
 
+  /** @return void */
   public function testSupportReferenceConflictIsReportedInPreviewAndApply(): void
   {
     $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries (id, parent_id, file_id, type, name) VALUES
@@ -182,6 +200,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertNotSame(202, (int)$this->connection->fetchOne("SELECT supporting_document_id FROM ProjectParticipantFieldsData WHERE option_key = X'02'"));
   }
 
+  /** @return iterable */
   public static function conflicts(): iterable
   {
     yield 'folder is a file' => [
@@ -195,6 +214,11 @@ class ParticipantFileRepairServiceTest extends TestCase
     ];
   }
 
+  /**
+   * @param string $sql
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('conflicts')]
   public function testConflictIsReportedWithoutReplacingEntry(string $sql): void
   {
@@ -209,6 +233,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame(1, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM EncryptedFileOwners'));
   }
 
+  /** @return void */
   public function testUnexpectedFailureRollsBackAllWrites(): void
   {
     $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL)');
@@ -224,6 +249,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertFalse($this->connection->isTransactionActive());
   }
 
+  /** @return iterable */
   public static function ineligibleDocuments(): iterable
   {
     yield 'deleted source' => ["UPDATE Invoices SET deleted = '2000-01-01'"];
@@ -235,6 +261,11 @@ class ParticipantFileRepairServiceTest extends TestCase
     yield 'broken source' => ['UPDATE DatabaseStorageDirEntries SET parent_id = 999 WHERE id = 201'];
   }
 
+  /**
+   * @param string $sql
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('ineligibleDocuments')]
   public function testIneligibleDocumentsDoNotChange(string $sql): void
   {
@@ -245,6 +276,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame($before, $this->snapshot());
   }
 
+  /** @return void */
   public function testCallerTransactionIsNotCommittedOrRolledBack(): void
   {
     $this->connection->beginTransaction();
@@ -258,6 +290,7 @@ class ParticipantFileRepairServiceTest extends TestCase
     $this->connection->rollBack();
   }
 
+  /** @return void */
   public function testClubMandateRepairPreservesExistingCrossProjectLinks(): void
   {
     $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 201, NULL)');
