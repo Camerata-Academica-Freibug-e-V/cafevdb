@@ -113,6 +113,12 @@ class DatabaseStorageTest extends TestCase
   {
     yield 'dry run without repair' => [['--dry-run' => true]];
     yield 'repair with audit' => [['--repair-access' => true, '--audit-access' => true]];
+    yield 'repair with encryption audit' => [['--repair-access' => true, '--audit-encryption' => true]];
+    yield 'both audits' => [['--audit-access' => true, '--audit-encryption' => true]];
+    yield 'encryption audit with file names' => [['--audit-encryption' => true, '--include-file-names' => true]];
+    yield 'encryption audit with field names' => [['--audit-encryption' => true, '--include-field-names' => true]];
+    yield 'encryption audit with orphan trees' => [['--audit-encryption' => true, '--find-orphan-trees' => null]];
+    yield 'encryption audit with removal' => [['--audit-encryption' => true, '--remove-orphans' => true]];
     yield 'repair with removal' => [['--repair-access' => true, '--remove-orphans' => true]];
     yield 'repair with orphan search' => [['--repair-access' => true, '--find-orphans' => true]];
     yield 'repair with storage listing' => [['--repair-access' => true, '--list-storages' => null]];
@@ -164,6 +170,8 @@ class DatabaseStorageTest extends TestCase
       [['code' => 'unrecognized-owned-file', 'file_id' => 1, 'musician_id' => 10, 'repairable' => false]],
       $report['findings'],
     );
+    self::assertArrayNotHasKey('encryption_diagnostics', $report);
+    self::assertArrayNotHasKey('encryption_issues', $report['summary']);
   }
 
   /** @return void */
@@ -175,10 +183,22 @@ class DatabaseStorageTest extends TestCase
     self::assertStringContainsString('read-only', $display);
     self::assertStringContainsString('Summary', $display);
     self::assertStringContainsString('Structural access findings', $display);
-    self::assertStringContainsString('Encryption issues', $display);
+    self::assertStringNotContainsString('Encryption issues', $display);
     self::assertStringContainsString('No structural access findings.', $display);
-    self::assertStringContainsString('No encryption issues detected.', $display);
+    self::assertStringNotContainsString('No encryption issues detected.', $display);
     self::assertStringContainsString('"findings":0', $display);
+  }
+
+  /** @return void */
+  public function testAccessAuditDoesNotReadEncryptionSealData(): void
+  {
+    $this->connection->expects(self::never())->method('fetchAssociative');
+    $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
+      str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted']],
+      str_contains($sql, 'FROM EncryptedFileOwners') => [['encrypted_file_id' => 1, 'musician_id' => 10]],
+      default => [],
+    });
+    self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(['--audit-access' => true]));
   }
 
   /**
@@ -481,14 +501,19 @@ class DatabaseStorageTest extends TestCase
       ],
       default => [],
     });
+    self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(
+      ['--audit-access' => true],
+      ['capture_stderr_separately' => true],
+    ));
+    self::assertStringNotContainsString('"recipient_present"', $this->tester->getDisplay());
     self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(
-      ['--audit-access' => true, '--json' => $json],
+      ['--audit-encryption' => true, '--json' => $json],
       ['capture_stderr_separately' => true],
     ));
     $display = $this->tester->getDisplay();
     if ($json) {
       $report = json_decode($display, true, flags: JSON_THROW_ON_ERROR);
-      self::assertSame([], $report['findings']);
+      self::assertArrayNotHasKey('findings', $report);
       self::assertSame(1, $report['summary']['encryption_issues']);
       $diagnostic = $report['encryption_diagnostics'][0];
       self::assertFalse($diagnostic['recipient_present']);
@@ -516,21 +541,30 @@ class DatabaseStorageTest extends TestCase
       ],
       str_contains($sql, 'FROM ProjectParticipants') => [['musician_id' => 10, 'project_id' => 20, 'root_id' => 100]],
       str_contains($sql, 'FROM SepaDebitMandates mandate') => [],
-      str_contains($sql, 'FROM SepaDebitMandates') => [
-        ['source' => 'invoice', 'source_id' => 1, 'musician_id' => 10, 'project_id' => 20,
-         'entry_id' => 101, 'deleted' => null, 'option_key' => null],
-      ],
       default => [],
     });
-    self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(
+    self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(
       ['--audit-access' => true],
+      ['capture_stderr_separately' => true],
+    ));
+    self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(
+      ['--audit-encryption' => true],
       ['capture_stderr_separately' => true],
     ));
     $display = $this->tester->getDisplay();
     self::assertStringContainsString('Encryption issues', $display);
     self::assertStringContainsString('No encryption issues detected.', $display);
+    self::assertStringNotContainsString('Structural access findings', $display);
     self::assertStringNotContainsString('"file_id":1', $display);
     self::assertStringNotContainsString('"user_id":"alice"', $display);
+    self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(
+      ['--audit-encryption' => true, '--json' => true],
+      ['capture_stderr_separately' => true],
+    ));
+    $report = json_decode($this->tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+    self::assertSame(0, $report['summary']['encryption_issues']);
+    self::assertTrue($report['encryption_diagnostics'][0]['recipient_present']);
+    self::assertArrayNotHasKey('findings', $report);
   }
 
   /** @return void */
