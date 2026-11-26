@@ -1,4 +1,10 @@
 <?php
+/**
+ * Verify mapping and queries with the scoped Doctrine dependencies.
+ *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
+ * @license AGPL-3.0-or-later
+ */
 
 declare(strict_types=1);
 

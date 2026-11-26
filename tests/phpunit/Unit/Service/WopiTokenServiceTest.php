@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -25,42 +26,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use RuntimeException;
 
-class IssuedWopiToken
-{
-  public const TOKEN_TYPE_USER = 0;
-  public int $type = self::TOKEN_TYPE_USER;
-  public string $editor = 'alice';
-  public string $fileUser = 'alice';
-  public function getTokenType(): int
-  {
-    return $this->type;
-  }
-  public function getEditorUid(): string
-  {
-    return $this->editor;
-  }
-  public function getUserForFileAccess(): string
-  {
-    return $this->fileUser;
-  }
-  public function getFileid(): int
-  {
-    return 42;
-  }
-  public function getExpiry(): int
-  {
-    return 2000000000;
-  }
-}
-
-class IssuedWopiMapper
-{
-  public function getWopiForToken(string $token): IssuedWopiToken
-  {
-    return new IssuedWopiToken();
-  }
-}
-
+/** Wopi Token Service Test. */
 #[CoversClass(WopiTokenService::class)]
 #[AllowMockObjectsWithoutExpectations]
 class WopiTokenServiceTest extends TestCase
@@ -74,6 +40,7 @@ class WopiTokenServiceTest extends TestCase
   private WopiTokenService $service;
   private ContainerInterface $container;
 
+  /** {@inheritdoc} */
   protected function setUp(): void
   {
     $user = $this->createStub(IUser::class);
@@ -103,6 +70,7 @@ class WopiTokenServiceTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testAuthorizationPrecedesWopiLookup(): void
   {
     $this->authorization->expects($this->once())->method('authorized')
@@ -112,6 +80,7 @@ class WopiTokenServiceTest extends TestCase
     $this->service->provideCredentials('issued-token');
   }
 
+  /** @return void */
   public function testOrdinaryMountDoesNotStoreCredentials(): void
   {
     $this->authorization->method('authorized')->willReturn(true);
@@ -120,6 +89,7 @@ class WopiTokenServiceTest extends TestCase
     $this->service->provideCredentials('issued-token');
   }
 
+  /** @return void */
   public function testGuestAndMismatchedIdentitiesAreIgnored(): void
   {
     $this->authorization->method('authorized')->willReturn(true);
@@ -134,6 +104,7 @@ class WopiTokenServiceTest extends TestCase
     $this->service->provideCredentials('issued-token');
   }
 
+  /** @return void */
   public function testStoresAppKeyWithAuthoritativeExpiry(): void
   {
     $this->eligible();
@@ -141,6 +112,7 @@ class WopiTokenServiceTest extends TestCase
     $this->service->provideCredentials('issued-token');
   }
 
+  /** @return void */
   public function testMissingAppKeyFailsExplicitly(): void
   {
     $this->eligible(key: '');
@@ -149,6 +121,7 @@ class WopiTokenServiceTest extends TestCase
     $this->service->provideCredentials('issued-token');
   }
 
+  /** @return void */
   public function testMismatchedBoundIdentityFailsExplicitly(): void
   {
     $this->eligible(userId: 'bob');
@@ -157,6 +130,7 @@ class WopiTokenServiceTest extends TestCase
     $this->service->provideCredentials('issued-token');
   }
 
+  /** @return void */
   public function testStorageFailurePropagatesToResponseMiddleware(): void
   {
     $this->eligible();
@@ -166,6 +140,12 @@ class WopiTokenServiceTest extends TestCase
     $this->service->provideCredentials('issued-token');
   }
 
+  /**
+   * @param string $key
+   * @param string $userId
+   *
+   * @return void
+   */
   private function eligible(string $key = 'app-key', string $userId = 'alice'): void
   {
     $this->authorization->method('authorized')->willReturn(true);

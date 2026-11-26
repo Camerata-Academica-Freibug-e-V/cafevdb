@@ -380,11 +380,17 @@ class ProjectsTest extends TestCase
 
   // BEFORE INSERT ALL NEWVALSD
 
-  // BEFORE NEWVALS Array ( [ProjectInstrumentationNumbers__master_key_] => [Instruments__master_key_] => [ProjectParticipantFields__master_key_] => [year] => 2099 [name] => Test2099 [type] => temporary [ProjectInstrumentationNumbers:instrument_id] => 15,14,16,6 [ProjectInstrumentationNumbers:voice] => 6:0,14:0,15:0,16:0 [ProjectInstrumentationNumbers:quantity] => 0 [mailing_list_id] => create )
+  // BEFORE NEWVALS Array (
+  // [ProjectInstrumentationNumbers__master_key_] => [Instruments__master_key_] => [ProjectParticipantFields__master_key_] =>
+  // [year] => 2099 [name] => Test2099 [type] => temporary [ProjectInstrumentationNumbers:instrument_id] => 15,14,16,6
+  // [ProjectInstrumentationNumbers:voice] => 6:0,14:0,15:0,16:0 [ProjectInstrumentationNumbers:quantity] => 0 [mailing_list_id] => create )
 
   // BEFORE INSERT ASLL CHANGFED
 
-  // BEFORE CHANGED Array ( [0] => ProjectInstrumentationNumbers__master_key_ [1] => Instruments__master_key_ [2] => ProjectParticipantFields__master_key_ [3] => year [4] => name [5] => type [8] => ProjectInstrumentationNumbers:quantity [9] => mailing_list_id [10] => ProjectInstrumentationNumbers:instrument_id [11] => ProjectInstrumentationNumbers:voice )
+  // BEFORE CHANGED Array (
+  // [0] => ProjectInstrumentationNumbers__master_key_ [1] => Instruments__master_key_ [2] => ProjectParticipantFields__master_key_
+  // [3] => year [4] => name [5] => type [8] => ProjectInstrumentationNumbers:quantity [9] => mailing_list_id
+  // [10] => ProjectInstrumentationNumbers:instrument_id [11] => ProjectInstrumentationNumbers:voice )
 
   // BLAH
 
@@ -398,7 +404,7 @@ class ProjectsTest extends TestCase
   {
     $this->assertTrue(self::$migrationsApplied);
 
-    // @todo: mock the EventsService to just accept everything.
+    // The EventsService mock still needs to accept all events.
 
     $this->renderer->render(execute: false);
     $this->phpMyEdit->tb = PageRenderer\Projects::TABLE;

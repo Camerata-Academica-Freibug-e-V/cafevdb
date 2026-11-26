@@ -32,6 +32,7 @@ use OCP\IDateTimeZone;
 use OCA\CAFEVDB\Service\CalendarObjectFactory;
 use OCA\CAFEVDB\Service\DTO\CalendarEventData;
 
+/** Calendar Object Factory Test. */
 #[Attributes\CoversClass(CalendarObjectFactory::class)]
 #[Attributes\UsesClass(CalendarEventData::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\DTO\AbstractDTO::class)]

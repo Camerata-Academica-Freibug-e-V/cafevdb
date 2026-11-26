@@ -26,11 +26,13 @@ use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\CAFEVDB\Service\WopiCredentialsViewService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 
+/** Wopi Credentials View Service Test. */
 #[CoversClass(WopiCredentialsViewService::class)]
 #[UsesClass(WopiCredentialStore::class)]
 #[UsesClass(ConnectorDatabaseCredentials::class)]
 class WopiCredentialsViewServiceTest extends TestCase
 {
+  /** @return void */
   public function testDatabaseSwitchUpdatesLocatorBeforeDroppingPreviousView(): void
   {
     $events = [];
@@ -53,6 +55,7 @@ class WopiCredentialsViewServiceTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testGrantFailureLeavesPreviousLocatorAndViewUntouched(): void
   {
     $events = [];
@@ -71,6 +74,7 @@ class WopiCredentialsViewServiceTest extends TestCase
     }
   }
 
+  /** @return void */
   public function testDisablingRemovesTheRecordedViewAndLocator(): void
   {
     $events = [];
@@ -88,6 +92,7 @@ class WopiCredentialsViewServiceTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testDedicatedCredentialsWorkWithPostgresAndAreCheckedBeforeSaving(): void
   {
     $events = [];
@@ -111,6 +116,7 @@ class WopiCredentialsViewServiceTest extends TestCase
     self::assertSame(['validated', 'saved', 'cafevdb|wopiConnectorDatabase|next'], array_slice($events, 4));
   }
 
+  /** @return void */
   public function testInaccessibleViewDoesNotReplaceTheActiveLocator(): void
   {
     $events = [];
@@ -132,6 +138,15 @@ class WopiCredentialsViewServiceTest extends TestCase
     }
   }
 
+  /**
+   * @param string $previousDatabase
+   * @param array $events
+   * @param bool $failOnSelectGrant
+   * @param null|ConnectorDatabaseCredentials $credentialStore
+   * @param string $dbType
+   *
+   * @return WopiCredentialsViewService
+   */
   private function service(
     string $previousDatabase,
     array &$events,

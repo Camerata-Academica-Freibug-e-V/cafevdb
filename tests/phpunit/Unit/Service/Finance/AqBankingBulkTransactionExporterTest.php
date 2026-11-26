@@ -153,10 +153,10 @@ class AqBankingBulkTransactionExporterTest extends TestCase
     $transfer = $this->generateSepaBankTransfer();
 
     $data = $this->exporter->fileData($transfer);
-    $expectedData =<<< EOF
-localBic;localIban;localName;remoteBic;remoteIban;remoteName;executionDate;value/value;value/currency;purpose[0];purpose[1];purpose[2];purpose[3]
-MARKDEFFXXX;DE07123412341234123412;"Örchester e.V.";BYLADEM1001;DE02120300000000202051;"Inhaber:in, Konto";2099/01/01;12.23;EUR;"TestProject / Forderungen: RechnungsNummer RE25/01354 AktenZeichen 25-01258 ümläüteßWeitereÜmläüteß";;;
-EOF;
+    $expectedData = 'localBic;localIban;localName;remoteBic;remoteIban;remoteName;executionDate;value/value;value/currency;'
+      . "purpose[0];purpose[1];purpose[2];purpose[3]\n"
+      . 'MARKDEFFXXX;DE07123412341234123412;"Örchester e.V.";BYLADEM1001;DE02120300000000202051;"Inhaber:in, Konto";'
+      . '2099/01/01;12.23;EUR;"TestProject / Forderungen: RechnungsNummer RE25/01354 AktenZeichen 25-01258 ümläüteßWeitereÜmläüteß";;;';
     $this->assertEquals($expectedData, $data);
   }
 }

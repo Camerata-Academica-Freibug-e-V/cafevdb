@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -26,10 +27,12 @@ use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection as DbalConnection;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Result;
 
+/** Connector Database Credentials Test. */
 #[CoversClass(ConnectorDatabaseCredentials::class)]
 #[UsesClass(WopiCredentialStore::class)]
 class ConnectorDatabaseCredentialsTest extends TestCase
 {
+  /** @return void */
   public function testCredentialsAreEncryptedBeforeStorage(): void
   {
     $credentials = ['user' => 'restricted', 'password' => 'test-only', 'accountHost' => '%'];
@@ -46,6 +49,7 @@ class ConnectorDatabaseCredentialsTest extends TestCase
     $service->save(ConnectorDatabaseCredentials::WOPI, $credentials);
   }
 
+  /** @return void */
   public function testCloudSnapshotRestoresEncryptedCredentialsAndAbsentMarker(): void
   {
     $config = $this->createMock(IConfig::class);
@@ -63,6 +67,7 @@ class ConnectorDatabaseCredentialsTest extends TestCase
     $service->restoreCloud($service->snapshotCloud());
   }
 
+  /** @return void */
   public function testPreparationIdentifiesTheActualAccountAndUsesTheAppServer(): void
   {
     $appConnection = $this->createStub(Connection::class);
@@ -89,6 +94,7 @@ class ConnectorDatabaseCredentialsTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testUnixSocketTakesPrecedenceOverHost(): void
   {
     $appConnection = $this->createStub(Connection::class);
@@ -125,6 +131,7 @@ class ConnectorDatabaseCredentialsTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testConnectionErrorsNeverExposeDriverDetails(): void
   {
     $appConnection = $this->createStub(Connection::class);
@@ -148,6 +155,7 @@ class ConnectorDatabaseCredentialsTest extends TestCase
     }
   }
 
+  /** @return void */
   public function testViewAccessIsCheckedOnTheDedicatedConnection(): void
   {
     $credentials = ['user' => 'restricted', 'password' => 'test-only'];

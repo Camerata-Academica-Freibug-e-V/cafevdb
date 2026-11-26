@@ -42,7 +42,12 @@ trait CheckGrumbleTrait
     'value',
   ];
 
-  /** @return void */
+  /**
+   * @param mixed $response
+   * @param mixed $expectedValue
+   *
+   * @return void
+   */
   public function ensureGrumbleResponse(mixed $response, mixed $expectedValue = null): void
   {
     $this->assertInstanceOf(Http\DataResponse::class, $response);

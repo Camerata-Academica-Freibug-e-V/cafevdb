@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -20,9 +21,16 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+/** Blog Reply Column Migration Test. */
 #[CoversClass(Version100202Date20261119091520::class)]
 class BlogReplyColumnMigrationTest extends TestCase
 {
+  /**
+   * @param bool $liveTableExists
+   * @param bool $liveCopyColumnExists
+   *
+   * @return void
+   */
   #[DataProvider('pendingSchemas')]
   public function testSchemaOnlyModeDoesNotQueryOrDropLiveLegacyData(bool $liveTableExists, bool $liveCopyColumnExists): void
   {
@@ -55,6 +63,11 @@ class BlogReplyColumnMigrationTest extends TestCase
     self::assertTrue($targetTable->hasColumn('in_reply_to'));
   }
 
+  /**
+   * @param bool $hasUncopiedRows
+   *
+   * @return void
+   */
   #[DataProvider('copyStatus')]
   public function testChecksCopiedRowsBeforeChangingTheSchema(bool $hasUncopiedRows): void
   {
@@ -95,6 +108,7 @@ class BlogReplyColumnMigrationTest extends TestCase
     self::assertSame($hasUncopiedRows, $targetTable->hasColumn('inreplyto'));
   }
 
+  /** @return array */
   public static function pendingSchemas(): array
   {
     return [
@@ -104,6 +118,7 @@ class BlogReplyColumnMigrationTest extends TestCase
     ];
   }
 
+  /** @return array */
   public static function copyStatus(): array
   {
     return [

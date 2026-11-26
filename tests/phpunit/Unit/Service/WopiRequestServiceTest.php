@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -16,19 +17,16 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
-class RequestTestWopiMiddleware
-{
-  public bool $validated = false;
-
-  public function isWOPIRequest(): bool
-  {
-    return $this->validated;
-  }
-}
-
+/** Wopi Request Service Test. */
 #[CoversClass(WopiRequestService::class)]
 class WopiRequestServiceTest extends TestCase
 {
+  /**
+   * @param string $path
+   * @param bool $expected
+   *
+   * @return void
+   */
   #[DataProvider('routePaths')]
   public function testEarlyClassificationDoesNotResolveMiddleware(string $path, bool $expected): void
   {
@@ -41,6 +39,7 @@ class WopiRequestServiceTest extends TestCase
     self::assertSame($expected, (new WopiRequestService($request, $container))->isWopiRoute());
   }
 
+  /** @return array */
   public static function routePaths(): array
   {
     return [
@@ -54,6 +53,7 @@ class WopiRequestServiceTest extends TestCase
     ];
   }
 
+  /** @return void */
   public function testValidationUsesCurrentMiddlewareStateNotThePath(): void
   {
     $request = $this->createMock(IRequest::class);

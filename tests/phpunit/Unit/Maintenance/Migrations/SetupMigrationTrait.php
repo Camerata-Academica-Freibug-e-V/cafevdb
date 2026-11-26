@@ -103,6 +103,11 @@ trait SetupMigrationTrait
     $appContainer = $this->mockProvider->getAppContainer();
     // Migration hooks must not use previously cached production dependencies.
     $migrationContainer = new class($appContainer, $this->entityManager, $this->mockProvider->getL10N()) implements ContainerInterface {
+      /**
+       * @param ContainerInterface $appContainer
+       * @param EntityManager $entityManager
+       * @param IL10N $l
+       */
       public function __construct(
         private ContainerInterface $appContainer,
         private EntityManager $entityManager,
@@ -110,6 +115,11 @@ trait SetupMigrationTrait
       ) {
       }
 
+      /**
+       * @param string $id
+       *
+       * @return mixed
+       */
       public function get(string $id): mixed
       {
         if (str_starts_with($id, MigrationsNamespace::class . '\\') && is_subclass_of($id, AbstractMigration::class)) {
@@ -118,6 +128,11 @@ trait SetupMigrationTrait
         return $this->appContainer->get($id);
       }
 
+      /**
+       * @param string $id
+       *
+       * @return bool
+       */
       public function has(string $id): bool
       {
         return (str_starts_with($id, MigrationsNamespace::class . '\\') && is_subclass_of($id, AbstractMigration::class))
@@ -170,6 +185,8 @@ trait SetupMigrationTrait
 
   /**
    * Undo applying migrations, i.e. go down to an empty database.
+   *
+   * @param string $downBelow
    *
    * @return void
    */

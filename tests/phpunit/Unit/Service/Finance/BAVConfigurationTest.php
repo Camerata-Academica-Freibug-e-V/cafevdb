@@ -37,6 +37,7 @@ use OCA\CAFEVDB\Wrapped\rotdrop\bav\Configuration\ConfigurationRegistry;
 use OCA\CAFEVDB\Wrapped\rotdrop\bav\DataBackend\Orm\Doctrine\DoctrineBackendContainer;
 use OCA\CAFEVDB\Wrapped\rotdrop\bav\DataBackend\Orm\Doctrine\DoctrineDataBackend;
 
+/** BAVConfiguration Test. */
 #[Attributes\CoversClass(BAVConfiguration::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\ConsoleLogger::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\DeprecationLogger::class)]
@@ -46,6 +47,8 @@ class BAVConfigurationTest extends TestCase
    * @param array $settings Nextcloud system configuration.
    *
    * @param array $expected Expected DBAL connection parameters.
+   *
+   * @return void
    */
   #[Attributes\DataProvider('databaseSettings')]
   public function testUsesNextcloudDatabase(array $settings, array $expected): void
@@ -103,6 +106,7 @@ class BAVConfigurationTest extends TestCase
     ];
   }
 
+  /** @return void */
   public function testUnsupportedDatabaseDoesNotFallBackToFiles(): void
   {
     $this->expectException(InvalidArgumentException::class);
@@ -111,6 +115,7 @@ class BAVConfigurationTest extends TestCase
     new BAVConfiguration($this->cloudConfig(['dbtype' => 'unsupported']));
   }
 
+  /** @return void */
   public function testExistingBankTablesAreSharedAcrossConnections(): void
   {
     $dataDir = sys_get_temp_dir() . '/cafevdb-bav-' . bin2hex(random_bytes(8));
@@ -164,7 +169,11 @@ class BAVConfigurationTest extends TestCase
     }
   }
 
-  /** @return IConfig */
+  /**
+   * @param array $settings
+   *
+   * @return IConfig
+   */
   private function cloudConfig(array $settings): IConfig
   {
     $config = $this->createStub(IConfig::class);

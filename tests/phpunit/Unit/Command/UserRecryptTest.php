@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -78,7 +79,11 @@ class UserRecryptTest extends TestCase
     yield 'empty user' => [['--user' => '']];
   }
 
-  /** @param array $options */
+  /**
+   * @param array $options
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('invalidSelections')]
   public function testInvalidSelectionDoesNotRecrypt(array $options): void
   {

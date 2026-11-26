@@ -93,7 +93,9 @@ class EntityManagerTest extends TestCase
     $this->entityManager = $mockProvider->getEntityManager($this);
   }
 
-  const EXPECTED_CONNECTION_PARAMETERS = '{"wrapperClass":"OCA\\\CAFEVDB\\\Database\\\Connection","dbname":"cafevdb","row_format":"compressed","host":"localhost","password":"nothing","driver":"pdo_mysql","user":"phpunit","charset":"utf8mb4","collate":"utf8mb4_uca1400_ai_ci"}';
+  const EXPECTED_CONNECTION_PARAMETERS = '{"wrapperClass":"OCA\\\CAFEVDB\\\Database\\\Connection","dbname":"cafevdb",'
+    . '"row_format":"compressed","host":"localhost","password":"nothing","driver":"pdo_mysql",'
+    . '"user":"phpunit","charset":"utf8mb4","collate":"utf8mb4_uca1400_ai_ci"}';
 
   /** @return void */
   public function testConnectionParameters(): void

@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -25,10 +26,12 @@ use OCA\CAFEVDB\Service\ConnectorDatabaseCredentials;
 use OCA\CAFEVDB\Service\WopiCredentialStore;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection as DbalConnection;
 
+/** Wopi Credential Store Test. */
 #[CoversClass(WopiCredentialStore::class)]
 #[UsesClass(ConnectorDatabaseCredentials::class)]
 class WopiCredentialStoreTest extends TestCase
 {
+  /** @return void */
   public function testRecoveryFallsBackToNextcloudConnectionAndClearsTheToken(): void
   {
     $expiry = time() + 300;
@@ -62,6 +65,7 @@ class WopiCredentialStoreTest extends TestCase
     ], $statements);
   }
 
+  /** @return void */
   public function testRecoveryUsesDedicatedConnectionAndClosesIt(): void
   {
     $expiry = time() + 300;
@@ -90,6 +94,7 @@ class WopiCredentialStoreTest extends TestCase
     self::assertSame('app-key', $store->recover('token', 'member', $expiry));
   }
 
+  /** @return void */
   public function testRecoveryClosesConnectionAndSanitizesDatabaseErrors(): void
   {
     $connection = $this->createMock(DbalConnection::class);

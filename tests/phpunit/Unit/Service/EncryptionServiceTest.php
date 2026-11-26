@@ -2,6 +2,7 @@
 /**
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -33,10 +34,12 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use ReflectionProperty;
 
+/** Encryption Service Test. */
 #[CoversClass(EncryptionService::class)]
 #[UsesClass(EncryptionServiceBound::class)]
 class EncryptionServiceTest extends TestCase
 {
+  /** @return void */
   public function testConnectorDescriptorPublishesEffectiveDatabaseWithoutSecrets(): void
   {
     $values = ['cloudUserViewsDatabase' => '', ConfigConstants::APP_DB_NAME => 'orchestra', 'musicianPersonalizedViews' => 'on'];
@@ -69,6 +72,7 @@ class EncryptionServiceTest extends TestCase
     self::assertSame($published[1]['revision'], $published[2]['revision']);
   }
 
+  /** @return void */
   public function testDatabaseSettingWriteRefreshesConnectorDescriptor(): void
   {
     $config = $this->createStub(IConfig::class);
@@ -84,6 +88,7 @@ class EncryptionServiceTest extends TestCase
     self::assertTrue($service->setConfigValue(ConfigConstants::APP_DB_NAME, 'updated'));
   }
 
+  /** @return void */
   public function testConnectorMetadataRemainsUnencryptedDuringKeyRotation(): void
   {
     $config = $this->createMock(IConfig::class);
@@ -101,6 +106,7 @@ class EncryptionServiceTest extends TestCase
     self::assertTrue($service->setConfigValue(ConfigConstants::CONNECTOR_DESCRIPTOR_KEY, '{"version":1}', ignoreLock: true));
   }
 
+  /** @return void */
   public function testWopiBindingUnlocksOnlyAppCredentials(): void
   {
     $credentials = $this->createMock(ICredentialsStore::class);
@@ -155,6 +161,7 @@ class EncryptionServiceTest extends TestCase
     $encryption->getSharedPrivateValue('rowAccessToken');
   }
 
+  /** @return void */
   public function testUnavailableLoginCredentialsAreLoggedAtDebugLevel(): void
   {
     $user = $this->createStub(IUser::class);

@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -18,9 +19,11 @@ use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+/** Wopi Credential Migration Test. */
 #[CoversClass(Version100201Date20261114001000::class)]
 class WopiCredentialMigrationTest extends TestCase
 {
+  /** @return void */
   public function testCreatesUsableRegistrySchemaAndLeavesExistingTableAlone(): void
   {
     $schema = new Schema();

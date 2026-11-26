@@ -41,9 +41,6 @@ trait TestRoutesAreDefinedTrait
   private MockProvider $mockProvider;
 
   /**
-   * @param bool $verbose If \true print the routes names for convenience
-   * during test implementation. Defaults to \false.
-   *
    * @return void
    */
   public function testRoutesAreDefined(): void

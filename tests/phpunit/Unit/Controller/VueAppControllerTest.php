@@ -52,7 +52,7 @@ use OCA\CAFEVDB\Tests\Unit\Storage\RootFolderStubTrait;
  * those classes. Additionally, the ToolTipsGeneration is explicitly looked
  * at.
  *
- * @todo The main entry point is still not tested.
+ * The main entry point is still not tested.
  */
 #[Attributes\CoversClass(DTO\NavigationItemsResponse::class)]
 #[Attributes\CoversClass(DTO\SidebarNavigationItem::class)]

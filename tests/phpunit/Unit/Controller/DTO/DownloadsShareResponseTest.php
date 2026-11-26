@@ -58,6 +58,7 @@ class DownloadsShareResponseTest extends TestCase
     );
   }
 
+  /** @return void */
   public function testFromArrayWithNullExpiry(): void
   {
     $dto = TestedDTO::fromArray([

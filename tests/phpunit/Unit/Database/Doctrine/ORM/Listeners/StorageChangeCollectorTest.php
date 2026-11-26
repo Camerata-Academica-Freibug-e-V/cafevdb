@@ -2,6 +2,7 @@
 /**
  * Orchestra member, musician and project management application.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @license AGPL-3.0-or-later
  */
 
@@ -13,9 +14,11 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
+/** Storage Change Collector Test. */
 #[CoversClass(StorageChangeCollector::class)]
 class StorageChangeCollectorTest extends TestCase
 {
+  /** @return void */
   public function testCommitHandsOverAndClearsChanges(): void
   {
     $collector = new StorageChangeCollector($this->createStub(LoggerInterface::class));
@@ -34,6 +37,7 @@ class StorageChangeCollectorTest extends TestCase
     self::assertFalse($collector->hasChanges());
   }
 
+  /** @return void */
   public function testDiscardDropsChanges(): void
   {
     $collector = new StorageChangeCollector($this->createStub(LoggerInterface::class));
@@ -42,6 +46,7 @@ class StorageChangeCollectorTest extends TestCase
     self::assertFalse($collector->hasChanges());
   }
 
+  /** @return void */
   public function testChainOfMovesKeepsOldestPath(): void
   {
     $collector = new StorageChangeCollector($this->createStub(LoggerInterface::class));
@@ -51,6 +56,7 @@ class StorageChangeCollectorTest extends TestCase
     self::assertSame(['s' => ['b' => 'a']], $collector->getChanges());
   }
 
+  /** @return void */
   public function testFailingConsumerDoesNotHinderOthers(): void
   {
     $exception = new RuntimeException('failed');

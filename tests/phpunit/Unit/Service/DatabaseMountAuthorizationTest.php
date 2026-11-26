@@ -4,6 +4,7 @@
  *
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
@@ -28,10 +29,12 @@ use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
+/** Database Mount Authorization Test. */
 #[CoversClass(MountProvider::class)]
 #[AllowMockObjectsWithoutExpectations]
 class DatabaseMountAuthorizationTest extends TestCase
 {
+  /** @return void */
   public function testAuthorizationPrecedesCredentialRecovery(): void
   {
     $user = $this->createStub(IUser::class);
@@ -56,6 +59,7 @@ class DatabaseMountAuthorizationTest extends TestCase
     self::assertSame([], $provider->getMountsForUser($user, $this->createStub(IStorageFactory::class)));
   }
 
+  /** @return void */
   public function testMountAuthenticationPrecedesUnavailableMountLookup(): void
   {
     $user = $this->createStub(IUser::class);
@@ -90,6 +94,7 @@ class DatabaseMountAuthorizationTest extends TestCase
     self::assertSame([], $provider->getMountsForUser($user, $this->createStub(IStorageFactory::class)));
   }
 
+  /** @return void */
   public function testAuthenticatedMountLookupResolvesEntityManagerFromAppContainer(): void
   {
     $user = $this->createStub(IUser::class);

@@ -40,7 +40,9 @@ class ProjectServiceTest extends TestCase
   {
   }
 
-  private const TEXT_WITH_PROJECT_NAMES = 'Anmeldezeitraum für das Projekt "Test2026". Interessierte können sich während dieser Zeit über den öffentlichen Link https://dev3.home.claus-justus-heine.de/apps/cafevdbmembers/registration/Test2026 online bewerben.';
+  private const TEXT_WITH_PROJECT_NAMES = 'Anmeldezeitraum für das Projekt "Test2026".'
+    . ' Interessierte können sich während dieser Zeit über den öffentlichen Link'
+    . ' https://dev3.home.claus-justus-heine.de/apps/cafevdbmembers/registration/Test2026 online bewerben.';
 
   private const NEW_NAME = 'HutzliPutzli2099';
 

@@ -218,13 +218,17 @@ class CompositePaymentTest extends TestCase
 
     $subject = $compositePayment->generateSubject();
     $this->assertEquals(
-      'TestProject99-19 / Unkostenbeiträge: Regulär / Unkostenerstattungen: Edeka 09.09., Edeka 11.09. Leergut vs. Milch, Edeka 12.09., EinkäufeEdeka 08.09., EinkäufeGetränkeFristo 08.09., EinkäufeREWE 08.09., Fristo 11.09. Leergut, VeselinPeykov e.K. 09.09.',
+      'TestProject99-19 / Unkostenbeiträge: Regulär / Unkostenerstattungen: Edeka 09.09., Edeka 11.09. Leergut vs. Milch,'
+        . ' Edeka 12.09., EinkäufeEdeka 08.09., EinkäufeGetränkeFristo 08.09., EinkäufeREWE 08.09.,'
+        . ' Fristo 11.09. Leergut, VeselinPeykov e.K. 09.09.',
       $subject,
      );
 
     $subject = $compositePayment->generateSubject(transliterate: fn(string $x) => $this->sepaTransliterator->translit($x));
     $this->assertEquals(
-      'TestProject99-19 / Unkostenbeitraege: Regulaer / Unkostenerstattungen: Edeka 09.09., Edeka 11.09. Leergut vs. Milch, Edeka 12.09., EinkaeufeEdeka 08.09., EinkaeufeGetraenkeFristo 08.09., EinkaeufeREWE 08.09., Fristo 11.09. Leergut, VeselinPeykov e.K. 09.09.',
+      'TestProject99-19 / Unkostenbeitraege: Regulaer / Unkostenerstattungen: Edeka 09.09., Edeka 11.09. Leergut vs. Milch,'
+        . ' Edeka 12.09., EinkaeufeEdeka 08.09., EinkaeufeGetraenkeFristo 08.09., EinkaeufeREWE 08.09.,'
+        . ' Fristo 11.09. Leergut, VeselinPeykov e.K. 09.09.',
       $subject,
     );
 

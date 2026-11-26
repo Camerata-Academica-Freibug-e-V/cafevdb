@@ -48,6 +48,7 @@ use OCA\CAFEVDB\Service\WebPagesRPC;
 use OCA\CAFEVDB\Settings\OrchestraSettingsInitialState;
 use OCA\CAFEVDB\Storage\UserStorage;
 
+/** Orchestra Settings Initial State Test. */
 #[Attributes\CoversClass(OrchestraSettingsInitialState::class)]
 class OrchestraSettingsInitialStateTest extends TestCase
 {
@@ -55,6 +56,7 @@ class OrchestraSettingsInitialStateTest extends TestCase
 
   private array $published = [];
 
+  /** {@inheritdoc} */
   protected function setUp():void
   {
     $this->form = (new ReflectionClass(OrchestraSettingsInitialState::class))->newInstanceWithoutConstructor();
@@ -109,6 +111,13 @@ class OrchestraSettingsInitialStateTest extends TestCase
     ];
   }
 
+  /**
+   * @param bool $member
+   * @param bool $subAdmin
+   * @param bool $validKey
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('deniedUsers')]
   public function testOrchestraStateIsNotPublishedWithoutMembershipRightsAndKey(
     bool $member,
@@ -141,6 +150,12 @@ class OrchestraSettingsInitialStateTest extends TestCase
     ];
   }
 
+  /**
+   * @param string $method
+   * @param Throwable $failure
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('configurationFailures')]
   public function testConfigurationFailuresAreLoggedWithoutPublishingPartialSettings(
     string $method,
@@ -176,6 +191,11 @@ class OrchestraSettingsInitialStateTest extends TestCase
     ];
   }
 
+  /**
+   * @param string $operation
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('unavailableGroups')]
   public function testGroupFailuresDisableOrchestraSettingsRatherThanPublishingEmptyOptions(string $operation):void
   {
@@ -217,6 +237,12 @@ class OrchestraSettingsInitialStateTest extends TestCase
     ];
   }
 
+  /**
+   * @param string $projectKey
+   * @param Throwable $failure
+   *
+   * @return void
+   */
   #[Attributes\DataProvider('participantFailures')]
   public function testParticipantFailuresAreReportedRatherThanPublishedAsEmptyOptions(string $projectKey, Throwable $failure):void
   {

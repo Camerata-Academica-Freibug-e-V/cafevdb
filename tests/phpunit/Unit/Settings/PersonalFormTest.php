@@ -24,6 +24,7 @@ use OCP\IL10N;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Settings\PersonalForm;
 
+/** Personal Form Test. */
 #[Attributes\CoversClass(PersonalForm::class)]
 class PersonalFormTest extends TestCase
 {

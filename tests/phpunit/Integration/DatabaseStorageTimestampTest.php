@@ -1308,6 +1308,9 @@ class DatabaseStorageTimestampTest extends TestCase
       private ?string $testFailPath;
       private int $testFailureCount = 0;
 
+      /**
+       * @param array $params
+       */
       public function __construct(array $params)
       {
         $this->testStorageId = $params['testStorageId'];
@@ -1316,8 +1319,8 @@ class DatabaseStorageTimestampTest extends TestCase
         parent::__construct($params);
       }
 
-      // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
-      public function file_exists(string $path): bool
+      /** {@inheritdoc} */
+      public function file_exists(string $path): bool // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
       {
         if ($path === $this->testFailPath) {
           ++$this->testFailureCount;
@@ -1326,21 +1329,29 @@ class DatabaseStorageTimestampTest extends TestCase
         return parent::file_exists($path);
       }
 
+      /** @return string */
       public function getShortId(): string
       {
         return $this->testStorageId;
       }
 
+      /**
+       * @param null|string $path
+       *
+       * @return void
+       */
       public function setTestFailPath(?string $path): void
       {
         $this->testFailPath = $path;
       }
 
+      /** @return integer */
       public function getTestFailureCount(): int
       {
         return $this->testFailureCount;
       }
 
+      /** {@inheritdoc} */
       protected function getReadMeFactory(): ReadMeFactoryInterface
       {
         return $this->testReadMeFactory;
@@ -1370,7 +1381,7 @@ class DatabaseStorageTimestampTest extends TestCase
   }
 
   /**
-   * @param int $id
+   * @param integer $id
    *
    * @return Entities\DatabaseStorageFolder
    */
@@ -1381,7 +1392,7 @@ class DatabaseStorageTimestampTest extends TestCase
 
   /**
    * @param array<string, int> $ids
-   * @param list<string> $updated
+   * @param array $updated List of folder names expected to be updated.
    *
    * @return void
    */
