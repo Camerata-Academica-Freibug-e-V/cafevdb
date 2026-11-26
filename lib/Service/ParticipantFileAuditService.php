@@ -137,14 +137,26 @@ class ParticipantFileAuditService
       $report['encryption_diagnostics'] = $this->encryptionDiagnostics($owners, $files, $findings, $userStatus);
       $report['summary']['encryption_issues'] = count(array_filter(
         $report['encryption_diagnostics'],
-        static fn(array $diagnostic) => $diagnostic['seal_status'] !== 'sealed'
-          || $diagnostic['recipient_present'] !== true
-          || $diagnostic['user_exists'] !== true
-          || $diagnostic['public_key_present'] !== true
-          || $diagnostic['private_key_present'] !== true,
+        self::encryptionDiagnosticIsIssue(...),
       ));
     }
     return $report;
+  }
+
+  /**
+   * Whether encryption diagnostics indicate an issue rather than a healthy grant.
+   *
+   * @param array $diagnostic
+   *
+   * @return bool
+   */
+  public static function encryptionDiagnosticIsIssue(array $diagnostic): bool
+  {
+    return $diagnostic['seal_status'] !== 'sealed'
+      || $diagnostic['recipient_present'] !== true
+      || $diagnostic['user_exists'] !== true
+      || $diagnostic['public_key_present'] !== true
+      || $diagnostic['private_key_present'] !== true;
   }
 
   /**

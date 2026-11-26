@@ -315,11 +315,26 @@ class DatabaseStorage extends Command
       $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
     } else {
       $output->writeln('Participant file access audit (read-only; includes soft-deleted records).');
+      $output->writeln('<info>Summary</info>');
       $output->writeln(json_encode($report['summary'], JSON_THROW_ON_ERROR));
+      $output->writeln('');
+      $output->writeln('<info>Structural access findings</info>');
+      if ($report['findings'] === []) {
+        $output->writeln('<comment>No structural access findings.</comment>');
+      }
       foreach ($report['findings'] as $finding) {
         $output->writeln(OutputFormatter::escape(json_encode($finding, JSON_THROW_ON_ERROR)));
       }
-      foreach ($report['encryption_diagnostics'] as $diagnostic) {
+      $encryptionIssues = array_filter(
+        $report['encryption_diagnostics'],
+        ParticipantFileAuditService::encryptionDiagnosticIsIssue(...),
+      );
+      $output->writeln('');
+      $output->writeln('<info>Encryption issues</info>');
+      if ($encryptionIssues === []) {
+        $output->writeln('<comment>No encryption issues detected.</comment>');
+      }
+      foreach ($encryptionIssues as $diagnostic) {
         $output->writeln(OutputFormatter::escape(json_encode($diagnostic, JSON_THROW_ON_ERROR)));
       }
     }

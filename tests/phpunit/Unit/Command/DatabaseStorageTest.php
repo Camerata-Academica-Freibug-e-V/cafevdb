@@ -59,7 +59,7 @@ class DatabaseStorageTest extends TestCase
     $this->connection->method('transactional')->willReturnCallback(fn(callable $callback) => $callback($this->connection));
     $this->connection->method('fetchAssociative')->willReturnCallback(static fn(string $sql) => str_contains($sql, 'AS header')
       ? ['header' => '00000001|', 'data_length' => 20]
-      : ['separator' => '|', 'recipients' => 'alice:key']);
+      : ['seal_delimiter' => '|', 'recipients' => 'alice:key']);
     $this->connection->expects(self::never())->method('executeStatement');
     $this->entityManager->expects(self::never())->method('flush');
     $this->entityManager->expects(self::never())->method('remove');
@@ -171,8 +171,14 @@ class DatabaseStorageTest extends TestCase
   {
     $this->connection->method('fetchAllAssociative')->willReturn([]);
     self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(['--audit-access' => true]));
-    self::assertStringContainsString('read-only', $this->tester->getDisplay());
-    self::assertStringContainsString('"findings":0', $this->tester->getDisplay());
+    $display = $this->tester->getDisplay();
+    self::assertStringContainsString('read-only', $display);
+    self::assertStringContainsString('Summary', $display);
+    self::assertStringContainsString('Structural access findings', $display);
+    self::assertStringContainsString('Encryption issues', $display);
+    self::assertStringContainsString('No structural access findings.', $display);
+    self::assertStringContainsString('No encryption issues detected.', $display);
+    self::assertStringContainsString('"findings":0', $display);
   }
 
   /**
@@ -495,6 +501,36 @@ class DatabaseStorageTest extends TestCase
       self::assertStringContainsString('"private_key_present":false', $display);
     }
     self::assertStringNotContainsString('alice:key', $display);
+  }
+
+  /** @return void */
+  public function testHealthyEncryptionDiagnosticsAreNotShownAsIssues(): void
+  {
+    $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
+      str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted']],
+      str_contains($sql, 'FROM EncryptedFileOwners') => [['encrypted_file_id' => 1, 'musician_id' => 10]],
+      str_contains($sql, 'SELECT id, user_id_slug FROM Musicians') => [['id' => 10, 'user_id_slug' => 'alice']],
+      str_contains($sql, 'FROM DatabaseStorageDirEntries') => [
+        ['id' => 100, 'parent_id' => null, 'file_id' => null, 'type' => 'folder'],
+        ['id' => 101, 'parent_id' => 100, 'file_id' => 1, 'type' => 'file'],
+      ],
+      str_contains($sql, 'FROM ProjectParticipants') => [['musician_id' => 10, 'project_id' => 20, 'root_id' => 100]],
+      str_contains($sql, 'FROM SepaDebitMandates mandate') => [],
+      str_contains($sql, 'FROM SepaDebitMandates') => [
+        ['source' => 'invoice', 'source_id' => 1, 'musician_id' => 10, 'project_id' => 20,
+         'entry_id' => 101, 'deleted' => null, 'option_key' => null],
+      ],
+      default => [],
+    });
+    self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(
+      ['--audit-access' => true],
+      ['capture_stderr_separately' => true],
+    ));
+    $display = $this->tester->getDisplay();
+    self::assertStringContainsString('Encryption issues', $display);
+    self::assertStringContainsString('No encryption issues detected.', $display);
+    self::assertStringNotContainsString('"file_id":1', $display);
+    self::assertStringNotContainsString('"user_id":"alice"', $display);
   }
 
   /** @return void */
