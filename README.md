@@ -56,6 +56,11 @@ through the personalized `Files` and `FileData` views.
 After deploying this change, use **Recreate personalized views** in the sharing
 settings to apply the updated definitions to an existing connector database.
 
+If debit-mandate synchronization fails, its previously cached finance mount is
+made unavailable while other mounts remain available when the database and
+transaction are healthy. Without a trusted cached mandate mount, or if the
+database cannot safely continue, the existing all-mount fallback applies.
+
 To inspect an existing orchestra database before changing personalized storage
 views, run `occ cafevdb:storage:database --audit-access`. This authenticates with
 the usual interactive CafeVDB operator login. The audit itself only reads

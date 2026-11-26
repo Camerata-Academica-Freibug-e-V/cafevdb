@@ -13,15 +13,19 @@ namespace OCA\CAFEVDB\Tests\Unit\Service;
 use UnexpectedValueException;
 
 use OCA\CAFEVDB\Database\EntityManager;
+use OCA\CAFEVDB\Database\Doctrine\Util as DoctrineUtil;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\MountAuthenticationService;
+use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Storage\Database\Factory;
 use OCA\CAFEVDB\Storage\Database\MountProvider;
 use OCA\CAFEVDB\Storage\Database;
 use OCA\CAFEVDB\Storage\Database\UnavailableCache;
 use OCA\CAFEVDB\Storage\Database\UnavailableMount;
 use OCA\CAFEVDB\Settings\ConfigConstants;
+use OCA\CAFEVDB\Wrapped\Doctrine\ORM\EntityManagerInterface;
+use OCA\CAFEVDB\Wrapped\Doctrine\ORM\EntityRepository;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\GroupFoldersService;
 use OCA\GroupFolders\Folder\FolderDefinitionWithPermissions;
 use OC\Files\Storage\FailedStorage;
@@ -40,6 +44,7 @@ use OCP\IUser;
 use OCP\IUserSession;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -48,6 +53,7 @@ use Psr\Log\LoggerInterface;
 #[CoversClass(MountProvider::class)]
 #[UsesClass(UnavailableCache::class)]
 #[UsesClass(UnavailableMount::class)]
+#[UsesClass(DoctrineUtil::class)]
 #[AllowMockObjectsWithoutExpectations]
 class DatabaseMountAuthorizationTest extends TestCase
 {
@@ -148,8 +154,25 @@ class DatabaseMountAuthorizationTest extends TestCase
     self::assertSame([], $provider->getMountsForUser($user, $this->createStub(IStorageFactory::class)));
   }
 
-  public function testSynchronizationFailureRestoresUnavailableCachedMount(): void
+  public static function synchronizationFailures(): array
   {
+    return [
+      'cached mount can be isolated' => [true, false, false, true, 5],
+      'no cached mandate mount' => [false, false, false, true, 0],
+      'outer transaction is active' => [true, true, true, true, 1],
+      'transaction remains active' => [true, false, true, true, 1],
+      'entity manager is closed' => [true, false, false, false, 1],
+    ];
+  }
+
+  #[DataProvider('synchronizationFailures')]
+  public function testSynchronizationFailureRestoresUnavailableCachedMount(
+    bool $hasCachedMount,
+    bool $hadTransaction,
+    bool $transactionActive,
+    bool $managerOpen,
+    int $expectedMounts,
+  ): void {
     require_once \OC::$SERVERROOT . '/apps/groupfolders/lib/Folder/FolderDefinition.php';
     require_once \OC::$SERVERROOT . '/apps/groupfolders/lib/Folder/FolderDefinitionWithPermissions.php';
 
@@ -175,6 +198,13 @@ class DatabaseMountAuthorizationTest extends TestCase
     $entityManager = $this->createStub(EntityManager::class);
     $entityManager->method('getUserId')->willReturn('alice');
     $entityManager->method('connected')->willReturn(true);
+    $entityManager->method('isTransactionActive')->willReturnOnConsecutiveCalls($hadTransaction, $transactionActive);
+    $wrappedEntityManager = $this->createStub(EntityManagerInterface::class);
+    $wrappedEntityManager->method('isOpen')->willReturn($managerOpen);
+    $entityManager->method('getWrappedObject')->willReturn($wrappedEntityManager);
+    $projectRepository = $this->createStub(EntityRepository::class);
+    $projectRepository->method('findBy')->willReturn([]);
+    $entityManager->method('getRepository')->willReturn($projectRepository);
     $groupFolders = $this->createStub(GroupFoldersService::class);
     $groupFolders->method('getFolderForUser')->willReturn(new FolderDefinitionWithPermissions(
       1, 'Shared', 0, false, false, 1, 1, [],
@@ -184,6 +214,7 @@ class DatabaseMountAuthorizationTest extends TestCase
     $container->method('get')->willReturnMap([
       [EntityManager::class, $entityManager],
       [GroupFoldersService::class, $groupFolders],
+      [ProjectService::class, $this->createStub(ProjectService::class)],
     ]);
     $config->method('getAppContainer')->willReturn($container);
     $authorization = $this->createStub(AuthorizationService::class);
@@ -197,6 +228,7 @@ class DatabaseMountAuthorizationTest extends TestCase
     $mandates = $this->createMock(Database\DebitMandatesStorage::class);
     $mandates->expects($this->once())->method('synchronize')
       ->willThrowException(new UnexpectedValueException('Invalid mandate path.'));
+    $mandates->method('getId')->willReturn('cafevdb::database-storage/finance/debit-mandates/');
     $factory = $this->createStub(Factory::class);
     $factory->method('getBankTransactionsStorage')->willReturn($this->createStub(Database\BankTransactionsStorage::class));
     $factory->method('getTaxExemptionNoticesStorage')->willReturn($this->createStub(Database\TaxExemptionNoticesStorage::class));
@@ -214,7 +246,7 @@ class DatabaseMountAuthorizationTest extends TestCase
     $cached->method('getRootInternalPath')->willReturn('');
     $cached->method('getMountProvider')->willReturn(MountProvider::class);
     $mountCache = $this->createMock(IUserMountCache::class);
-    $mountCache->expects($this->once())->method('getMountsForUser')->with($user)->willReturn([$cached]);
+    $mountCache->method('getMountsForUser')->willReturn($hasCachedMount ? [$cached] : []);
 
     $expression = $this->createStub(IExpressionBuilder::class);
     $expression->method('eq')->willReturn('condition');
@@ -231,11 +263,24 @@ class DatabaseMountAuthorizationTest extends TestCase
 
     $provider = new MountProvider($config, $authorization, $factory, $mountCache, $connection, $session, $authentication);
     $mounts = $provider->getMountsForUser($user, $loader);
-    self::assertCount(1, $mounts);
-    self::assertInstanceOf(UnavailableMount::class, $mounts[0]);
-    self::assertSame('/alice/files/Shared/Finance/debit-mandates/', $mounts[0]->getMountPoint());
-    self::assertInstanceOf(FailedStorage::class, $mounts[0]->getStorage());
+    self::assertCount($expectedMounts, $mounts);
+    if (!$hasCachedMount) {
+      return;
+    }
+    $mandateMount = $mounts[$expectedMounts - 1];
+    if ($expectedMounts === 5) {
+      self::assertNotInstanceOf(FailedStorage::class, $mounts[0]->getStorage());
+      try {
+        $mandateMount->getStorage()->getCache()->get('');
+        self::fail('Unavailable mandate cache must fail closed.');
+      } catch (StorageNotAvailableException $exception) {
+        self::assertStringContainsString('synchronize debit-mandate', $exception->getMessage());
+      }
+    }
+    self::assertInstanceOf(UnavailableMount::class, $mandateMount);
+    self::assertSame('/alice/files/Shared/Finance/debit-mandates/', $mandateMount->getMountPoint());
+    self::assertInstanceOf(FailedStorage::class, $mandateMount->getStorage());
     $this->expectException(StorageNotAvailableException::class);
-    $mounts[0]->getStorage()->file_get_contents('mandate');
+    $mandateMount->getStorage()->file_get_contents('mandate');
   }
 }
