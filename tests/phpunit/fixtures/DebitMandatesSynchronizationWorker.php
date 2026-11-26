@@ -11,8 +11,8 @@ require_once __DIR__ . '/../MockProvider.php';
 
 use OCA\CAFEVDB\Storage\Database\DebitMandatesStorage;
 use OCA\CAFEVDB\Storage\UserStorage;
-use OCA\CAFEVDB\Tests\fixtures\DebitMandatesWorkerProvider;
-use OCA\CAFEVDB\Tests\fixtures\DebitMandatesWorkerTestCase;
+use OCA\CAFEVDB\Tests\Fixtures\DebitMandatesWorkerProvider;
+use OCA\CAFEVDB\Tests\Fixtures\DebitMandatesWorkerTestCase;
 
 try {
   DebitMandatesWorkerProvider::$databaseConfig = json_decode(fgets(STDIN), true, 512, JSON_THROW_ON_ERROR);

@@ -6,7 +6,7 @@
  * @license AGPL-3.0-or-later
  */
 
-namespace OCA\CAFEVDB\Tests\fixtures;
+namespace OCA\CAFEVDB\Tests\Fixtures;
 
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Tests\MockProvider;
