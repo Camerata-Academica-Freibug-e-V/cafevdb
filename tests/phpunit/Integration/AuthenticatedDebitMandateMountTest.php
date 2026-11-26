@@ -138,14 +138,10 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       Filesystem::tearDown();
 
       $this->mockProvider = $mockProvider = AuthenticatedMountMockProvider::create($this);
+      $mockProvider->useGroupBase($groupBase);
       $this->mockProvider->registerClassInstance(IUserSession::class, $session, global: true);
       $this->mockProvider->registerClassInstance(ICredentialsStore::class, $credentials, global: true);
       $this->mockProvider->registerClassInstance(GroupFoldersService::class, $groupFolders);
-      $this->mockProvider->getCloudConfig()->setAppValue(
-        Application::getAppName(),
-        ConfigConstants::USER_GROUP_KEY,
-        $groupBase,
-      );
       $authorization = new AuthorizationService(
         $uid,
         $groups,
