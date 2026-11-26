@@ -270,7 +270,10 @@ class DatabaseMountAuthorizationTest extends TestCase
 
     $provider = new MountProvider($config, $authorization, $factory, $mountCache, $connection, $session, $authentication);
     $mounts = $provider->getMountsForUser($user, $loader);
-    self::assertCount($expectedMounts, $mounts, implode("\n", array_map(strval(...), $exceptions)));
+    self::assertCount($expectedMounts, $mounts, implode("\n", array_map(
+      static fn(\Throwable $exception) => $exception->getMessage(),
+      $exceptions,
+    )));
     if (!$hasCachedMount) {
       return;
     }

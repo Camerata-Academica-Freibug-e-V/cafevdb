@@ -28,6 +28,7 @@ use Throwable;
 use UnexpectedValueException;
 
 // F I X M E internal
+use OC\Files\Filesystem;
 use OC\Files\Mount\MountPoint;
 
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -311,10 +312,10 @@ class MountProvider implements IMountProvider
       };
 
       $storage = $this->storageFactory->getDebitMandatesStorage();
-      $mandatePath = UserStorage::PATH_SEP . implode(
+      $mandatePath = Filesystem::normalizePath(UserStorage::PATH_SEP . implode(
         UserStorage::PATH_SEP,
         [ $userId, 'files', $this->getDebitMandatesPath(), ],
-      );
+      ));
       $hadTransaction = $this->entityManager->isTransactionActive();
       try {
         $storage->synchronize();
