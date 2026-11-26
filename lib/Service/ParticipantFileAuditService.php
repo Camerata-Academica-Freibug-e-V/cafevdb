@@ -225,10 +225,10 @@ class ParticipantFileAuditService
       return ['status' => 'invalid-seal', 'recipients' => []];
     }
     $trailer = $this->connection->fetchAssociative(
-      'SELECT SUBSTR(data, ?, 1) AS separator, SUBSTR(data, ?) AS recipients FROM FileData WHERE file_id = ?',
+      'SELECT SUBSTR(data, ?, 1) AS seal_delimiter, SUBSTR(data, ?) AS recipients FROM FileData WHERE file_id = ?',
       [$length + 10, $length + 11, $fileId],
     );
-    if ($trailer === false || $this->metadataString($trailer['separator']) !== '|') {
+    if ($trailer === false || $this->metadataString($trailer['seal_delimiter']) !== '|') {
       return ['status' => 'invalid-seal', 'recipients' => []];
     }
     $recipients = [];
