@@ -25,6 +25,7 @@ use OCP\Files\Mount\IMountManager;
 use Psr\Log\LoggerInterface;
 
 use OCA\CAFEVDB\Common\TimeFactory;
+use OCA\CAFEVDB\Controller\EnumAddDocumentConflictAction;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\DatabaseStorageTimestampListener;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
@@ -704,6 +705,77 @@ class DatabaseStorageTimestampTest extends TestCase
           ->findBy(['storageId' => $storageId]),
       );
     } finally {
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testDeferredRenameConflictPreservesOriginalFileId(): void
+  {
+    $this->mockProvider = MockProvider::create($this);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+    $storageId = 'integration/rename-conflict/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-rename-conflict-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $root->addDocument(new Entities\EncryptedFile('document.txt', 'original', 'text/plain'));
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+      $original = $cache->get('document.txt');
+      self::assertNotFalse($original);
+      $originalId = $original->getId();
+
+      $this->entityManager->beginTransaction();
+      $replacement = $root->addDocument(
+        new Entities\EncryptedFile('document.txt', 'replacement', 'text/plain'),
+        conflictAction: EnumAddDocumentConflictAction::RENAME,
+      );
+      $this->entityManager->persist($replacement);
+      $this->entityManager->flush();
+      $this->entityManager->commit();
+      $pending = $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+        ->findBy(['storageId' => $storageId], ['id' => 'ASC']);
+      self::assertSame(
+        [['document.txt', 'document~1.txt'], [null, 'document.txt']],
+        array_map(fn($change) => [$change->getOldPath(), $change->getPath()], $pending),
+      );
+
+      $storage = $this->createScanStorage($storageId);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      $storage->hasUpdated('', time());
+      $backup = $cache->get('document~1.txt');
+      $new = $cache->get('document.txt');
+      self::assertNotFalse($backup);
+      self::assertNotFalse($new);
+      self::assertSame($originalId, $backup->getId());
+      self::assertNotSame($originalId, $new->getId());
+      self::assertSame('original', $storage->file_get_contents('document~1.txt'));
+      self::assertSame('replacement', $storage->file_get_contents('document.txt'));
+      self::assertSame(
+        [],
+        $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+          ->findBy(['storageId' => $storageId]),
+      );
+    } finally {
+      while ($this->entityManager->isOwnTransactionActive()) {
+        $this->entityManager->rollback();
+      }
       if ($mounted) {
         Filesystem::getMountManager()->removeMount($mountPath);
       }
