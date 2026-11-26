@@ -75,6 +75,7 @@ use OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Traits\UserPreferencesTrait::class)]
 #[Attributes\UsesClass(Entities\CompositePayment::class)]
 #[Attributes\UsesClass(Entities\DatabaseStorage::class)]
+#[Attributes\UsesClass(Entities\DatabaseStorageCacheChange::class)]
 #[Attributes\UsesClass(Entities\DatabaseStorageDirEntry::class)]
 #[Attributes\UsesClass(Entities\DatabaseStorageFile::class)]
 #[Attributes\UsesClass(Entities\DatabaseStorageFolder::class)]
