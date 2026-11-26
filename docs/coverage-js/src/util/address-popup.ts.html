@@ -30,9 +30,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">28.26% </span>
+                <span class="strong">30.43% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>13/46</span>
+                <span class='fraction'>14/46</span>
             </div>
         
             
@@ -213,55 +213,55 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -344,39 +344,39 @@ export const addressPopup = (content: string) =&gt; {
 };
 &nbsp;
 export const musicianAddressPopup = (option: FrontEndEntity&lt;'Musician'&gt;) =&gt; {
-  <span class="missing-if-branch" title="else path not taken" >E</span>if (option.id === 0) {
-    return addressPopup(t(appName, 'selects all musicians'));
+  <span class="missing-if-branch" title="if path not taken" >I</span>if (option.id === 0) {
+<span class="cstat-no" title="statement not covered" >    return addressPopup(t(appName, 'selects all musicians'));</span>
   }
   const name = option.personalPublicName || '';
-  const userId = option.userIdSlug ? ` (${option.userIdSlug})` : '';
-  const email = <span class="cstat-no" title="statement not covered" >option.email || addressItemUnknownLabel('email');</span>
-  const street = <span class="cstat-no" title="statement not covered" ><span class="branch-0 cbranch-no" title="branch not covered" >option.street || a</span>ddressItemUnknownLabel('street');</span>
+  const userId = option.userIdSlug ? <span class="branch-0 cbranch-no" title="branch not covered" >` (${option.userIdSlug})` : '</span>';
+  const email = option.email || addressItemUnknownLabel('email');
+  const street = option.street || addressItemUnknownLabel('street');
   const streetNumber = option.streetNumber ? <span class="branch-0 cbranch-no" title="branch not covered" >' ' + option.streetNumber : '</span>';
-  const postalCode = option.postalCode &amp;&amp; option.postalCode !== '0' ? option.postalCode + ' ' : '';
+  const postalCode = option.postalCode &amp;&amp; <span class="branch-1 cbranch-no" title="branch not covered" >option.postalCode !== '0' ? <span class="branch-0 cbranch-no" title="branch not covered" >o</span>ption.postalCode + ' ' : '</span>';
   const city = option.city || addressItemUnknownLabel('city');
   const additionalInfo = [email, street + streetNumber, postalCode + city];
   <span class="missing-if-branch" title="if path not taken" >I</span>if (option.country) {
     const regionName = (<span class="cstat-no" title="statement not covered" >new Intl.DisplayNames([getCanonicalLocale()], { type: 'region' })).of(option.country);</span>
-    additionalInfo.push(`${regionName} (${option.country})`);
+<span class="cstat-no" title="statement not covered" >    additionalInfo.push(`${regionName} (${option.country})`);</span>
   }
   const content = `&lt;h4&gt;${name}${userId}&lt;/h4&gt;` + additionalInfo.join('&lt;br/&gt;');
-<span class="cstat-no" title="statement not covered" >  return addressPopup(content);</span>
+  return addressPopup(content);
 };
 &nbsp;
-export const <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >contactNameFromContact = (o</span>ption: Contact) =&gt; {</span>
+export const <span class="fstat-no" title="function not covered" >contactNameFromContact = (o</span>ption: Contact) =&gt; {
   let name = <span class="cstat-no" title="statement not covered" >stringValue(option?.name);</span>
-  <span class="missing-if-branch" title="else path not taken" >E</span>if (typeof name !== 'string') {
-    name = t(appName, '[empty name]');
+<span class="cstat-no" title="statement not covered" >  if (typeof name !== 'string') {</span>
+<span class="cstat-no" title="statement not covered" >    name = t(appName, '[empty name]');</span>
   }
 <span class="cstat-no" title="statement not covered" >  return name;</span>
 };
 &nbsp;
-export const <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >contactAddressPopup = (o</span>ption: Contact) =&gt; {</span>
+export const <span class="fstat-no" title="function not covered" >contactAddressPopup = (o</span>ption: Contact) =&gt; {
   const additionalInfo: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
   let displayName = <span class="cstat-no" title="statement not covered" >contactNameFromContact(option);</span>
 <span class="cstat-no" title="statement not covered" >  if (option.ORG &amp;&amp; option.ORG.length &gt; 0) {</span>
 <span class="cstat-no" title="statement not covered" >    additionalInfo.push('c/o ' + displayName);</span>
-    displayName = option.ORG;
+<span class="cstat-no" title="statement not covered" >    displayName = option.ORG;</span>
   }
   const emails: string[] = <span class="cstat-no" title="statement not covered" >[];</span>
 <span class="cstat-no" title="statement not covered" >  if (option.EMAIL) {</span>
@@ -415,7 +415,7 @@ export const <span class="cstat-no" title="statement not covered" ><span class="
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-11-25T07:05:54.693Z
+                at 2026-11-26T02:48:57.105Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
