@@ -42,6 +42,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types\EnumProjectTemporalType;
+use OCA\CAFEVDB\Crypto\AsymmetricKeyStorageInterface;
 use OCA\CAFEVDB\Service\ConfigService;
 use OCA\CAFEVDB\Service\OrphanTreeService;
 use OCA\CAFEVDB\Service\ParticipantFileAuditService;
@@ -76,7 +77,7 @@ class DatabaseStorage extends Command
         'audit-access',
         null,
         InputOption::VALUE_NONE,
-        'Read-only audit of musician file ownership, business references and participant-storage links.',
+        'Read-only audit of musician file ownership, participant links and encryption access indicators.',
       )
       ->addOption('repair-access', null, InputOption::VALUE_NONE, 'Backfill audit-approved participant links and ownership; does not reconcile seals.')
       ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Preview --repair-access without changing records.')
@@ -289,6 +290,26 @@ class DatabaseStorage extends Command
       $includeFileNames,
       $includeFileNames ? $this->auditMountPaths($config) : [],
       $input->getOption('include-field-names'),
+      function(string $userId) use ($config): array {
+        $user = $this->userManager->get($userId);
+        $userConfig = $config->getCloudUserConfig();
+        return [
+          'user_exists' => $user !== null,
+          'logged_in' => $user !== null ? $user->getLastLogin() > 0 : null,
+          'public_key_present' => $userConfig->getValueString(
+            $userId,
+            $this->appName,
+            AsymmetricKeyStorageInterface::PUBLIC_ENCRYPTION_KEY,
+            '',
+          ) !== '',
+          'private_key_present' => $userConfig->getValueString(
+            $userId,
+            $this->appName,
+            AsymmetricKeyStorageInterface::PRIVATE_ENCRYPTION_KEY,
+            '',
+          ) !== '',
+        ];
+      },
     );
     if ($input->getOption('json')) {
       $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
@@ -298,8 +319,11 @@ class DatabaseStorage extends Command
       foreach ($report['findings'] as $finding) {
         $output->writeln(OutputFormatter::escape(json_encode($finding, JSON_THROW_ON_ERROR)));
       }
+      foreach ($report['encryption_diagnostics'] as $diagnostic) {
+        $output->writeln(OutputFormatter::escape(json_encode($diagnostic, JSON_THROW_ON_ERROR)));
+      }
     }
-    return $report['findings'] === [] ? self::SUCCESS : self::FAILURE;
+    return $report['findings'] === [] && $report['summary']['encryption_issues'] === 0 ? self::SUCCESS : self::FAILURE;
   }
 
   /**

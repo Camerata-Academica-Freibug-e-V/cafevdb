@@ -9,6 +9,8 @@
 
 namespace OCA\CAFEVDB\Service;
 
+use RuntimeException;
+
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
 
 /** Inspect file grants and participant links without loading encrypted data or ORM entities. */
@@ -28,22 +30,29 @@ class ParticipantFileAuditService
    * @param bool $includeFileNames Include potentially identifying file names and paths.
    * @param array<int, string> $mountPaths Mounted paths indexed by database root entry ID.
    * @param bool $includeFieldNames Include potentially identifying field names.
+   * @param null|callable $userStatus Resolve key-presence and login indicators for a cloud user.
    *
    * @return array{summary: array, findings: array}
    */
-  public function audit(bool $includeFileNames = false, array $mountPaths = [], bool $includeFieldNames = false): array
+  public function audit(
+    bool $includeFileNames = false,
+    array $mountPaths = [],
+    bool $includeFieldNames = false,
+    ?callable $userStatus = null,
+  ): array
   {
-    return $this->connection->transactional(fn() => $this->inspect($includeFileNames, $mountPaths, $includeFieldNames));
+    return $this->connection->transactional(fn() => $this->inspect($includeFileNames, $mountPaths, $includeFieldNames, $userStatus));
   }
 
   /**
    * @param bool $includeFileNames
    * @param array $mountPaths
    * @param bool $includeFieldNames
+   * @param null|callable $userStatus
    *
    * @return array
    */
-  private function inspect(bool $includeFileNames, array $mountPaths, bool $includeFieldNames): array
+  private function inspect(bool $includeFileNames, array $mountPaths, bool $includeFieldNames, ?callable $userStatus): array
   {
     $files = array_column($this->connection->fetchAllAssociative(
       'SELECT id, type' . ($includeFileNames ? ', file_name' : '') . ' FROM Files',
@@ -116,7 +125,7 @@ class ParticipantFileAuditService
       }
       unset($finding);
     }
-    return [
+    $report = [
       'summary' => [
         'owned_files' => count($owners),
         'ownership_grants' => array_sum(array_map('count', $owners)),
@@ -125,6 +134,129 @@ class ParticipantFileAuditService
       ],
       'findings' => $findings,
     ];
+    if ($userStatus !== null) {
+      $report['encryption_diagnostics'] = $this->encryptionDiagnostics($owners, $files, $findings, $userStatus);
+      $report['summary']['encryption_issues'] = count(array_filter(
+        $report['encryption_diagnostics'],
+        static fn(array $diagnostic) => $diagnostic['seal_status'] !== 'sealed'
+          || $diagnostic['recipient_present'] !== true
+          || $diagnostic['user_exists'] !== true
+          || $diagnostic['public_key_present'] !== true
+          || $diagnostic['private_key_present'] !== true,
+      ));
+    }
+    return $report;
+  }
+
+  /**
+   * Inspect ownership grants and audit-approved missing grants without decrypting data.
+   *
+   * @param array $owners
+   * @param array $files
+   * @param array $findings
+   * @param callable $userStatus
+   *
+   * @return array
+   */
+  private function encryptionDiagnostics(array $owners, array $files, array $findings, callable $userStatus): array
+  {
+    $grants = $owners;
+    foreach ($findings as $finding) {
+      if (($finding['repairable'] ?? false)
+          && in_array('add-ownership', $finding['repairsteps'] ?? [], true)
+          && isset($finding['file_id'], $finding['musician_id'])) {
+        $grants[$finding['file_id']][$finding['musician_id']] = false;
+      }
+    }
+    $musicians = array_column($this->connection->fetchAllAssociative('SELECT id, user_id_slug FROM Musicians'), 'user_id_slug', 'id');
+    $statuses = [];
+    $diagnostics = [];
+    ksort($grants);
+    foreach ($grants as $fileId => $fileOwners) {
+      if (($files[$fileId]['type'] ?? null) !== 'encrypted') {
+        continue;
+      }
+      $seal = $this->sealRecipients((int)$fileId);
+      ksort($fileOwners);
+      foreach ($fileOwners as $musicianId => $owned) {
+        $userId = $musicians[$musicianId] ?? null;
+        if ($userId !== null && $userId !== '') {
+          $statuses[$userId] ??= $userStatus($userId);
+          $status = $statuses[$userId];
+        } else {
+          $userId = null;
+          $status = ['user_exists' => null, 'logged_in' => null, 'public_key_present' => null, 'private_key_present' => null];
+        }
+        $diagnostics[] = [
+          'file_id' => (int)$fileId,
+          'musician_id' => (int)$musicianId,
+          'user_id' => $userId,
+          'ownership_granted' => $owned,
+          'seal_status' => $seal['status'],
+          'recipient_present' => $seal['status'] === 'sealed' && $userId !== null
+            ? isset($seal['recipients'][$userId]) : null,
+        ] + $status;
+      }
+    }
+    return $diagnostics;
+  }
+
+  /**
+   * Read only the seal header and recipient trailer, not its encrypted payload.
+   *
+   * @param int $fileId
+   *
+   * @return array{status: string, recipients: array<string, bool>}
+   */
+  private function sealRecipients(int $fileId): array
+  {
+    $header = $this->connection->fetchAssociative(
+      'SELECT SUBSTR(data, 1, 9) AS header, LENGTH(data) AS data_length FROM FileData WHERE file_id = ?',
+      [$fileId],
+    );
+    if ($header === false) {
+      return ['status' => 'missing-data', 'recipients' => []];
+    }
+    $prefix = $this->metadataString($header['header']);
+    if (!preg_match('/^[0-9]{8}\\|$/D', $prefix)) {
+      return ['status' => 'unsealed-or-invalid', 'recipients' => []];
+    }
+    $length = (int)substr($prefix, 0, 8);
+    if ((int)$header['data_length'] < $length + 10) {
+      return ['status' => 'invalid-seal', 'recipients' => []];
+    }
+    $trailer = $this->connection->fetchAssociative(
+      'SELECT SUBSTR(data, ?, 1) AS separator, SUBSTR(data, ?) AS recipients FROM FileData WHERE file_id = ?',
+      [$length + 10, $length + 11, $fileId],
+    );
+    if ($trailer === false || $this->metadataString($trailer['separator']) !== '|') {
+      return ['status' => 'invalid-seal', 'recipients' => []];
+    }
+    $recipients = [];
+    foreach (explode(';', $this->metadataString($trailer['recipients'])) as $recipient) {
+      $parts = explode(':', $recipient, 2);
+      if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+        return ['status' => 'invalid-seal', 'recipients' => []];
+      }
+      $recipients[$parts[0]] = true;
+    }
+    return ['status' => 'sealed', 'recipients' => $recipients];
+  }
+
+  /**
+   * @param mixed $value
+   *
+   * @return string
+   */
+  private function metadataString(mixed $value): string
+  {
+    if (is_resource($value)) {
+      $value = stream_get_contents($value);
+    }
+    if (!is_string($value)) {
+      throw new RuntimeException('Unable to read encrypted file seal metadata.');
+    }
+    return $value;
   }
 
   /**

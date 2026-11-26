@@ -65,6 +65,89 @@ class ParticipantFileAuditServiceTest extends TestCase
     $this->connection->close();
   }
 
+  /** @return void */
+  public function testEncryptionDiagnosticsInspectEachOwnerWithoutDecryptingOrExposingSealData(): void
+  {
+    $this->connection->executeStatement('ALTER TABLE Musicians ADD COLUMN user_id_slug TEXT');
+    $this->connection->executeStatement("UPDATE Musicians SET user_id_slug = 'alice' WHERE id = 10");
+    $this->connection->executeStatement("INSERT INTO Musicians (id, user_id_slug) VALUES (11, 'bob')");
+    $this->connection->executeStatement('INSERT INTO EncryptedFileOwners VALUES (1, 11)');
+    $this->connection->executeStatement('CREATE TABLE FileData (file_id INTEGER PRIMARY KEY, data BLOB)');
+    $this->connection->executeStatement(
+      'INSERT INTO FileData VALUES (1, CAST(? AS BLOB))',
+      ["00000004|\0xyz|alice:secret-key;@board:other-key"],
+    );
+    $before = $this->snapshot();
+    $report = $this->service->audit(userStatus: static fn(string $id) => [
+      'user_exists' => true,
+      'logged_in' => $id === 'alice',
+      'public_key_present' => $id === 'alice',
+      'private_key_present' => $id === 'alice',
+    ]);
+    self::assertSame([
+      ['file_id' => 1, 'musician_id' => 10, 'user_id' => 'alice', 'ownership_granted' => true,
+       'seal_status' => 'sealed', 'recipient_present' => true, 'user_exists' => true, 'logged_in' => true,
+       'public_key_present' => true, 'private_key_present' => true],
+      ['file_id' => 1, 'musician_id' => 11, 'user_id' => 'bob', 'ownership_granted' => true,
+       'seal_status' => 'sealed', 'recipient_present' => false, 'user_exists' => true, 'logged_in' => false,
+       'public_key_present' => false, 'private_key_present' => false],
+    ], $report['encryption_diagnostics']);
+    self::assertSame(1, $report['summary']['encryption_issues']);
+    self::assertStringNotContainsString('secret-key', json_encode($report, JSON_THROW_ON_ERROR));
+    self::assertStringNotContainsString('other-key', json_encode($report, JSON_THROW_ON_ERROR));
+    self::assertSame($before, $this->snapshot());
+  }
+
+  /** @return iterable */
+  public static function invalidSeals(): iterable
+  {
+    yield 'missing data' => [null, 'missing-data'];
+    yield 'unsealed' => ['plaintext', 'unsealed-or-invalid'];
+    yield 'truncated payload' => ['00000004|x', 'invalid-seal'];
+    yield 'wrong separator' => ['00000001|x!alice:key', 'invalid-seal'];
+    yield 'malformed recipient' => ['00000001|x|alice', 'invalid-seal'];
+    yield 'empty key' => ['00000001|x|alice:', 'invalid-seal'];
+  }
+
+  /** @param null|string $data
+   * @param string $expected
+   */
+  #[Attributes\DataProvider('invalidSeals')]
+  public function testUnverifiableSealsAreNotReportedAsAccessible(?string $data, string $expected): void
+  {
+    $this->connection->executeStatement('ALTER TABLE Musicians ADD COLUMN user_id_slug TEXT');
+    $this->connection->executeStatement("UPDATE Musicians SET user_id_slug = 'alice' WHERE id = 10");
+    $this->connection->executeStatement('CREATE TABLE FileData (file_id INTEGER PRIMARY KEY, data BLOB)');
+    if ($data !== null) {
+      $this->connection->executeStatement('INSERT INTO FileData VALUES (1, CAST(? AS BLOB))', [$data]);
+    }
+    $report = $this->service->audit(userStatus: static fn(string $id) => [
+      'user_exists' => true, 'logged_in' => true, 'public_key_present' => true, 'private_key_present' => true,
+    ]);
+    self::assertSame($expected, $report['encryption_diagnostics'][0]['seal_status']);
+    self::assertNull($report['encryption_diagnostics'][0]['recipient_present']);
+    self::assertSame(1, $report['summary']['encryption_issues']);
+  }
+
+  /** @return void */
+  public function testAuditIncludesRepairableMissingOwnerAndUnknownUserIdentity(): void
+  {
+    $this->createMissingSupportGrant();
+    $this->connection->executeStatement('ALTER TABLE Musicians ADD COLUMN user_id_slug TEXT');
+    $this->connection->executeStatement('CREATE TABLE FileData (file_id INTEGER PRIMARY KEY, data BLOB)');
+    $this->connection->executeStatement("INSERT INTO FileData VALUES (1, CAST('00000001|x|alice:key' AS BLOB))");
+    $report = $this->service->audit(userStatus: static function(string $id): array {
+      throw new LogicException('A missing user ID must not be resolved.');
+    });
+    $diagnostic = $report['encryption_diagnostics'][0];
+    self::assertFalse($diagnostic['ownership_granted']);
+    self::assertSame('sealed', $diagnostic['seal_status']);
+    self::assertNull($diagnostic['user_id']);
+    self::assertNull($diagnostic['recipient_present']);
+    self::assertNull($diagnostic['logged_in']);
+    self::assertSame(1, $report['summary']['encryption_issues']);
+  }
+
   /** @return iterable */
   public static function recognizedDocuments(): iterable
   {

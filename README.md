@@ -60,9 +60,23 @@ To inspect an existing orchestra database before changing personalized storage
 views, run `occ cafevdb:storage:database --audit-access`. This authenticates with
 the usual interactive CafeVDB operator login. The audit itself only reads
 metadata; it does not decrypt file contents, repair links, flush ORM entities,
-or regenerate views. Use `--json` for a report with `summary` and `findings`;
-exit status is 0 for no findings, 1 for inconsistencies, and 2 for invalid option
-combinations. Database/query failures are errors, never a clean audit.
+or regenerate views. Use `--json` for a report with `summary`, `findings` and
+`encryption_diagnostics`; exit status is 0 for no findings or encryption
+issues, 1 for inconsistencies, and 2 for invalid option combinations.
+Database/query failures are errors, never a clean audit.
+
+The access audit also reports `encryption_diagnostics` for each encrypted-file
+owner and each audit-approved missing owner. It checks the seal's recipient IDs
+without decrypting the payload and reports whether the Nextcloud user exists,
+has logged in, and has stored public and private key material. The report
+includes the user ID but never the seal keys or file contents. A missing user
+ID or an unsealed, malformed or missing payload leaves recipient status
+unknown. Key presence and a matching recipient are indicators, not proof that
+the keys match or the file can be decrypted. The login indicator is based on
+Nextcloud's recorded last login, not proof that a key was generated.
+Once the affected user has logged in and obtained their key pair, reconcile
+missing seal recipients manually with `occ cafevdb:users:recrypt --user=USER`.
+The audit does not change ownership, keys or seals.
 
 To list directory-entry trees not connected to a registered `DatabaseStorage`,
 run `occ cafevdb:storage:database --find-orphan-trees`, optionally with `--json`.
@@ -91,8 +105,8 @@ The audit recognizes debit mandates, invoices, donation receipts, composite
 payment supporting documents, participant `db-file` values and participant
 field supporting documents (including generated insurance records). An
 ownership grant or participant-storage link alone is not a business reference.
-By default, reports use database identifiers rather than names, paths or document
-contents. Add `--include-file-names` to include `file_name` (the underlying file's
+By default, findings use database identifiers rather than names, paths or document
+contents; encryption diagnostics also include user IDs. Add `--include-file-names` to include `file_name` (the underlying file's
 stored name) and, for findings with an `entry_id`, `entry_name` (the directory-entry
 name, which may differ). Missing names are `null`. This works with text and JSON
 output. The same option adds `entry_path`, the full participant mount path
@@ -124,7 +138,7 @@ Review findings before attempting a backfill: this command intentionally does
 not infer associations from filenames or directory names. Run during a quiet
 maintenance window; it scans file/directory metadata and uses the database's
 configured transaction isolation. It does not check deployed view definitions,
-connector grants, encryption identities or Nextcloud's file cache.
+connector grants or Nextcloud's file cache.
 
 Each finding has `repairable`; `true` identifies missing ownership supported by
 an active, participant-readable supporting-document reference in that

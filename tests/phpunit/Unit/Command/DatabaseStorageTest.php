@@ -19,6 +19,7 @@ use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\DriverManager;
 use OCP\IL10N;
+use OCP\Config\IUserConfig;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
@@ -45,6 +46,8 @@ class DatabaseStorageTest extends TestCase
   private EntityManager&MockObject $entityManager;
   private CommandTester $tester;
   private bool $loginSuccessful = true;
+  private int $lastLogin = 123;
+  private bool $privateKeyPresent = true;
 
   /** {@inheritdoc} */
   protected function setUp(): void
@@ -53,11 +56,19 @@ class DatabaseStorageTest extends TestCase
     $this->entityManager = $this->createMock(EntityManager::class);
     $this->entityManager->method('getConnection')->willReturn($this->connection);
     $this->connection->method('transactional')->willReturnCallback(fn(callable $callback) => $callback($this->connection));
+    $this->connection->method('fetchAssociative')->willReturnCallback(static fn(string $sql) => str_contains($sql, 'AS header')
+      ? ['header' => '00000001|', 'data_length' => 20]
+      : ['separator' => '|', 'recipients' => 'alice:key']);
     $this->connection->expects(self::never())->method('executeStatement');
     $this->entityManager->expects(self::never())->method('flush');
     $this->entityManager->expects(self::never())->method('remove');
     $container = $this->createStub(ContainerInterface::class);
     $config = $this->createStub(ConfigService::class);
+    $userConfig = $this->createStub(IUserConfig::class);
+    $userConfig->method('getValueString')->willReturnCallback(
+      fn(string $uid, string $app, string $key) => $key === 'privateEncryptionKey' && !$this->privateKeyPresent ? '' : 'key',
+    );
+    $config->method('getCloudUserConfig')->willReturn($userConfig);
     $config->method('getConfigValue')->willReturnCallback(static function(string $key, mixed $default = null): mixed {
       self::assertSame($key === ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY ? 0 : null, $default);
       return match ($key) {
@@ -75,7 +86,9 @@ class DatabaseStorageTest extends TestCase
       [ProjectService::class, $projectService],
     ]);
     $users = $this->createStub(IUserManager::class);
-    $users->method('get')->willReturn($this->createStub(IUser::class));
+    $user = $this->createStub(IUser::class);
+    $user->method('getLastLogin')->willReturnCallback(fn() => $this->lastLogin);
+    $users->method('get')->willReturn($user);
     $session = $this->createStub(IUserSession::class);
     $session->method('login')->willReturnCallback(fn() => $this->loginSuccessful);
     $l10n = $this->createStub(IL10N::class);
@@ -389,6 +402,7 @@ class DatabaseStorageTest extends TestCase
     $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
       str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted']],
       str_contains($sql, 'FROM EncryptedFileOwners') => [['encrypted_file_id' => 1, 'musician_id' => 10]],
+      str_contains($sql, 'SELECT id, user_id_slug FROM Musicians') => [['id' => 10, 'user_id_slug' => 'alice']],
       str_contains($sql, 'FROM DatabaseStorageDirEntries') => [
         ['id' => 100, 'parent_id' => null, 'file_id' => null, 'type' => 'folder'],
         ['id' => 101, 'parent_id' => 100, 'file_id' => 1, 'type' => 'file'],
@@ -408,6 +422,50 @@ class DatabaseStorageTest extends TestCase
     });
     self::assertSame(DatabaseStorage::SUCCESS, $this->tester->execute(['--audit-access' => true]));
     self::assertStringContainsString('"findings":0', $this->tester->getDisplay());
+  }
+
+  /** @param bool $json */
+  #[Attributes\DataProvider('fileNameFormats')]
+  public function testEncryptionDiagnosticsAreReportedAndCauseFailure(bool $json): void
+  {
+    $this->lastLogin = 0;
+    $this->privateKeyPresent = false;
+    $this->connection->method('fetchAllAssociative')->willReturnCallback(static fn(string $sql) => match (true) {
+      str_contains($sql, 'FROM Files') => [['id' => 1, 'type' => 'encrypted']],
+      str_contains($sql, 'FROM EncryptedFileOwners') => [['encrypted_file_id' => 1, 'musician_id' => 10]],
+      str_contains($sql, 'SELECT id, user_id_slug FROM Musicians') => [['id' => 10, 'user_id_slug' => 'bob']],
+      str_contains($sql, 'FROM DatabaseStorageDirEntries') => [
+        ['id' => 100, 'parent_id' => null, 'file_id' => null, 'type' => 'folder'],
+        ['id' => 101, 'parent_id' => 100, 'file_id' => 1, 'type' => 'file'],
+      ],
+      str_contains($sql, 'FROM ProjectParticipants') => [['musician_id' => 10, 'project_id' => 20, 'root_id' => 100]],
+      str_contains($sql, 'FROM SepaDebitMandates mandate') => [],
+      str_contains($sql, 'FROM SepaDebitMandates') => [
+        ['source' => 'invoice', 'source_id' => 1, 'musician_id' => 10, 'project_id' => 20,
+         'entry_id' => 101, 'deleted' => null, 'option_key' => null],
+      ],
+      default => [],
+    });
+    self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(
+      ['--audit-access' => true, '--json' => $json],
+      ['capture_stderr_separately' => true],
+    ));
+    $display = $this->tester->getDisplay();
+    if ($json) {
+      $report = json_decode($display, true, flags: JSON_THROW_ON_ERROR);
+      self::assertSame([], $report['findings']);
+      self::assertSame(1, $report['summary']['encryption_issues']);
+      $diagnostic = $report['encryption_diagnostics'][0];
+      self::assertFalse($diagnostic['recipient_present']);
+      self::assertFalse($diagnostic['logged_in']);
+      self::assertFalse($diagnostic['private_key_present']);
+      self::assertTrue($diagnostic['public_key_present']);
+    } else {
+      self::assertStringContainsString('"recipient_present":false', $display);
+      self::assertStringContainsString('"logged_in":false', $display);
+      self::assertStringContainsString('"private_key_present":false', $display);
+    }
+    self::assertStringNotContainsString('alice:key', $display);
   }
 
   /** @return void */
