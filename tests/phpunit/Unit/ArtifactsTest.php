@@ -275,6 +275,7 @@ class ArtifactsTest extends TestCase
       connection: $connection,
       connectorCredentials: $connectorCredentials,
     );
+    $this->mockProvider->registerClassInstance(WopiCredentialsViewService::class, $wopiViewService);
     $wopiViewService->updateWopiCredentialsView($cloudConnectorDatabase, $credentials, checkAccess: true);
 
     $this->databaseProvider->dumpDatabase(

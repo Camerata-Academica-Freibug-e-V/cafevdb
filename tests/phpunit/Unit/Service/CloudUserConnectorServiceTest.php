@@ -35,15 +35,20 @@ use ReflectionProperty;
 use OCP\App\IAppManager;
 use OCP\Http\Client\IClientService;
 use OCP\IConfig;
+use OCP\IDBConnection;
+use OCP\Security\ICrypto;
 use Psr\Container\ContainerInterface;
 
 use OCA\RotDrop\Tests\DatabaseProvider;
 use OCA\RotDrop\Tests\EnumDatabasePurpose;
 
 use OCA\CAFEVDB\Constants;
+use OCA\CAFEVDB\Controller\EnumSimpleSettingsKey;
 use OCA\CAFEVDB\Service\CloudUserConnectorService;
 use OCA\CAFEVDB\Service\ConnectorDatabaseCredentials;
 use OCA\CAFEVDB\Service\EncryptionService;
+use OCA\CAFEVDB\Service\WopiCredentialStore;
+use OCA\CAFEVDB\Service\WopiCredentialsViewService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Tests\MockProvider;
 use OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
@@ -189,6 +194,17 @@ class CloudUserConnectorServiceTest extends TestCase
 
     $appContainer = $this->mockProvider->getAppContainer();
 
+    $this->mockProvider->registerClassInstance(
+      ConnectorDatabaseCredentials::class,
+      new ConnectorDatabaseCredentials(
+        config: $this->cloudConfig,
+        crypto: \OCP\Server::get(ICrypto::class),
+        cloudConnection: $this->createStub(IDBConnection::class),
+        l: $this->mockProvider->getL10N(),
+        appName: $this->appName,
+      ),
+    );
+
     $httpClientService = $this->getUserSqlEndPointStub();
     $this->mockProvider->registerClassInstance(IClientService::class, $httpClientService, global: true);
 
@@ -208,7 +224,16 @@ class CloudUserConnectorServiceTest extends TestCase
   public function testConstruction(): void
   {
     $this->appManager->expects($this->never())->method('isInstalled');
-    // nothing
+    $dbConfig = $this->databaseProvider->getDatabaseConfig();
+    $params = $this->getEntityManager()->getConnection()->getParams();
+    self::assertSame($dbConfig->databaseName, $params['dbname']);
+    self::assertSame($dbConfig->databaseUser, $params['user']);
+    self::assertSame($dbConfig->databaseName, $this->encryptionService->getConfigValue(ConfigConstants::APP_DB_NAME));
+    self::assertSame([], $this->cloudUserConnectorService->getConnectorAccount());
+    self::assertSame(
+      [],
+      $this->mockProvider->getAppContainer()->get(ConnectorDatabaseCredentials::class)->load(ConnectorDatabaseCredentials::CLOUD),
+    );
   }
 
   public function testGrantToRevokeStatementHandlesFieldAndFunctionGrants(): void
@@ -268,7 +293,7 @@ class CloudUserConnectorServiceTest extends TestCase
     $this->assertNotEmpty($result['hints']);
 
     $result = $this->cloudUserConnectorService->checkRequirements(
-      dataBaseName: $this->appName,
+      dataBaseName: $this->databaseProvider->dataBaseName(EnumDatabasePurpose::APP),
     );
     $this->assertEquals(CloudUserConnectorService::REQUIREMENTS_OK, $result['status']);
     $this->assertEmpty($result['hints']);
@@ -439,7 +464,7 @@ class CloudUserConnectorServiceTest extends TestCase
     $this->applyMigrations('latest');
     $database = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
     $dbConfig = $this->databaseProvider->getDatabaseConfig();
-    $credentialService = $this->mockProvider->getAppContainer()->get(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class);
+    $credentialService = $this->mockProvider->getAppContainer()->get(ConnectorDatabaseCredentials::class);
     $credentials = $credentialService->prepare(
       $this->getEntityManager()->getConnection(),
       DatabaseProvider::CLOUD_DB_USER,
@@ -459,6 +484,22 @@ class CloudUserConnectorServiceTest extends TestCase
       $this->cloudConfig->setSystemValue('dbtype', $oldType);
       $this->unapplyMigrations();
     }
+  }
+
+  public function testMigrationUsesTestConnectorConfiguration(): void
+  {
+    $database = $this->databaseProvider->dataBaseName(EnumDatabasePurpose::CLOUD_CONNECTOR);
+    $this->cloudConfig->setAppValue($this->appName, EnumSimpleSettingsKey::IMPORT_CLUB_MEMBERS_AS_CLOUD_USERS->value, 'on');
+    $this->cloudConfig->setAppValue($this->appName, EnumSimpleSettingsKey::CLOUD_USER_VIEWS_DATABASE->value, $database);
+    $this->cloudConfig->setAppValue($this->appName, WopiCredentialStore::CONNECTOR_DATABASE_CONFIG, $database);
+
+    $wopiViewService = $this->createMock(WopiCredentialsViewService::class);
+    $wopiViewService->expects($this->once())->method('updateWopiCredentialsView')->with($database);
+    $wopiViewService->expects($this->once())->method('removeWopiCredentialsView');
+    $this->mockProvider->registerClassInstance(WopiCredentialsViewService::class, $wopiViewService);
+
+    $this->applyMigrations('latest');
+    $this->unapplyMigrations();
   }
 
   /** @return void */
