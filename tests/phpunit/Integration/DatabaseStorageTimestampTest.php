@@ -1061,6 +1061,66 @@ class DatabaseStorageTimestampTest extends TestCase
   }
 
   /** @return void */
+  public function testStorageAccessRetriesPersistentPlannerFailure(): void
+  {
+    $this->mockProvider = MockProvider::create($this);
+    $this->mockProvider->registerClassInstance(IMountManager::class, Filesystem::getMountManager(), global: true);
+    $this->applyMigrations('latest');
+    $storageId = 'integration/planner-retry/' . bin2hex(random_bytes(8));
+    $mountPath = '/files_external/cafevdb-planner-retry-' . bin2hex(random_bytes(8));
+    $storage = null;
+    $mounted = false;
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storageEntity);
+      $first = $root->addDocument(new Entities\EncryptedFile('first.txt', 'first', 'text/plain'));
+      $second = $root->addDocument(new Entities\EncryptedFile('second.txt', 'second', 'text/plain'));
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storageEntity);
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId);
+      $cache = $storage->getCache();
+      $storage->getScanner()->scan('', Scanner::SCAN_RECURSIVE);
+      $firstId = $cache->get('first.txt')->getId();
+      $secondId = $cache->get('second.txt')->getId();
+      $this->entityManager->persist(
+        new Entities\DatabaseStorageCacheChange($storageId, 'second.txt', 'first.txt', $first->getId()),
+      );
+      $this->entityManager->persist(
+        new Entities\DatabaseStorageCacheChange($storageId, 'first.txt', 'second.txt', $second->getId()),
+      );
+      $this->flushTransaction();
+      $storage = $this->createScanStorage($storageId);
+      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
+      $mounted = true;
+      for ($attempt = 0; $attempt < 2; ++$attempt) {
+        try {
+          $storage->hasUpdated('', time());
+          self::fail('A cyclic batch must fail storage access.');
+        } catch (RuntimeException $exception) {
+          self::assertStringContainsString('cyclic cache renames', $exception->getMessage());
+        }
+        self::assertSame($firstId, $cache->get('first.txt')->getId());
+        self::assertSame($secondId, $cache->get('second.txt')->getId());
+        self::assertCount(
+          2,
+          $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+            ->findBy(['storageId' => $storageId]),
+        );
+      }
+    } finally {
+      if ($mounted) {
+        Filesystem::getMountManager()->removeMount($mountPath);
+      }
+      if ($storage !== null) {
+        $storage->getCache()->remove('');
+      }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
   public function testReconciliationFailuresLogOutboxRowIds(): void
   {
     $this->applyMigrations('latest');
