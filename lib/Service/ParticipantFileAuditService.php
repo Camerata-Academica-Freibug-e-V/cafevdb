@@ -39,8 +39,7 @@ class ParticipantFileAuditService
     array $mountPaths = [],
     bool $includeFieldNames = false,
     ?callable $userStatus = null,
-  ): array
-  {
+  ): array {
     return $this->connection->transactional(fn() => $this->inspect($includeFileNames, $mountPaths, $includeFieldNames, $userStatus));
   }
 
