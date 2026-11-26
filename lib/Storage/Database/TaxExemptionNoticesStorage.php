@@ -78,9 +78,13 @@ class TaxExemptionNoticesStorage extends Storage
    */
   public function findDocument(Entity $entity, Entities\EncryptedFile $file):?Entities\DatabaseStorageFile
   {
+    if ($this->rootFolder === null) {
+      return null;
+    }
+
     /** @var Entities\DatabaseStorageFile $dirEntry */
     foreach ($file->getDatabaseStorageDirEntries() as $dirEntry) {
-      if ($dirEntry === $this->rootFolder) {
+      if ($dirEntry->getParent() === $this->rootFolder) {
         return $dirEntry;
       }
     }

@@ -85,6 +85,10 @@ class DonationReceiptsStorage extends Storage
    */
   public function findDocument(Entity $entity, Entities\EncryptedFile $file):?Entities\DatabaseStorageFile
   {
+    if ($this->rootFolder === null) {
+      return null;
+    }
+
     $year = $this->getBirthTimeFromEntity($entity)->format('Y');
 
     /** @var Entities\DatabaseStorageFile $dirEntry */
