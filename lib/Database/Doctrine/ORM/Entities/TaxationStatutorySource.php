@@ -110,9 +110,9 @@ class TaxationStatutorySource implements JsonSerializable, ArrayAccess
    *
    * @return TaxationStatutorySource
    */
-  public function setTaxType(string|EnumTaxType $taxType):TaxationStatutorySource
+  public function setTaxType(string|Types\EnumTaxType $taxType):TaxationStatutorySource
   {
-    $this->taxType = EnumTaxType::get($taxType);
+    $this->taxType = Types\EnumTaxType::get($taxType);
 
     return $this;
   }

@@ -73,6 +73,12 @@ class Factory
     return $this->di(InvoicesStorage::class);
   }
 
+  /** @return DebitMandatesStorage */
+  public function getDebitMandatesStorage():DebitMandatesStorage
+  {
+    return $this->di(DebitMandatesStorage::class);
+  }
+
   /**
    * @param Entities\Project $project
    *

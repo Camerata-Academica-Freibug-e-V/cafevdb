@@ -78,7 +78,7 @@ class EncryptedFileTest extends TestCase
     $this->assertEquals(self::FILE_NAME, $file->getFileName());
     $this->assertEquals(self::FILE_MIME, $file->getMimeType());
     $this->assertTrue($file->getOwners()->containsKey($this->musician->getId()));
-    $this->assertFalse($this->musician->getEncryptedFiles()->contains($file));
+    $this->assertTrue($this->musician->getEncryptedFiles()->contains($file));
   }
 
   /** {@inheritdoc} */
@@ -101,9 +101,27 @@ class EncryptedFileTest extends TestCase
   {
     $file = $this->generateEncryptedFile(persist: false);
     $this->assertTrue($file->getOwners()->containsKey($this->musician->getId()));
-    $this->assertFalse($this->musician->getEncryptedFiles()->contains($file));
+    $this->assertTrue($this->musician->getEncryptedFiles()->contains($file));
     $file->setId(13);
     $file->postPersist();
     $this->assertTrue($this->musician->getEncryptedFiles()->containsKey($file->getId()));
+    $this->assertCount(1, $this->musician->getEncryptedFiles());
+  }
+
+  /** {@inheritdoc} */
+  public function testTemporaryOwnerCollectionKeysDoNotCollideWithGeneratedIds(): void
+  {
+    $first = $this->generateEncryptedFile(persist: false);
+    $second = new Entities\EncryptedFile('second.pdf', 'second', 'application/pdf', $this->musician);
+
+    $first->setId(1);
+    $first->postPersist();
+    $second->setId(2);
+    $second->postPersist();
+
+    $files = $this->musician->getEncryptedFiles();
+    $this->assertSame($first, $files->get(1));
+    $this->assertSame($second, $files->get(2));
+    $this->assertCount(2, $files);
   }
 }

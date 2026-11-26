@@ -28,6 +28,7 @@ use Throwable;
 use UnexpectedValueException;
 
 // F I X M E internal
+use OC\Files\Filesystem;
 use OC\Files\Mount\MountPoint;
 
 use OCP\DB\QueryBuilder\IQueryBuilder;
@@ -309,6 +310,58 @@ class MountProvider implements IMountProvider
           return MountProvider::MOUNT_TYPE;
         }
       };
+
+      $storage = $this->storageFactory->getDebitMandatesStorage();
+      $mandatePath = Filesystem::normalizePath(UserStorage::PATH_SEP . implode(
+        UserStorage::PATH_SEP,
+        [ $userId, 'files', $this->getDebitMandatesPath(), ],
+      ));
+      $hadTransaction = $this->entityManager->isTransactionActive();
+      try {
+        $storage->synchronize();
+      } catch (Throwable $t) {
+        $failure = new StorageNotAvailableException(
+          'Unable to synchronize debit-mandate storage.',
+          StorageNotAvailableException::STATUS_ERROR,
+          $t instanceof \Exception ? $t : null,
+        );
+        $this->logException($t, 'Unable to synchronize debit-mandate storage for ' . $userId);
+        if ($hadTransaction
+            || $this->entityManager->isTransactionActive()
+            || !$this->entityManager->getWrappedObject()->isOpen()
+            || !$this->entityManager->connected()) {
+          throw $failure;
+        }
+        $unavailable = $this->getUnavailableMounts($user, $mandatePath . '/', $storage->getId(), $failure);
+        if (count($unavailable) !== 1) {
+          throw $failure;
+        }
+        $mounts[] = $unavailable[0];
+      }
+      if (!isset($failure)) {
+        $bulkLoadStorageIds[] = $storage->getId();
+        $mounts[] = new class(
+          storage: $storage,
+          mountpoint: $mandatePath,
+          mountId: null,
+          loader: $loader,
+          mountProvider: MountProvider::class,
+          mountOptions: [
+            'filesystem_check_changes' => 1,
+            'readonly' => true,
+            'previews' => true,
+            'enable_sharing' => false,
+            'authenticated' => true,
+          ],
+        ) extends MountPoint
+        {
+          /** {@inheritdoc} */
+          public function getMountType()
+          {
+            return MountProvider::MOUNT_TYPE;
+          }
+        };
+      }
     }
 
     try {
@@ -447,11 +500,18 @@ class MountProvider implements IMountProvider
    * application database is unavailable.
    *
    * @param IUser $user
+   * @param null|string $targetMountPath Only restore this exact mount path.
+   * @param null|string $expectedStorageId Require this storage identity.
+   * @param null|StorageNotAvailableException $failure The reason the mount is unavailable.
    *
    * @return array
    */
-  private function getUnavailableMounts(IUser $user):array
-  {
+  private function getUnavailableMounts(
+    IUser $user,
+    ?string $targetMountPath = null,
+    ?string $expectedStorageId = null,
+    ?StorageNotAvailableException $failure = null,
+  ):array {
     $mounts = [];
     $userId = $user->getUID();
     $hasFinancePermission = $this->authorizationService->authorized(
@@ -466,6 +526,9 @@ class MountProvider implements IMountProvider
         }
 
         $mountPath = $cachedMount->getMountPoint();
+        if ($targetMountPath !== null && $mountPath !== $targetMountPath) {
+          continue;
+        }
         $prefix = '/' . $userId . '/files/';
         $relativePath = str_starts_with($mountPath, $prefix)
           ? substr($mountPath, strlen($prefix))
@@ -486,6 +549,10 @@ class MountProvider implements IMountProvider
         }
 
         $storageId = $this->getCachedStorageId($cachedMount);
+        if ($expectedStorageId !== null
+            && $storageId !== \OC\Files\Cache\Storage::adjustStorageId($expectedStorageId)) {
+          throw new StorageNotAvailableException('Cached CafeVDB storage identity does not match the requested mount.');
+        }
         $storagePrefix = self::APP_ID . Storage::STORAGE_ID_TAG . Storage::PATH_SEPARATOR;
         if (!str_starts_with($storageId, $storagePrefix)
             && preg_match('/^[a-f0-9]{32}$/D', $storageId) !== 1) {
@@ -496,7 +563,7 @@ class MountProvider implements IMountProvider
           continue;
         }
 
-        $mounts[] = new UnavailableMount($storageId, $cachedMount);
+        $mounts[] = new UnavailableMount($storageId, $cachedMount, $failure);
       }
     } catch (Throwable $t) {
       if ($t instanceof StorageNotAvailableException) {
@@ -525,6 +592,7 @@ class MountProvider implements IMountProvider
       $this->getTaxExemptionNoticesPath(),
       $this->getDonationReceiptsPath(),
       $this->getInvoicesPath(),
+      $this->getDebitMandatesPath(),
       $this->getProjectBalancesPath(),
     ];
 

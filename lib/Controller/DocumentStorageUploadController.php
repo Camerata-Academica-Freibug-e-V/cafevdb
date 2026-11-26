@@ -212,7 +212,7 @@ class DocumentStorageUploadController extends Controller
           }
           $originalFilePath = $file['original_name'] ?? null;
           if ($file['upload_mode']) {
-            $uploadMode = $file['upload_mode'];
+            $uploadMode = EnumFileUploadMode::get($file['upload_mode']);
           }
         } else {
           $originalFilePath = $cloudFile;
@@ -272,6 +272,8 @@ class DocumentStorageUploadController extends Controller
         /** @var Entities\DatabaseStorageFile $fileNodeEntity */
         $fileNodeEntity = $this->getDocument($entity);
         $fileEntity = $fileNodeEntity ? $fileNodeEntity->getFile() : null;
+        $previousFile = $fileEntity;
+        $previousName = $fileNodeEntity?->getName();
         $actualConflict = empty($fileEntity) ? null : $conflict;
 
         $this->entityManager->beginTransaction();
@@ -342,6 +344,10 @@ class DocumentStorageUploadController extends Controller
           }
 
           $fileNodeEntity = $this->addDocument($fileNodeEntity, $fileEntity, $entity, $storage, $conflict);
+
+          if ($entity instanceof Entities\Invoice || $entity instanceof Entities\DonationReceipt) {
+            $this->synchronizeParticipantDocument($entity, $fileNodeEntity, $previousFile, $previousName);
+          }
 
           $this->flush();
 
@@ -424,6 +430,9 @@ class DocumentStorageUploadController extends Controller
         $this->entityManager->beginTransaction();
         try {
           // ok, delete it
+          if ($entity instanceof Entities\Invoice || $entity instanceof Entities\DonationReceipt) {
+            $this->synchronizeParticipantDocument($entity, null, $fileNodeEntity->getFile(), $fileNodeEntity->getName());
+          }
           $this->clearDocument($entity);
           $this->remove($fileNodeEntity, flush: true);
 
@@ -477,6 +486,28 @@ class DocumentStorageUploadController extends Controller
         [ $section, $topic ],
       )
     );
+  }
+
+  /**
+   * @param Entities\Invoice|Entities\DonationReceipt $entity
+   * @param null|Entities\DatabaseStorageFile $document
+   * @param null|Entities\EncryptedFile $previousFile
+   * @param null|string $previousName
+   *
+   * @return void
+   */
+  private function synchronizeParticipantDocument(
+    Entities\Invoice|Entities\DonationReceipt $entity,
+    ?Entities\DatabaseStorageFile $document,
+    ?Entities\EncryptedFile $previousFile,
+    ?string $previousName,
+  ):void {
+    $participant = $entity->getProjectParticipant();
+    if ($participant === null) {
+      throw new UnexpectedValueException('The financial document has no project participant.');
+    }
+    $this->storageFactory->getProjectParticipantsStorage($participant)
+      ->synchronizeFinancialDocument($entity, $document, $previousFile, $previousName);
   }
 
   /**
@@ -609,19 +640,20 @@ class DocumentStorageUploadController extends Controller
         }
         return $fileNodeEntity;
       case ($entity instanceof Entities\DonationReceipt):
-        /** @var Entities\DonationReceipt $entity */
-        if (!empty($fileNodeEntity)) {
-          $fileNodeEntity->setFile($fileEntity);
-        } else {
-          $fileNodeEntity = $storage->addDocument($entity, $fileEntity, flush: false, conflictAction: $conflict);
-          $entity->setSupportingDocument($fileNodeEntity);
-        }
-        return $fileNodeEntity;
       case ($entity instanceof Entities\Invoice):
-        /** @var Entities\Invoice $entity */
-        $fileNodeEntity = $storage->addDocument($entity, $fileEntity, flush: false, conflictAction: $conflict);
-        $entity->setWrittenInvoice($fileNodeEntity);
-        return $fileNodeEntity;
+        /** @var Entities\Invoice|Entities\DonationReceipt $entity */
+        $document = $storage->addDocument($entity, $fileEntity, flush: false, conflictAction: $conflict);
+        if ($entity instanceof Entities\Invoice) {
+          $entity->setWrittenInvoice($document);
+        } else {
+          $entity->setSupportingDocument($document);
+        }
+        if ($fileNodeEntity !== null && $document !== $fileNodeEntity && $conflict === EnumAddDocumentConflictAction::REPLACE) {
+          $fileNodeEntity->setFile(null);
+          $fileNodeEntity->setParent(null);
+          $this->entityManager->remove($fileNodeEntity);
+        }
+        return $document;
       case ($entity instanceof Entities\TaxExemptionNotice):
         /** @var Entities\TaxExemptionNotice $entity */
         if (!empty($fileNodeEntity)) {

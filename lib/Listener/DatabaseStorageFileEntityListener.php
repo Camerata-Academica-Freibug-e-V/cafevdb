@@ -77,7 +77,10 @@ class DatabaseStorageFileEntityListener
   private function sanitizeFileName(Entities\DatabaseStorageFile $dirEntry): void
   {
     $pathInfo = pathinfo($dirEntry->getName());
-    $name = $pathInfo['filename'] . '.' . strtolower($pathInfo['extension']);
+    $name = $pathInfo['filename'];
+    if (isset($pathInfo['extension'])) {
+      $name .= '.' . strtolower($pathInfo['extension']);
+    }
     $name = $this->systemSanitizeFilename($name);
     $dirEntry->setName($name);
   }
@@ -128,20 +131,24 @@ class DatabaseStorageFileEntityListener
     }
     $this->preCommitAction = new GenericUndoable(
       function() {
-        $needFlush = false;
-        $orphans = Entities\DatabaseStorageFile::getOrphans();
-        /** @var Entities\EncryptedFile $orphan */
-        foreach ($orphans as $orphan) {
-          if ($orphan->getNumberOfLinks() == 0) {
-            $this->entityManager->remove($orphan);
-            $needFlush = true;
+        try {
+          $needFlush = false;
+          $orphans = Entities\DatabaseStorageFile::getOrphans();
+          /** @var Entities\EncryptedFile $orphan */
+          foreach ($orphans as $orphan) {
+            if ($orphan->getNumberOfLinks() == 0) {
+              $this->entityManager->remove($orphan);
+              $needFlush = true;
+            }
           }
+          Entities\DatabaseStorageFile::clearOrphans();
+          if ($needFlush) {
+            $this->flush();
+          }
+          return $orphans;
+        } finally {
+          $this->preCommitAction = null;
         }
-        Entities\DatabaseStorageFile::clearOrphans();
-        if ($needFlush) {
-          $this->flush();
-        }
-        return $orphans;
       },
       function($orphans) {
         Entities\DatabaseStorageFile::restoreOrphans($orphans);

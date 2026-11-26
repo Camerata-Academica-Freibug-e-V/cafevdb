@@ -666,11 +666,16 @@ class CloudUserConnectorServiceTest extends TestCase
       $connection->executeStatement(
         'INSERT INTO Files (id, mime_type, type) VALUES
           (1, "text/plain", "encrypted"), (2, "text/plain", "encrypted"),
-          (3, "text/plain", "encrypted")',
+          (3, "text/plain", "encrypted"), (4, "text/plain", "encrypted")',
+      );
+      $connection->executeStatement(
+        'INSERT INTO FileData (file_id, data_hash, data, type) VALUES
+          (1, "1", "one", "encrypted"), (2, "2", "two", "encrypted"),
+          (3, "3", "three", "encrypted"), (4, "4", "four", "encrypted")',
       );
       $connection->executeStatement(
         'INSERT INTO EncryptedFileOwners (musician_id, encrypted_file_id) VALUES
-          (1, 1), (1, 2), (2, 3)',
+          (1, 1), (1, 2), (1, 4), (2, 2), (2, 3)',
       );
       $connection->executeStatement(
         'INSERT INTO DatabaseStorageDirEntries (id, name, type, parent_id, file_id) VALUES
@@ -684,7 +689,10 @@ class CloudUserConnectorServiceTest extends TestCase
           (10, "other-root", "folder", NULL, NULL),
           (11, "other-parent", "folder", 10, NULL),
           (12, "other-file", "file", 11, 3),
+          (13, "shared-file", "file", 11, 2),
+          (14, "first-owner-file", "file", 11, 1),
           (20, "empty-root", "folder", NULL, NULL),
+          (21, "unassociated-file", "file", 20, 2),
           (30, "authorized-root", "folder", NULL, NULL),
           (31, "second-file", "file", 30, 2)',
       );
@@ -692,30 +700,115 @@ class CloudUserConnectorServiceTest extends TestCase
         'INSERT INTO DatabaseStorages (id, storage_id, root_id) VALUES
           (1, "shared", 1), (2, "other", 10), (3, "empty", 20), (4, "authorized", 30)',
       );
+      $connection->executeStatement(
+        'INSERT INTO Projects (id, name, year) VALUES
+          (1, "first-project", 2026), (2, "second-project", 2026)',
+      );
+      $connection->executeStatement(
+        'INSERT INTO ProjectParticipants (project_id, musician_id, database_documents_id) VALUES
+          (1, 1, 1), (2, 1, 4), (1, 2, 2), (1, 3, NULL)',
+      );
 
       foreach ([
-        ['first-owner', 'first-token', [1, 2, 3, 4, 5, 30, 31], [1, 4]],
-        ['second-owner', 'second-token', [1, 2, 3, 6, 10, 11, 12], [1, 2]],
-        ['third-owner', 'third-token', [], []],
-        ['first-owner', 'wrong-token', [], []],
-        [null, null, [], []],
-      ] as [$userId, $token, $entryIds, $storageIds]) {
+        ['first-owner', 'first-token', [1, 2, 3, 4, 5, 30, 31], [1, 4], [1, 2, 4]],
+        ['second-owner', 'second-token', [10, 11, 12, 13], [2], [2, 3]],
+        ['third-owner', 'third-token', [], [], []],
+        ['first-owner', 'wrong-token', [], [], []],
+        [null, null, [], [], []],
+      ] as [$userId, $token, $entryIds, $storageIds, $fileIds]) {
         $connection->executeStatement('SET @' . Constants::SQL_CLOUD_USER_ID . ' = ?', [$userId]);
         $connection->executeStatement('SET @' . Constants::SQL_ROW_ACCESS_TOKEN . ' = ?', [$token]);
         foreach ([
           'DatabaseStorageDirEntries' => $entryIds,
           'DatabaseStorages' => $storageIds,
+          'Files' => $fileIds,
         ] as $table => $expectedIds) {
           $actualIds = $connection->executeQuery(
             'SELECT id FROM ' . $cloudConnectorDatabase . '.Personalized' . $table . 'View ORDER BY id',
           )->fetchFirstColumn();
           $this->assertSame($expectedIds, array_map('intval', $actualIds));
         }
+        $actualFileIds = $connection->executeQuery(
+          'SELECT file_id FROM ' . $cloudConnectorDatabase . '.PersonalizedFileDataView ORDER BY file_id',
+        )->fetchFirstColumn();
+        $this->assertSame($fileIds, array_map('intval', $actualFileIds));
       }
+      $this->assertParticipantFieldStorageVisibility($cloudConnectorDatabase);
     } finally {
       $connection->executeStatement('SET @' . Constants::SQL_CLOUD_USER_ID . ' = NULL');
       $connection->executeStatement('SET @' . Constants::SQL_ROW_ACCESS_TOKEN . ' = NULL');
       $connection->rollBack();
     }
+  }
+
+  /**
+   * @param string $cloudConnectorDatabase
+   *
+   * @return void
+   */
+  private function assertParticipantFieldStorageVisibility(string $cloudConnectorDatabase): void
+  {
+    $connection = $this->getEntityManager()->getConnection();
+    $connection->executeStatement('SET @' . Constants::SQL_CLOUD_USER_ID . ' = ?', ['first-owner']);
+    $connection->executeStatement('SET @' . Constants::SQL_ROW_ACCESS_TOKEN . ' = ?', ['first-token']);
+    $connection->executeStatement(
+      'INSERT INTO DatabaseStorageDirEntries (id, name, type, parent_id, file_id) VALUES
+        (40, "hidden-only-folder", "folder", 1, NULL),
+        (41, "hidden-alias", "file", 40, 1),
+        (42, "invoice", "file", 2, 1), (43, "donation-receipt", "file", 2, 1),
+        (44, "debit-mandate", "file", 2, 1), (45, "composite-payment", "file", 2, 1)',
+    );
+    $connection->executeStatement(
+      'INSERT INTO ProjectParticipantFields (id, project_id, name, multiplicity, data_type, participant_access) VALUES
+        (101, 1, "hidden support", "simple", "receivables", "none"),
+        (102, 1, "readable upload", "simple", "db-file", "read"),
+        (103, 2, "other project", "simple", "db-file", "read"),
+        (104, 1, "other musician", "simple", "db-file", "read-write"),
+        (105, 1, "hidden alias", "simple", "db-file", "none"),
+        (106, 2, "read-write support", "simple", "receivables", "read-write")',
+    );
+    $connection->executeStatement(
+      'INSERT INTO ProjectParticipantFieldsDataOptions (field_id, `key`) VALUES
+        (101, UNHEX("00000000000000000000000000000001")),
+        (102, UNHEX("00000000000000000000000000000001")),
+        (103, UNHEX("00000000000000000000000000000001")),
+        (104, UNHEX("00000000000000000000000000000001")),
+        (105, UNHEX("00000000000000000000000000000001")),
+        (106, UNHEX("00000000000000000000000000000001"))',
+    );
+    $connection->executeStatement(
+      'INSERT INTO ProjectParticipantFieldsData
+        (field_id, project_id, musician_id, option_key, option_value, supporting_document_id) VALUES
+        (101, 1, 1, UNHEX("00000000000000000000000000000001"), "10.00", 4),
+        (102, 1, 1, UNHEX("00000000000000000000000000000001"), "5", NULL),
+        (103, 2, 1, UNHEX("00000000000000000000000000000001"), "4", NULL),
+        (104, 1, 2, UNHEX("00000000000000000000000000000001"), "4", NULL),
+        (105, 1, 1, UNHEX("00000000000000000000000000000001"), "41", NULL),
+        (106, 2, 1, UNHEX("00000000000000000000000000000001"), "10.00", 31)',
+    );
+    $visibleIds = fn(string $table, string $column = 'id'): array => array_map('intval', $connection->fetchFirstColumn(
+      'SELECT ' . $column . ' FROM ' . $cloudConnectorDatabase . '.Personalized' . $table . 'View ORDER BY ' . $column,
+    ));
+
+    self::assertSame([1, 2, 3, 5, 30, 31, 42, 43, 44, 45], $visibleIds('DatabaseStorageDirEntries'));
+    self::assertSame([102, 103, 104, 106], $visibleIds('ProjectParticipantFields'));
+    self::assertSame([102, 103, 106], $visibleIds('ProjectParticipantFieldsData', 'field_id'));
+
+    $connection->executeStatement("UPDATE ProjectParticipantFields SET participant_access = 'none' WHERE id IN (102, 106)");
+    self::assertSame([1, 2, 42, 43, 44, 45], $visibleIds('DatabaseStorageDirEntries'));
+    self::assertSame([1], $visibleIds('DatabaseStorages'));
+    self::assertSame([103, 104], $visibleIds('ProjectParticipantFields'));
+    self::assertSame([103], $visibleIds('ProjectParticipantFieldsData', 'field_id'));
+
+    $connection->executeStatement("UPDATE ProjectParticipantFields SET participant_access = 'read' WHERE id IN (101, 105)");
+    self::assertSame([1, 2, 3, 4, 40, 41, 42, 43, 44, 45], $visibleIds('DatabaseStorageDirEntries'));
+    $connection->executeStatement("UPDATE ProjectParticipantFields SET deleted = '2000-01-01' WHERE id = 105");
+    $connection->executeStatement("UPDATE ProjectParticipantFieldsData SET deleted = '2000-01-01' WHERE field_id = 105");
+    self::assertSame([1, 2, 3, 4, 40, 41, 42, 43, 44, 45], $visibleIds('DatabaseStorageDirEntries'));
+    self::assertSame([1, 2, 4], $visibleIds('Files'));
+    self::assertSame([1, 2, 4], $visibleIds('FileData', 'file_id'));
+    self::assertSame(6, (int)$connection->fetchOne(
+      'SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE id IN (4, 5, 30, 31, 40, 41)',
+    ));
   }
 }

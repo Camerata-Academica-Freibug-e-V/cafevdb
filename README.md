@@ -41,8 +41,183 @@ path. If the rename fails, the file is left in place and the notification
 asks the uploader to move or rename it manually. No participant-field value
 or README is created for the conflicting file.
 
+Auditing exported personalized database storage views
+-----------------------------------------------------
+
+Personalized directory-entry views export field documents only when the exact
+entry is referenced by a field datum for that storage's musician and project,
+and the field permits `read` or `read-write` participant access. This applies to
+supporting documents and `db-file` values. Unreferenced non-field entries retain
+the ownership and participant-tree checks; a readable link to the same encrypted
+file does not expose a hidden field entry. Folders without visible descendants
+are omitted. Management-board storage is unchanged and retains hidden field
+documents. This filters filesystem entries, not direct ownership-based access
+through the personalized `Files` and `FileData` views.
+After deploying this change, use **Recreate personalized views** in the sharing
+settings to apply the updated definitions to an existing connector database.
+
+If debit-mandate synchronization fails, its previously cached finance mount is
+made unavailable while other mounts remain available when the database and
+transaction are healthy. Without a trusted cached mandate mount, or if the
+database cannot safely continue, the existing all-mount fallback applies.
+
+To inspect an existing orchestra database before changing personalized storage
+views, run `occ cafevdb:storage:database --audit-access`. This authenticates with
+the usual interactive CafeVDB operator login. The audit itself only reads
+metadata; it does not decrypt file contents, repair links, flush ORM entities,
+or regenerate views. Use `--json` for a report with `summary`, `findings` and
+`encryption_diagnostics`; exit status is 0 for no findings or encryption
+issues, 1 for inconsistencies, and 2 for invalid option combinations.
+Database/query failures are errors, never a clean audit.
+
+The access audit also reports `encryption_diagnostics` for each encrypted-file
+owner and each audit-approved missing owner. It checks the seal's recipient IDs
+without decrypting the payload and reports whether the Nextcloud user exists,
+has logged in, and has stored public and private key material. The report
+includes the user ID but never the seal keys or file contents. A missing user
+ID or an unsealed, malformed or missing payload leaves recipient status
+unknown. Key presence and a matching recipient are indicators, not proof that
+the keys match or the file can be decrypted. The login indicator is based on
+Nextcloud's recorded last login, not proof that a key was generated.
+Once the affected user has logged in and obtained their key pair, reconcile
+missing seal recipients manually with `occ cafevdb:users:recrypt --user=USER`.
+The audit does not change ownership, keys or seals.
+
+To list directory-entry trees not connected to a registered `DatabaseStorage`,
+run `occ cafevdb:storage:database --find-orphan-trees`, optionally with `--json`.
+The read-only listing groups entry IDs, parent IDs, file IDs and types by root
+ID, including empty trees. Add `--include-file-names` to include entry names and
+`parent_path` relative to the orphan tree (root parents use `/`); entries are
+sorted by `parent_path`, then `name`, and trees by root name.
+Use `--find-orphan-trees=prune-empty` to remove complete trees containing only
+folders. Trees containing file entries, file references, or nested registered
+storages are preserved. Pruning owns a transaction, locks the relevant metadata,
+deletes leaves before parents, and rolls back on errors. Its report lists the
+remaining trees and `pruned_root_ids`, with pruned tree/entry counts. Run pruning
+during a quiet maintenance window; repeating it is safe.
+The included names and paths
+these may identify people and should be kept private. These trees have no known
+mount path. Registered roots and their descendants are excluded, including
+registered subtrees nested beneath an unregistered root. This lists trees with
+a parentless root, not broken parent chains or cycles. It does not infer that
+their files are unused: business references and links elsewhere may still
+exist. This action never removes entries, files or directories, and cannot be
+combined with `--remove-orphans`, `--find-orphans`, `--list-storages` or
+`--audit-access`. Listing succeeds even when trees are found; query failures
+remain errors.
+
+The audit recognizes debit mandates, invoices, donation receipts, composite
+payment supporting documents, participant `db-file` values and participant
+field supporting documents (including generated insurance records). An
+ownership grant or participant-storage link alone is not a business reference.
+By default, findings use database identifiers rather than names, paths or document
+contents; encryption diagnostics also include user IDs. Add `--include-file-names` to include `file_name` (the underlying file's
+stored name) and, for findings with an `entry_id`, `entry_name` (the directory-entry
+name, which may differ). Missing names are `null`. This works with text and JSON
+output. The same option adds `entry_path`, the full participant mount path
+(starting at the shared orchestra folder, without a Nextcloud user's `/files`
+prefix). File-level findings without an `entry_id` include `file_paths`, listing
+each directory entry and its full path. Paths use current folder configuration
+and app-localized document folder names. Unresolved paths, including broken
+directory chains or roots without a known participant mount, are `null`, never
+misleading partial paths. Names and paths may identify people, so keep such
+reports private.
+Findings with associated participant fields include `participant_fields`, one
+entry per datum/reference, with field ID, type, multiplicity, participant access,
+relation (`supporting_document_id` or `option_value`), entry ID, musician,
+project and option key. Associations follow all directory links to the same
+file, so an association may belong to another project or musician. Only `db-file`
+option values are treated as entry IDs. Use `--include-field-names` to include
+the stored field name; it can identify people and should be kept private.
+They include retained soft-deleted records, since ownership-based views do not
+filter those records, and show each referenced record's `deleted` value.
+Links to a club-members-project mandate in the same musician's other participant
+storages are recognized using the configured club-members project ID.
+
+Findings distinguish unrecognized owned files, unexpected owners, missing
+ownership, missing participants or participant-tree links, unrelated-project
+and non-owner participant links, broken document references and broken
+directory trees. Shared files with explicit references for several participants
+are allowed; dedicated finance links are not mistaken for participant links.
+Review findings before attempting a backfill: this command intentionally does
+not infer associations from filenames or directory names. Run during a quiet
+maintenance window; it scans file/directory metadata and uses the database's
+configured transaction isolation. It does not check deployed view definitions,
+connector grants or Nextcloud's file cache.
+
+Each finding has `repairable`; `true` identifies missing ownership supported by
+an active, participant-readable supporting-document reference in that
+participant's own storage and project, an active invoice, donation receipt or
+composite-payment supporting document, or an active debit mandate. Financial
+documents qualify only for their own musician and project, and only when a
+link to the same encrypted file already exists in that participant's storage;
+the financial document may use a separate directory entry. Financial documents
+are not excluded solely because the participant's status is `associated`.
+An invoice, donation receipt, composite-payment document or debit mandate may
+also qualify when its participant link is missing:
+the destination must be an existing, unambiguous participant-storage root in
+the document's own project. A mandate's source entry must not be misplaced in
+another participant's or project's storage. The proposed
+steps include `add-participant-link`, and include `add-ownership` and
+`reconcile-encryption-seal` when ownership is missing. The existing source
+entry is preserved; a future repair must check destination names and conflicts.
+Tax exemption notices do not qualify. A club-members-project mandate also
+justifies links in the same musician's other active project storages; other
+mandates justify only their own project.
+The same missing-link classification applies to active participant-readable
+supporting documents of participant fields, subject to their access and context
+rules. Existing ownership alone does not establish that the seal includes the
+participant or that the participant can decrypt it.
+For active `db-file` participant fields, a missing participant-storage link may
+qualify for `add-participant-link` alone, even when `participant_access` is `none`.
+This restores the administrative storage link without granting ownership or
+participant access. The destination must be valid and unambiguous, and broken
+source trees are excluded.
+If a financial link is also associated with a participant field, the
+personalized view's field-access filter still applies; the suggested ownership
+repair alone does not override it.
+Participant-only fields must match the participant's context. Deleted records, invalid files
+and ambiguous links are not candidates. Such findings include `repairsteps`:
+`add-ownership` and `reconcile-encryption-seal`. These are proposed steps, not
+repairs performed or proof that encryption keys and seals are usable. The audit
+does not validate decryption.
+Run `occ cafevdb:storage:database --repair-access --dry-run --json` to preview
+the audit-approved metadata backfill, then omit `--dry-run` to apply it. The
+audit action itself remains read-only. Run during a quiet maintenance window:
+the executor owns a transaction and locks the audit's input rows before
+classifying them. Unexpected errors roll back the transaction; filename and
+one-to-one-reference conflicts are reported as `blocked` without replacing
+entries. Independent ownership repairs may still proceed when a link conflicts.
+The JSON report lists applied, planned, blocked and deferred operations and
+includes the remaining audit findings. A blocked operation gives a failing exit
+status; remaining findings and deferred seal work must still be reviewed.
+
+New links use the existing entry's filename and the app's localized document
+folders. Participant fields use their field folder path. The backfill never
+creates missing storage roots, deletes source entries, resurrects soft-deleted
+records, or grants ownership for a private field's link-only repair.
+Participant-field, composite-payment and debit-mandate references are pointed
+to their new participant entries; dedicated invoice/receipt entries are retained.
+Metadata is updated directly to avoid ORM orphan removal deleting shared source
+entries; the command clears the ORM identity map afterward.
+
+A missing or unusable participant public key does not prevent recording
+ownership. Seal reconciliation is explicitly deferred and reported, and no
+encrypted payload is read or rewritten. The owner list and the recipients of
+the currently stored seal can therefore differ. Repeating the operation creates
+no duplicate ownership grants or links. A subsequent run may repair newly
+eligible findings, such as club-mandate cross-project links after their canonical
+source link has been restored.
+`false` means this audit has not identified a safe automatic repair; it does not
+mean that the inconsistency is irreparable. When known, `repair_reasons` lists
+specific blockers, such as `musician-deleted`, `participant-storage-shared` or
+`field-access-not-readable`. `club-mandate-source-link-missing` means that no
+active club mandate for that file has its canonical entry in the musician's
+club-project storage; other blockers may still apply. The reasons are not
+exhaustive; their absence does not imply that a finding is safe to repair.
+
 Database-backed files and Collabora
-----------------------------------
+-----------------------------------
 
 Database mounts require the CafeVDB app key to unlock encrypted database
 configuration. On validated WOPI requests, CafeVDB can recover that key without

@@ -38,8 +38,9 @@ class UnavailableMount extends MountPoint
   /**
    * @param string $storageId
    * @param ICachedMountInfo $cachedMount
+   * @param null|StorageNotAvailableException $failure
    */
-  public function __construct(string $storageId, ICachedMountInfo $cachedMount)
+  public function __construct(string $storageId, ICachedMountInfo $cachedMount, ?StorageNotAvailableException $failure = null)
   {
     $this->storageId = StorageCache::adjustStorageId($storageId);
     $this->numericStorageId = $cachedMount->getStorageId();
@@ -47,7 +48,7 @@ class UnavailableMount extends MountPoint
 
     $storage = new class([
       'storageId' => $storageId,
-      'exception' => new StorageNotAvailableException('Database storage requires the user\'s authorization credentials.'),
+      'exception' => $failure ?? new StorageNotAvailableException('Database storage requires the user\'s authorization credentials.'),
     ]) extends FailedStorage {
       private string $storageId;
 
@@ -67,7 +68,7 @@ class UnavailableMount extends MountPoint
       /** {@inheritdoc} */
       public function getCache(string $path = '', ?IStorage $storage = null):FailedCache
       {
-        return new UnavailableCache();
+        return new UnavailableCache($this->e->getMessage());
       }
     };
 
