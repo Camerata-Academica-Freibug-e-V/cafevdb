@@ -53,8 +53,12 @@ class AbstractUndoableTest extends TestCase
       // phpcs:disable Squiz.Commenting.FunctionComment.Missing
       // phpcs:disable Squiz.Functions.MultiLineFunctionDeclaration.BraceOnSameLine
       public function __construct() { $this->sortOrder = AbstractUndoableTest::SORT_ORDER; }
+      // phpcs:enable Squiz.Commenting.FunctionComment.Missing
+      /** {@inheritdoc} */
       public function do(): void {}
+      /** {@inheritdoc} */
       public function undo(): void {}
+      /** {@inheritdoc} */
       public function reset(): void {}
       // phpcs:enable
     };

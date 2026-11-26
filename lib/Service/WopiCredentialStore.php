@@ -36,7 +36,18 @@ class WopiCredentialStore
     private ConnectorDatabaseCredentials $connectorCredentials,
   ) {
   }
+  // phpcs:enable
 
+  /**
+   * Store an encrypted WOPI credential.
+   *
+   * @param string $token WOPI token.
+   * @param string $userId User identifier.
+   * @param integer $expiry Credential expiration timestamp.
+   * @param string $appKey WOPI application key.
+   *
+   * @return void
+   */
   public function store(
     #[SensitiveParameter] string $token,
     string $userId,
@@ -63,6 +74,15 @@ class WopiCredentialStore
     );
   }
 
+  /**
+   * Recover a WOPI application key for a user and expiration timestamp.
+   *
+   * @param string $token WOPI token.
+   * @param string $userId User identifier.
+   * @param integer $expiry Credential expiration timestamp.
+   *
+   * @return string|null The application key, or null if no credential matches.
+   */
   public function recover(#[SensitiveParameter] string $token, string $userId, int $expiry): ?string
   {
     if ($token === '' || $expiry <= time()) {
@@ -91,6 +111,15 @@ class WopiCredentialStore
     return $encoded === false ? null : $this->decryptCredential($encoded, $token, $userId, $expiry);
   }
 
+  /**
+   * Read a credential using the cloud database connection.
+   *
+   * @param string $view Qualified credential view name.
+   * @param string $token WOPI token.
+   * @param integer $expiry Credential expiration timestamp.
+   *
+   * @return mixed The encrypted credential value returned by the database.
+   */
   private function recoverUsingCloudConnection(string $view, #[SensitiveParameter] string $token, int $expiry): mixed
   {
     $variable = '@' . Constants::SQL_WOPI_TOKEN_HASH;
@@ -107,6 +136,16 @@ class WopiCredentialStore
     }
   }
 
+  /**
+   * Decrypt and validate a stored WOPI application key.
+   *
+   * @param string $encoded Encrypted credential value.
+   * @param string $token WOPI token.
+   * @param string $userId Expected user identifier.
+   * @param integer $expiry Expected expiration timestamp.
+   *
+   * @return string The decrypted application key.
+   */
   private function decryptCredential(string $encoded, #[SensitiveParameter] string $token, string $userId, int $expiry): string
   {
     $credential = json_decode(
@@ -127,11 +166,24 @@ class WopiCredentialStore
     return $key;
   }
 
+  /**
+   * Quote a database object name for a qualified SQL reference.
+   *
+   * @param string $database Database name.
+   * @param string $name Object name.
+   *
+   * @return string Qualified and escaped database object name.
+   */
   public static function qualify(string $database, string $name): string
   {
     return '`' . str_replace('`', '``', $database) . '`.`' . str_replace('`', '``', $name) . '`';
   }
 
+  /**
+   * Get the configured connector database name.
+   *
+   * @return string Connector database name.
+   */
   private function connectorDatabase(): string
   {
     $database = $this->config->getAppValue($this->appName, self::CONNECTOR_DATABASE_CONFIG, '');
@@ -141,10 +193,16 @@ class WopiCredentialStore
     return $database;
   }
 
+  /**
+   * Derive a credential-specific encryption key from the WOPI token.
+   *
+   * @param string $token WOPI token.
+   *
+   * @return string Derived encryption key.
+   */
   private function encryptionKey(#[SensitiveParameter] string $token): string
   {
     // The lookup hash is visible to SQL; it must not also be the encryption key.
     return hash_hkdf('sha256', $token, 32, 'cafevdb/wopi-credential/v1');
   }
-  // phpcs:enable
 }
