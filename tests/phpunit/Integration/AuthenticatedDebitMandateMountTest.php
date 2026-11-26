@@ -13,6 +13,9 @@ use DateTimeImmutable;
 use OCA\CAFEVDB\AppInfo\Application;
 use OCA\CAFEVDB\Crypto\AsymmetricKeyService;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
+use OCA\CAFEVDB\Listener\ContactsCardEventListener;
+use OCA\CAFEVDB\Listener\GroupListener;
+use OCA\CAFEVDB\Listener\GroupMembershipListener;
 use OCA\CAFEVDB\Service\AuthorizationService;
 use OCA\CAFEVDB\Service\MountAuthenticationService;
 use OCA\CAFEVDB\Service\ParticipantFileAuditService;
@@ -28,9 +31,12 @@ use OCA\GroupFolders\Folder\FolderManager;
 use OCA\GroupFolders\Mount\FolderStorageManager;
 use OC\Files\Filesystem;
 use OC\Files\Mount\MountPoint;
+use OC\EventDispatcher\EventDispatcher;
+use OC\EventDispatcher\ServiceEventListener;
 use OCP\App\IAppManager;
 use OCP\Authentication\LoginCredentials\IStore as ICredentialsStore;
 use OCP\Config\IUserConfig;
+use OCP\EventDispatcher\IEventDispatcher;
 use OCP\Files\Config\IMountProviderCollection;
 use OCP\Files\File;
 use OCP\Files\Folder;
@@ -47,9 +53,12 @@ use OCP\IUserSession;
 use OCP\L10N\IFactory as IL10NFactory;
 use OCP\Server;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use ReflectionProperty;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface as SymfonyEventDispatcher;
 
 /** @SuppressWarnings(PHPMD.CouplingBetweenObjects) */
 #[CoversNothing]
@@ -61,6 +70,8 @@ class AuthenticatedDebitMandateMountTest extends TestCase
   use \OCA\CAFEVDB\Tests\Unit\Service\SetupCalendarBackendTrait;
 
   /** @return void */
+  #[RunInSeparateProcess]
+  #[PreserveGlobalState(false)]
   public function testAuthenticatedFinanceMountThroughFilesystem(): void
   {
     self::enableDeprecations();
@@ -84,9 +95,13 @@ class AuthenticatedDebitMandateMountTest extends TestCase
 
     $uid = 'cafevdb-mount-' . bin2hex(random_bytes(6));
     $password = 'integration-test-password';
-    $groupId = MockProvider::USER_GROUP_VALUE . AuthorizationService::FINANCE_GROUP_SUFFIX;
+    $folderName = 'CAFEVDBIntegration-' . $uid;
+    $groupBase = $uid . '-group';
+    $groupId = $groupBase . AuthorizationService::FINANCE_GROUP_SUFFIX;
     self::assertNull($groups->get($groupId));
-    $group = $groups->createGroup($groupId);
+    $dispatcher = Server::get(IEventDispatcher::class);
+    $suspendedListeners = $this->suspendFixtureListeners($dispatcher);
+    $group = null;
     $user = null;
     $folderId = null;
     $mockProvider = null;
@@ -94,6 +109,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
     $providerRegistry = null;
     $previousProvider = null;
     try {
+      $group = $groups->createGroup($groupId);
       self::assertInstanceOf(IGroup::class, $group);
       $user = $users->createUser($uid, $password);
       self::assertInstanceOf(IUser::class, $user);
@@ -103,19 +119,19 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       self::assertSame($uid, $session->getUser()->getUID());
       self::assertSame($uid, $credentials->getLoginCredentials()->getUID());
 
-      $folderId = $folderManager->createFolder('CAFEVDBIntegration');
+      $folderId = $folderManager->createFolder($folderName);
       $folderManager->addApplicableGroup($folderId, $groupId);
-      $folderInfo = $groupFolders->getFolderForUser('CAFEVDBIntegration', $user);
+      $folderInfo = $groupFolders->getFolderForUser($folderName, $user);
       self::assertNotNull($folderInfo);
       self::assertNotSame(0, $folderInfo->permissions & \OCP\Constants::PERMISSION_READ);
       Filesystem::tearDown();
       Filesystem::initMountPoints($user);
       self::assertSame(
-        '/' . $uid . '/files/CAFEVDBIntegration/',
-        $mounts->find('/' . $uid . '/files/CAFEVDBIntegration/')->getMountPoint(),
+        '/' . $uid . '/files/' . $folderName . '/',
+        $mounts->find('/' . $uid . '/files/' . $folderName . '/')->getMountPoint(),
       );
       $userFolder = $root->getUserFolder($uid);
-      $shared = $userFolder->get('CAFEVDBIntegration');
+      $shared = $userFolder->get($folderName);
       self::assertInstanceOf(Folder::class, $shared);
       $shared->newFolder('Finance');
       $shared->newFolder('Projects');
@@ -125,6 +141,11 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       $this->mockProvider->registerClassInstance(IUserSession::class, $session, global: true);
       $this->mockProvider->registerClassInstance(ICredentialsStore::class, $credentials, global: true);
       $this->mockProvider->registerClassInstance(GroupFoldersService::class, $groupFolders);
+      $this->mockProvider->getCloudConfig()->setAppValue(
+        Application::getAppName(),
+        ConfigConstants::USER_GROUP_KEY,
+        $groupBase,
+      );
       $authorization = new AuthorizationService(
         $uid,
         $groups,
@@ -148,7 +169,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
 
       $config = $this->mockProvider->getConfigService();
       foreach ([
-        ConfigConstants::SHARED_FOLDER => 'CAFEVDBIntegration',
+        ConfigConstants::SHARED_FOLDER => $folderName,
         ConfigConstants::PROJECTS_FOLDER => 'Projects',
         ConfigConstants::FINANCE_FOLDER => 'Finance',
         ConfigConstants::TRANSACTIONS_FOLDER => 'Transactions',
@@ -214,7 +235,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       Filesystem::initMountPoints($user);
 
       $mountName = $config->getAppL10n()->t('debit-mandates');
-      $mountPath = '/' . $uid . '/files/CAFEVDBIntegration/Finance/' . $mountName . '/';
+      $mountPath = '/' . $uid . '/files/' . $folderName . '/Finance/' . $mountName . '/';
       $mount = $mounts->find($mountPath);
       self::assertInstanceOf(MountPoint::class, $mount);
       self::assertSame($mountPath, $mount->getMountPoint());
@@ -224,7 +245,7 @@ class AuthenticatedDebitMandateMountTest extends TestCase
       self::assertTrue($mount->getOption('authenticated', false));
       self::assertFalse($mount->getOption('enable_sharing', true));
 
-      $path = 'CAFEVDBIntegration/Finance/' . $mountName . '/'
+      $path = $folderName . '/Finance/' . $mountName . '/'
         . $this->musician->getUserIdSlug() . '/' . $this->project->getName() . '/MOUNT-1';
       $mountedFile = $root->getUserFolder($uid)->get($path);
       self::assertInstanceOf(File::class, $mountedFile);
@@ -264,11 +285,50 @@ class AuthenticatedDebitMandateMountTest extends TestCase
             $providerRegistry->setValue($providers, $registeredProviders);
           }
         } finally {
-          if ($migrationsApplied) {
-            $this->unapplyMigrations();
+          try {
+            if ($migrationsApplied) {
+              $this->unapplyMigrations();
+            }
+          } finally {
+            foreach ($suspendedListeners as [$event, $listener, $priority]) {
+              $dispatcher->addListener($event, $listener, $priority);
+            }
+          }
+        }
+
+      }
+    }
+  }
+
+  /**
+   * Keep fixture lifecycle events in core and DAV without invoking ambient app services.
+   *
+   * @param IEventDispatcher $dispatcher
+   *
+   * @return array
+   */
+  private function suspendFixtureListeners(IEventDispatcher $dispatcher): array
+  {
+    self::assertInstanceOf(EventDispatcher::class, $dispatcher);
+    $symfony = new ReflectionProperty(EventDispatcher::class, 'dispatcher')->getValue($dispatcher);
+    self::assertInstanceOf(SymfonyEventDispatcher::class, $symfony);
+    $listenerClass = new ReflectionProperty(ServiceEventListener::class, 'class');
+    $suspended = [];
+    foreach ([ContactsCardEventListener::class, GroupListener::class, GroupMembershipListener::class] as $class) {
+      $count = 0;
+      foreach ($class::EVENT as $event) {
+        foreach ($symfony->getListeners($event) as $listener) {
+          if ($listener instanceof ServiceEventListener && $listenerClass->getValue($listener) === $class) {
+            $suspended[] = [$event, $listener, $symfony->getListenerPriority($event, $listener)];
+            ++$count;
           }
         }
       }
+      self::assertSame(count($class::EVENT), $count, 'Expected fixture event listeners to be registered for ' . $class);
     }
+    foreach ($suspended as [$event, $listener]) {
+      $dispatcher->removeListener($event, $listener);
+    }
+    return $suspended;
   }
 }
