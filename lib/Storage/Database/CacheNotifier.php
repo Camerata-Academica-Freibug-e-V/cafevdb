@@ -116,7 +116,12 @@ class CacheNotifier
    */
   public function notifyStorage(Storage $storage): void
   {
-    $shortId = $storage->getShortId();
+    try {
+      $shortId = $storage->getShortId();
+    } catch (Throwable $t) {
+      $this->logger->error('Unable to identify storage for pending cache changes.', [ 'exception' => $t ]);
+      throw $t;
+    }
     $unresolved = [];
     $this->processPendingChanges($storage, $shortId, $unresolved, true);
   }
@@ -144,11 +149,13 @@ class CacheNotifier
     $this->processing[$shortId] = true;
     $changes = null;
     $failureLogged = false;
+    $complete = false;
     try {
       $changes = $this->entityManager
         ->getRepository(Entities\DatabaseStorageCacheChange::class)
         ->findBy(['storageId' => $shortId], ['id' => 'ASC']);
       if (empty($changes)) {
+        $complete = true;
         return;
       }
       $this->clearPathCache($storage);
@@ -200,7 +207,9 @@ class CacheNotifier
           for (; $next < $count; ++$next) {
             if (!isset($consumed[$next]) && $changes[$next]->getEntryId() === $entryId
                 && $changes[$next]->getOldPath() === $path) {
-              throw new RuntimeException('Cannot safely reconcile interleaved cache renames for storage "' . $shortId . '".');
+              throw new CacheReconciliationConflictException(
+                'Cannot safely reconcile interleaved cache renames for storage "' . $shortId . '".',
+              );
             }
           }
         }
@@ -234,17 +243,24 @@ class CacheNotifier
         $this->entityManager->remove($change);
       }
       $this->entityManager->flush();
+      $complete = true;
     } catch (Throwable $t) {
-      if (!$failureLogged && $changes !== null) {
-        $ids = array_map(fn(Entities\DatabaseStorageCacheChange $change) => $change->getId(), $changes);
+      if (!$failureLogged) {
+        $batch = '';
+        if ($changes !== null) {
+          $ids = array_map(fn(Entities\DatabaseStorageCacheChange $change) => $change->getId(), $changes);
+          $batch = '; pending batch (' . count($ids) . ' rows), outbox row IDs: ' . implode(', ', $ids);
+        }
         $this->logger->error(
-          'Unable to process pending cache changes for storage "' . $shortId . '"; pending batch ('
-            . count($ids) . ' rows), outbox row IDs: ' . implode(', ', $ids) . '.',
+          'Unable to process pending cache changes for storage "' . $shortId . '"' . $batch . '.',
           [ 'exception' => $t ],
         );
       }
       throw $t;
     } finally {
+      if (!$complete) {
+        $storage->invalidatePendingCacheChangesCheck();
+      }
       unset($this->processing[$shortId]);
     }
   }
@@ -282,7 +298,9 @@ class CacheNotifier
         }
       }
       if (!$progress) {
-        throw new RuntimeException('Cannot safely reconcile cyclic cache renames for storage "' . $shortId . '".');
+        throw new CacheReconciliationConflictException(
+          'Cannot safely reconcile cyclic cache renames for storage "' . $shortId . '".',
+        );
       }
     }
     return $ordered;

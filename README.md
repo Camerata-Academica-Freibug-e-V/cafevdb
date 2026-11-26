@@ -171,6 +171,17 @@ is no background retry job. Reconciliation errors are logged with the storage
 ID and relevant outbox row IDs; a batch-planning failure logs the entire pending
 batch, not necessarily only the conflicting rows.
 
+On storage access, reconciliation failures are logged. By default, unsafe cyclic
+or interleaved rename batches block access; other failures allow access to
+continue. The cache may be stale or partially updated until a retry succeeds.
+Set the app configuration key `database_storage_cache_failure_policy` with
+`occ config:app:set cafevdb database_storage_cache_failure_policy --value=VALUE`:
+`fail` blocks access on every reconciliation failure, `continue` continues on
+every failure, and `fail-on-conflict` (default) blocks on unsafe cyclic or
+interleaved rename batches but continues on other failures. All modes retry on
+later access. Invalid values block access until corrected. This setting does not change post-commit
+notification or the outbox command.
+
 Run `occ cafevdb:storage:cache-outbox` to list pending rows, including their
 IDs, paths, creation times and creators. Use `--storage=ID` to select a storage,
 `--summary` for counts and oldest creation times, or `--json` for a JSON listing.

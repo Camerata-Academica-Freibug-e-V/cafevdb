@@ -30,8 +30,10 @@ use OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Listeners\DatabaseStorageTimestampListener;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
 use OCA\CAFEVDB\Storage\Database\CacheNotifier;
+use OCA\CAFEVDB\Storage\Database\CacheReconciliationConflictException;
 use OCA\CAFEVDB\Storage\Database\InvoicesStorage;
 use OCA\CAFEVDB\Storage\Database\ReadMeFactoryInterface;
+use OCA\CAFEVDB\Storage\Database\Storage;
 use OCA\CAFEVDB\Tests\MockProvider;
 use OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Events;
@@ -935,11 +937,7 @@ class DatabaseStorageTimestampTest extends TestCase
           ->findBy(['storageId' => $storageId]),
       );
 
-      Filesystem::getMountManager()->removeMount($mountPath);
-      $mounted = false;
-      $storage = $this->createScanStorage($storageId);
-      Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
-      $mounted = true;
+      $storage->setTestFailPath(null);
       $storage->hasUpdated('', $this->now->getTimestamp());
       self::assertNotFalse($storage->getCache()->get('retry.txt'));
       self::assertSame(
@@ -1037,7 +1035,11 @@ class DatabaseStorageTimestampTest extends TestCase
     $mountPath = '/files_external/cafevdb-partial-retry-' . bin2hex(random_bytes(8));
     $storage = null;
     $mounted = false;
+    $config = $this->mockProvider->getConfigService()->getCloudConfig();
+    $appName = $this->mockProvider->getConfigService()->getAppName();
+    $previousPolicy = $config->getAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG, null);
     try {
+      $config->deleteAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG);
       $root = (new Entities\DatabaseStorageFolder)->setName('');
       $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
       $root->setStorage($storageEntity);
@@ -1057,22 +1059,54 @@ class DatabaseStorageTimestampTest extends TestCase
       Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
       $mounted = true;
 
-      for ($attempt = 0; $attempt < 2; ++$attempt) {
-        try {
-          $storage->hasUpdated('', $this->now->getTimestamp());
-          self::fail('A failed reconciliation must fail storage access.');
-        } catch (RuntimeException $exception) {
-          self::assertStringContainsString('Unable to reconcile pending cache changes', $exception->getMessage());
+      foreach ([null, 'continue', 'fail', 'fail-on-conflict'] as $policy) {
+        if ($policy !== null) {
+          $config->setAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG, $policy);
         }
-        self::assertNotFalse($cache->get('first.txt'));
-        self::assertFalse($cache->get('second.txt'));
-        self::assertCount(
-          2,
-          $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
-            ->findBy(['storageId' => $storageId]),
-        );
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+          $failures = $storage->getTestFailureCount();
+          if ($policy === 'fail') {
+            try {
+              $storage->hasUpdated('', $this->now->getTimestamp());
+              self::fail('The fail policy must fail storage access.');
+            } catch (RuntimeException $exception) {
+              self::assertStringContainsString('Unable to reconcile pending cache changes', $exception->getMessage());
+            }
+          } else {
+            $storage->hasUpdated('', $this->now->getTimestamp());
+          }
+          self::assertGreaterThan($failures, $storage->getTestFailureCount());
+          if ($policy === 'fail') {
+            try {
+              $storage->opendir('');
+              self::fail('The fail policy must fail directory access.');
+            } catch (RuntimeException $exception) {
+              self::assertStringContainsString('Unable to reconcile pending cache changes', $exception->getMessage());
+            }
+          } else {
+            $directory = $storage->opendir('');
+            self::assertIsResource($directory);
+            closedir($directory);
+          }
+          self::assertNotFalse($cache->get('first.txt'));
+          self::assertFalse($cache->get('second.txt'));
+          self::assertCount(
+            2,
+            $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+              ->findBy(['storageId' => $storageId]),
+          );
+        }
       }
 
+      $config->setAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG, 'invalid');
+      try {
+        $storage->hasUpdated('', $this->now->getTimestamp());
+        self::fail('Invalid policy must fail storage access.');
+      } catch (\UnexpectedValueException $exception) {
+        self::assertStringContainsString('Invalid database storage cache failure policy', $exception->getMessage());
+      }
+
+      $config->setAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG, 'continue');
       $firstId = $cache->get('first.txt')->getId();
       $storage->setTestFailPath(null);
       $storage->hasUpdated('', $this->now->getTimestamp());
@@ -1086,6 +1120,11 @@ class DatabaseStorageTimestampTest extends TestCase
       $view = new View($mountPath);
       self::assertCount(2, $view->getDirectoryContent('/'));
     } finally {
+      if ($previousPolicy === null) {
+        $config->deleteAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG);
+      } else {
+        $config->setAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG, $previousPolicy);
+      }
       if ($mounted) {
         Filesystem::getMountManager()->removeMount($mountPath);
       }
@@ -1106,7 +1145,11 @@ class DatabaseStorageTimestampTest extends TestCase
     $mountPath = '/files_external/cafevdb-planner-retry-' . bin2hex(random_bytes(8));
     $storage = null;
     $mounted = false;
+    $config = $this->mockProvider->getConfigService()->getCloudConfig();
+    $appName = $this->mockProvider->getConfigService()->getAppName();
+    $previousPolicy = $config->getAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG, null);
     try {
+      $config->deleteAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG);
       $root = (new Entities\DatabaseStorageFolder)->setName('');
       $storageEntity = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
       $root->setStorage($storageEntity);
@@ -1130,22 +1173,36 @@ class DatabaseStorageTimestampTest extends TestCase
       $storage = $this->createScanStorage($storageId);
       Filesystem::getMountManager()->addMount(new MountPoint($storage, $mountPath));
       $mounted = true;
-      for ($attempt = 0; $attempt < 2; ++$attempt) {
-        try {
-          $storage->hasUpdated('', time());
-          self::fail('A cyclic batch must fail storage access.');
-        } catch (RuntimeException $exception) {
-          self::assertStringContainsString('cyclic cache renames', $exception->getMessage());
+      foreach ([null, 'continue', 'fail', 'fail-on-conflict'] as $policy) {
+        if ($policy !== null) {
+          $config->setAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG, $policy);
         }
-        self::assertSame($firstId, $cache->get('first.txt')->getId());
-        self::assertSame($secondId, $cache->get('second.txt')->getId());
-        self::assertCount(
-          2,
-          $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
-            ->findBy(['storageId' => $storageId]),
-        );
+        for ($attempt = 0; $attempt < 2; ++$attempt) {
+          if ($policy === null || $policy === 'fail' || $policy === 'fail-on-conflict') {
+            try {
+              $storage->hasUpdated('', time());
+              self::fail('A cyclic batch must fail storage access for this policy.');
+            } catch (CacheReconciliationConflictException $exception) {
+              self::assertStringContainsString('cyclic cache renames', $exception->getMessage());
+            }
+          } else {
+            $storage->hasUpdated('', time());
+          }
+          self::assertSame($firstId, $cache->get('first.txt')->getId());
+          self::assertSame($secondId, $cache->get('second.txt')->getId());
+          self::assertCount(
+            2,
+            $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
+              ->findBy(['storageId' => $storageId]),
+          );
+        }
       }
     } finally {
+      if ($previousPolicy === null) {
+        $config->deleteAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG);
+      } else {
+        $config->setAppValue($appName, Storage::CACHE_FAILURE_POLICY_CONFIG, $previousPolicy);
+      }
       if ($mounted) {
         Filesystem::getMountManager()->removeMount($mountPath);
       }
@@ -1161,11 +1218,13 @@ class DatabaseStorageTimestampTest extends TestCase
   {
     $this->applyMigrations('latest');
     try {
-      foreach (['operation', 'planner'] as $failure) {
+      foreach (['operation', 'planner', 'interleaved'] as $failure) {
         $storageId = 'integration/outbox-logs/' . bin2hex(random_bytes(8));
-        $moves = $failure === 'operation'
-          ? [['a.txt', 'b.txt', 1], ['b.txt', 'c.txt', 1]]
-          : [['a.txt', 'b.txt', 1], ['b.txt', 'a.txt', 2]];
+        $moves = match ($failure) {
+          'operation' => [['a.txt', 'b.txt', 1], ['b.txt', 'c.txt', 1]],
+          'planner' => [['a.txt', 'b.txt', 1], ['b.txt', 'a.txt', 2]],
+          'interleaved' => [['a.txt', 'b.txt', 1], ['x.txt', 'b.txt/child', 2], ['b.txt', 'c.txt', 1]],
+        };
         $rows = [];
         foreach ($moves as [$oldPath, $path, $entryId]) {
           $row = new Entities\DatabaseStorageCacheChange($storageId, $path, $oldPath, $entryId);
@@ -1194,9 +1253,16 @@ class DatabaseStorageTimestampTest extends TestCase
           self::fail('Reconciliation should fail.');
         } catch (RuntimeException $exception) {
           self::assertStringContainsString(
-            $failure === 'operation' ? 'Unable to reconcile' : 'cyclic cache renames',
+            match ($failure) {
+              'operation' => 'Unable to reconcile',
+              'planner' => 'cyclic cache renames',
+              'interleaved' => 'interleaved cache renames',
+            },
             $exception->getMessage(),
           );
+          if ($failure !== 'operation') {
+            self::assertInstanceOf(CacheReconciliationConflictException::class, $exception);
+          }
         }
         self::assertCount(1, $messages);
         self::assertStringContainsString($storageId, $messages[0][0]);
@@ -1205,10 +1271,14 @@ class DatabaseStorageTimestampTest extends TestCase
           'outbox row IDs: ' . implode(', ', $loggedIds) . ($failure === 'operation' ? ' (pending' : '.'),
           $messages[0][0],
         );
-        self::assertStringContainsString($failure === 'operation' ? 'pending batch: 3 rows' : 'pending batch (3 rows)', $messages[0][0]);
+        $count = count($rows);
+        self::assertStringContainsString(
+          $failure === 'operation' ? 'pending batch: ' . $count . ' rows' : 'pending batch (' . $count . ' rows)',
+          $messages[0][0],
+        );
         self::assertArrayHasKey('exception', $messages[0][1]);
         self::assertCount(
-          3,
+          $count,
           $this->entityManager->getRepository(Entities\DatabaseStorageCacheChange::class)
             ->findBy(['storageId' => $storageId]),
         );
@@ -1236,6 +1306,7 @@ class DatabaseStorageTimestampTest extends TestCase
       private string $testStorageId;
       private ReadMeFactoryInterface $testReadMeFactory;
       private ?string $testFailPath;
+      private int $testFailureCount = 0;
 
       public function __construct(array $params)
       {
@@ -1249,6 +1320,7 @@ class DatabaseStorageTimestampTest extends TestCase
       public function file_exists(string $path): bool
       {
         if ($path === $this->testFailPath) {
+          ++$this->testFailureCount;
           throw new RuntimeException('Simulated storage error');
         }
         return parent::file_exists($path);
@@ -1262,6 +1334,11 @@ class DatabaseStorageTimestampTest extends TestCase
       public function setTestFailPath(?string $path): void
       {
         $this->testFailPath = $path;
+      }
+
+      public function getTestFailureCount(): int
+      {
+        return $this->testFailureCount;
       }
 
       protected function getReadMeFactory(): ReadMeFactoryInterface

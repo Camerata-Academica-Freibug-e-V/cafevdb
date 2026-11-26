@@ -26,6 +26,7 @@ namespace OCA\CAFEVDB\Storage\Database;
 
 use \DateTimeInterface;
 use \DateTimeImmutable;
+use \UnexpectedValueException;
 
 use OCP\Files\IMimeTypeDetector;
 use OCP\EventDispatcher\IEventDispatcher;
@@ -68,6 +69,8 @@ abstract class Storage extends AbstractStorage
   const STORAGE_ID_TAG = '::database-storage';
 
   const PATH_SEPARATOR = Constants::PATH_SEP;
+
+  public const CACHE_FAILURE_POLICY_CONFIG = 'database_storage_cache_failure_policy';
 
   /** @var \OCA\CAFEVDB\Wrapped\Doctrine\ORM\EntityRepository */
   protected $filesRepository;
@@ -317,6 +320,16 @@ abstract class Storage extends AbstractStorage
   public function clearPathCache():void
   {
     $this->files = [];
+  }
+
+  /**
+   * Retry pending cache changes on the next access.
+   *
+   * @return void
+   */
+  public function invalidatePendingCacheChangesCheck(): void
+  {
+    $this->checkedPendingCacheChanges = false;
   }
 
   /**
@@ -576,12 +589,19 @@ abstract class Storage extends AbstractStorage
     if ($this->checkedPendingCacheChanges) {
       return;
     }
+    $policy = $this->cloudConfig()->getAppValue($this->appName(), self::CACHE_FAILURE_POLICY_CONFIG, 'fail-on-conflict');
+    if (!in_array($policy, ['fail', 'continue', 'fail-on-conflict'], true)) {
+      throw new UnexpectedValueException('Invalid database storage cache failure policy: ' . $policy);
+    }
+    $notifier = $this->appContainer()->get(CacheNotifier::class);
     $this->checkedPendingCacheChanges = true;
     try {
-      $this->appContainer()->get(CacheNotifier::class)->notifyStorage($this);
+      $notifier->notifyStorage($this);
     } catch (\Throwable $t) {
       $this->checkedPendingCacheChanges = false;
-      throw $t;
+      if ($policy === 'fail' || ($policy === 'fail-on-conflict' && $t instanceof CacheReconciliationConflictException)) {
+        throw $t;
+      }
     }
   }
 
