@@ -30,6 +30,7 @@ use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
 
+use OC\Security\Crypto;
 use OCP\IConfig;
 
 use OCA\RotDrop\Tests\DatabaseProvider;
@@ -280,7 +281,7 @@ class ArtifactsTest extends TestCase
     $cryptoConfig->method('getSystemValue')->willReturnMap([['secret', '', $testSecret]]);
     $connectorCredentials = new ConnectorDatabaseCredentials(
       config: $cloudConfig,
-      crypto: new \OC\Security\Crypto($cryptoConfig),
+      crypto: new Crypto($cryptoConfig),
       cloudConnection: $this->createStub(\OCP\IDBConnection::class),
       l: $this->mockProvider->getL10N(),
       appName: $this->mockProvider->appName,
