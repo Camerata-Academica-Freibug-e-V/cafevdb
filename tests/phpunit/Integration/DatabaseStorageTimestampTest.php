@@ -35,6 +35,7 @@ use OCA\CAFEVDB\Storage\Database\ReadMeFactoryInterface;
 use OCA\CAFEVDB\Tests\MockProvider;
 use OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Events;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 
 /** Exercise timestamp propagation through the real Doctrine flush. */
 class DatabaseStorageTimestampTest extends TestCase
@@ -711,6 +712,40 @@ class DatabaseStorageTimestampTest extends TestCase
       if ($storage !== null) {
         $storage->getCache()->remove('');
       }
+      $this->unapplyMigrations();
+    }
+  }
+
+  /** @return void */
+  public function testSameFlushDeleteAndRecreatePathIsRejected(): void
+  {
+    $this->applyMigrations('latest');
+    $storageId = 'integration/recreate-same-flush/' . bin2hex(random_bytes(8));
+    try {
+      $root = (new Entities\DatabaseStorageFolder)->setName('');
+      $storage = (new Entities\DatabaseStorage)->setStorageId($storageId)->setRoot($root);
+      $root->setStorage($storage);
+      $old = $root->addDocument(new Entities\EncryptedFile('document.txt', 'original', 'text/plain'));
+      $this->entityManager->persist($root);
+      $this->entityManager->persist($storage);
+      $this->flushTransaction();
+      $rootId = $root->getId();
+      $oldId = $old->getId();
+
+      $old->setParent(null);
+      $this->entityManager->remove($old);
+      $new = $root->addDocument(new Entities\EncryptedFile('document.txt', 'replacement', 'text/plain'));
+      $this->entityManager->persist($new);
+      try {
+        $this->flushTransaction();
+        self::fail('Inserting the replacement before deleting the old row should violate the unique constraint.');
+      } catch (UniqueConstraintViolationException $exception) {
+        self::assertNotSame('', $exception->getMessage());
+      }
+      $entry = $this->entityManager->find(Entities\DatabaseStorageFile::class, $oldId);
+      self::assertSame($rootId, $entry->getParent()->getId());
+      self::assertSame('document.txt', $entry->getName());
+    } finally {
       $this->unapplyMigrations();
     }
   }
