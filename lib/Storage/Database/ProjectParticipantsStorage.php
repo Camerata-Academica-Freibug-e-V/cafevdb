@@ -24,7 +24,6 @@
 
 namespace OCA\CAFEVDB\Storage\Database;
 
-use DateTimeInterface;
 use UnexpectedValueException;
 
 use OCP\EventDispatcher\IEventDispatcher;
@@ -121,14 +120,6 @@ class ProjectParticipantsStorage extends Storage
     }
 
     return $this->readMeFactory;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  protected function getStorageModificationDateTime():DateTimeInterface
-  {
-    return self::ensureDate(empty($this->rootFolder) ? null : $this->rootFolder->getUpdated());
   }
 
   /** {@inheritdoc} */

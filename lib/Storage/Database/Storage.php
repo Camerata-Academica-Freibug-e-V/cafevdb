@@ -52,7 +52,7 @@ use OCA\CAFEVDB\Constants;
  * Storage implementation for data-base storage, including access to
  * encrypted entities.
  */
-class Storage extends AbstractStorage
+abstract class Storage extends AbstractStorage
 {
   use CopyDirectory;
   use \OCA\CAFEVDB\Traits\ConfigTrait;
@@ -387,11 +387,11 @@ class Storage extends AbstractStorage
   /**
    * Return the overall modification time of the entire storage.
    *
-   * @return null|DateTimeInterface
+   * @return ?DateTimeInterface
    */
-  protected function getStorageModificationDateTime():?DateTimeInterface
+  protected function getStorageModificationDateTime(): ?DateTimeInterface
   {
-    return self::ensureDate($this->getDatabaseRepository(Entities\LogEntry::class)->modificationTime());
+    return self::ensureDate(empty($this->rootFolder) ? null : $this->rootFolder->getUpdated());
   }
 
   /**
@@ -410,11 +410,8 @@ class Storage extends AbstractStorage
     return $this->appName() . self::STORAGE_ID_TAG . self::PATH_SEPARATOR . $this->getShortId();
   }
 
-  /** @return string The shot storage id without the base prefix. */
-  public function getShortId():string
-  {
-    return '';
-  }
+  /** @return string The short storage id without the base prefix. */
+  abstract public function getShortId():string;
 
   /**
    * @param null|string $path The path to work on.

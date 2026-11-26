@@ -52,9 +52,6 @@ class Registration
         entityManager: $container->get(EntityManager::class),
       );
     });
-    $context->registerService(Storage::class, function(ContainerInterface $container) {
-      return new Storage([ 'configService' => $container->get(ConfigService::class), ]);
-    });
     $context->registerService(BankTransactionsStorage::class, function(ContainerInterface $container) {
       return new BankTransactionsStorage([ 'configService' => $container->get(ConfigService::class), ]);
     });

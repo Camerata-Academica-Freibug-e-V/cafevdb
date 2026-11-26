@@ -278,12 +278,6 @@ class TaxExemptionNoticesStorage extends Storage
   }
 
   /** {@inheritdoc} */
-  protected function getStorageModificationDateTime():?\DateTimeInterface
-  {
-    return self::ensureDate(empty($this->rootFolder) ? null : $this->rootFolder->getUpdated());
-  }
-
-  /** {@inheritdoc} */
   public function getShortId():string
   {
     return implode(

@@ -69,7 +69,7 @@ class DonationReceiptsStorage extends Storage
    *
    * @return DateTimeInterface
    */
-  protected function getBirthTimeFromEntity(Entity $entity):DateTimeInterface
+  protected function getBirthTimeFromEntity(Entity $entity): DateTimeInterface
   {
     return $entity->getDateOfReceipt();
   }
@@ -250,12 +250,6 @@ class DonationReceiptsStorage extends Storage
   protected function findFiles(string $dirName, bool $ignored = false):array
   {
     return parent::findFiles($dirName, rootIsMandatory: false);
-  }
-
-  /** {@inheritdoc} */
-  protected function getStorageModificationDateTime():?\DateTimeInterface
-  {
-    return self::ensureDate(empty($this->rootFolder) ? null : $this->rootFolder->getUpdated());
   }
 
   /** {@inheritdoc} */
