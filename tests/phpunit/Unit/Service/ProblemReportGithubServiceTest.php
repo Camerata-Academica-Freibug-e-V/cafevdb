@@ -123,21 +123,25 @@ class ProblemReportGithubServiceTest extends TestCase
       ) {
         parent::__construct($appName, $clientService, $db, $crypto, $l, $logger, $encryptionService);
       }
+      // phpcs:enable Squiz.Commenting.FunctionComment.Missing
+      /** {@inheritdoc} */
       protected function findIssue(string $fingerprint, string $repository): ?array
       {
         return $this->test->known();
       }
+      /** {@inheritdoc} */
       protected function rememberIssue(string $fingerprint, string $repository, int $number, string $url): void
       {
       }
+      /** {@inheritdoc} */
       protected function touchIssue(int|string $id): void
       {
       }
+      /** {@inheritdoc} */
       protected function forgetIssue(int|string $id): void
       {
         $this->test->forgotten[] = (string)$id;
       }
-      // phpcs:enable
     };
   }
 

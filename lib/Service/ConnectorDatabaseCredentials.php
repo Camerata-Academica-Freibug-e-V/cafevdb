@@ -30,7 +30,15 @@ class ConnectorDatabaseCredentials
   public const CLOUD = 'cloudConnectorCredentials';
   public const CLOUD_MANAGED = 'cloudConnectorCredentialsManaged';
 
-  // phpcs:disable Squiz.Commenting.FunctionComment.Missing
+  /**
+   * Initialize the connector database credential service.
+   *
+   * @param IConfig $config App configuration.
+   * @param ICrypto $crypto Encryption service.
+   * @param IDBConnection $cloudConnection Cloud database connection.
+   * @param IL10N $l Localization service.
+   * @param string $appName App identifier.
+   */
   public function __construct(
     private IConfig $config,
     private ICrypto $crypto,
@@ -40,12 +48,27 @@ class ConnectorDatabaseCredentials
   ) {
   }
 
+  /**
+   * Load and decrypt connector credentials.
+   *
+   * @param string $key Configuration key.
+   *
+   * @return array<string, mixed>
+   */
   public function load(string $key): array
   {
     $encrypted = $this->config->getAppValue($this->appName, $key, '');
     return $encrypted === '' ? [] : json_decode($this->crypto->decrypt($encrypted), true, flags: JSON_THROW_ON_ERROR);
   }
 
+  /**
+   * Encrypt and persist connector credentials.
+   *
+   * @param string $key Configuration key.
+   * @param array<string, mixed> $credentials Credentials to persist.
+   *
+   * @return void
+   */
   public function save(string $key, #[SensitiveParameter] array $credentials): void
   {
     if ($credentials === []) {
@@ -55,11 +78,21 @@ class ConnectorDatabaseCredentials
     }
   }
 
+  /**
+   * Mark the cloud connector as managed by this application.
+   *
+   * @return void
+   */
   public function markCloudManaged(): void
   {
     $this->config->setAppValue($this->appName, self::CLOUD_MANAGED, '1');
   }
 
+  /**
+   * Capture the cloud connector settings for later restoration.
+   *
+   * @return array<string, string>
+   */
   public function snapshotCloud(): array
   {
     return [
@@ -68,6 +101,13 @@ class ConnectorDatabaseCredentials
     ];
   }
 
+  /**
+   * Restore the cloud connector settings from a snapshot.
+   *
+   * @param array<string, string> $snapshot Connector settings.
+   *
+   * @return void
+   */
   public function restoreCloud(#[SensitiveParameter] array $snapshot): void
   {
     foreach ([self::CLOUD, self::CLOUD_MANAGED] as $key) {
@@ -79,6 +119,15 @@ class ConnectorDatabaseCredentials
     }
   }
 
+  /**
+   * Validate dedicated connector database credentials.
+   *
+   * @param Connection $appConnection Application database connection.
+   * @param string $user Connector database username.
+   * @param string $password Connector database password.
+   *
+   * @return array<string, string>
+   */
   public function prepare(
     Connection $appConnection,
     string $user,
@@ -117,6 +166,14 @@ class ConnectorDatabaseCredentials
     throw $this->accessError();
   }
 
+  /**
+   * Open a connector database connection.
+   *
+   * @param array<string, mixed> $credentials Connection credentials.
+   * @param string|null $database Database name.
+   *
+   * @return DbalConnection
+   */
   public function open(#[SensitiveParameter] array $credentials, ?string $database = null): DbalConnection
   {
     $params = array_intersect_key($credentials, array_flip(['host', 'port', 'unix_socket', 'user', 'password']))
@@ -127,6 +184,15 @@ class ConnectorDatabaseCredentials
     return DriverManager::getConnection($params);
   }
 
+  /**
+   * Verify that the connector database views can be queried.
+   *
+   * @param array<string, mixed> $credentials Connection credentials.
+   * @param string $database Database name.
+   * @param array<string, string> $views View names.
+   *
+   * @return void
+   */
   public function checkViews(#[SensitiveParameter] array $credentials, string $database, array $views): void
   {
     try {
@@ -150,11 +216,15 @@ class ConnectorDatabaseCredentials
     }
   }
 
+  /**
+   * Create the localized connector database access exception.
+   *
+   * @return DatabaseCloudConnectorViewException
+   */
   public function accessError(): DatabaseCloudConnectorViewException
   {
     return new DatabaseCloudConnectorViewException(
       $this->l->t('Cannot access the connector database with these credentials. Check the MariaDB account, password, and view privileges.'),
     );
   }
-  // phpcs:enable
 }
