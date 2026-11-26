@@ -345,17 +345,17 @@ class ParticipantFileAuditService
           $matchingReferences = $related[$fileId][$key] ?? [];
           if ($this->clubMembersProjectId > 0 && (int)$projectId !== $this->clubMembersProjectId) {
             $sourceKey = $musicianId . ':' . $this->clubMembersProjectId;
-            $activeMandates = [];
+            $mandateReferences = [];
             foreach ($related[$fileId][$sourceKey] ?? [] as $reference) {
               if ($reference['source'] === 'debit-mandate') {
                 $matchingReferences[] = $reference;
-                if ($reference['deleted'] === null && ($entries[(int)$reference['entry_id']]['type'] ?? null) === 'file') {
-                  $activeMandates[] = $reference;
+                if (($entries[(int)$reference['entry_id']]['type'] ?? null) === 'file') {
+                  $mandateReferences[] = $reference;
                 }
               }
             }
-            if ($activeMandates !== [] && !array_filter(
-              $activeMandates,
+            if ($mandateReferences !== [] && !array_filter(
+              $mandateReferences,
               static fn(array $reference) => in_array((int)$reference['entry_id'], $links[$fileId][$sourceKey] ?? [], true),
             )) {
               $reasons[] = 'club-mandate-source-link-missing';
@@ -363,13 +363,14 @@ class ParticipantFileAuditService
           }
           if ($matchingReferences !== [] && count(array_filter(
             $matchingReferences,
-            static fn(array $reference) => $reference['deleted'] === null,
+            static fn(array $reference) => $reference['source'] === 'debit-mandate' || $reference['deleted'] === null,
           )) === 0) {
             $reasons[] = 'document-deleted';
           }
         }
       }
-      if (isset($finding['source']) && ($finding['deleted'] ?? null) !== null) {
+      if (isset($finding['source']) && ($finding['deleted'] ?? null) !== null
+          && $finding['source'] !== 'debit-mandate') {
         $reasons[] = 'document-deleted';
       }
       $fieldReference = in_array($finding['source'] ?? null, ['participant-field', 'participant-field-support'], true)
@@ -572,7 +573,11 @@ class ParticipantFileAuditService
     return $expected;
   }
 
-  /** @return array */
+  /**
+   * @return array
+   *
+   * Revocation invalidates the mandate, not the participant's access to its written document.
+   */
   private function references(): array
   {
     return $this->connection->fetchAllAssociative(
@@ -740,7 +745,7 @@ class ParticipantFileAuditService
          WHERE receipt.deleted IS NULL AND receipt.supporting_document_id IS NOT NULL
          UNION ALL
          SELECT 'debit-mandate', sequence, musician_id, project_id, written_mandate_id
-         FROM SepaDebitMandates WHERE deleted IS NULL AND written_mandate_id IS NOT NULL
+         FROM SepaDebitMandates WHERE written_mandate_id IS NOT NULL
        ) documents
        JOIN Musicians musician ON musician.id = documents.musician_id AND musician.deleted IS NULL
        JOIN Projects project ON project.id = documents.project_id AND project.deleted IS NULL
@@ -851,7 +856,7 @@ class ParticipantFileAuditService
          AND source_participant.musician_id = mandate.musician_id AND source_participant.deleted IS NULL
        JOIN ProjectParticipants target ON target.musician_id = mandate.musician_id AND target.deleted IS NULL
        JOIN Projects target_project ON target_project.id = target.project_id AND target_project.deleted IS NULL
-       WHERE mandate.deleted IS NULL AND mandate.written_mandate_id IS NOT NULL
+       WHERE mandate.written_mandate_id IS NOT NULL
          AND (target.project_id = mandate.project_id OR (? > 0 AND mandate.project_id = ?))',
       [$this->clubMembersProjectId, $this->clubMembersProjectId],
     );

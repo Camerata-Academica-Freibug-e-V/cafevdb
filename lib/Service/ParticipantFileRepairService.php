@@ -266,7 +266,7 @@ class ParticipantFileRepairService
     } elseif ($finding['source'] === 'debit-mandate') {
       $updated = $this->connection->executeStatement(
         'UPDATE SepaDebitMandates SET written_mandate_id = ?
-         WHERE sequence = ? AND musician_id = ? AND project_id = ? AND written_mandate_id = ? AND deleted IS NULL',
+         WHERE sequence = ? AND musician_id = ? AND project_id = ? AND written_mandate_id = ?',
         [$entryId, $finding['source_id'], $finding['musician_id'], $finding['project_id'], $finding['entry_id']],
       );
       if ($updated !== 1) {

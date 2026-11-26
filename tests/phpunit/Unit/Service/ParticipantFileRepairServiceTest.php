@@ -305,4 +305,29 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame([], $report['remaining']['findings']);
     self::assertSame([], $this->service->repair()['repairs']);
   }
+
+  /** @return void */
+  public function testRevokedMandateDocumentIsRepairedFromOrphanTree(): void
+  {
+    $this->connection->executeStatement(
+      "INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 201, '2000-01-01')",
+    );
+    $before = $this->snapshot();
+    $report = $this->service->repair();
+
+    self::assertSame(['applied' => 2, 'deferred' => 1], $report['summary']);
+    self::assertSame([], $report['remaining']['findings']);
+    $relinkedEntryId = (int)$this->connection->fetchOne('SELECT written_mandate_id FROM SepaDebitMandates');
+    self::assertNotSame(201, $relinkedEntryId);
+    self::assertSame('2000-01-01', $this->connection->fetchOne('SELECT deleted FROM SepaDebitMandates'));
+    self::assertSame(
+      1,
+      (int)$this->connection->fetchOne(
+        'SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE id = ? AND file_id = 1 AND type = ?',
+        [$relinkedEntryId, 'file'],
+      ),
+    );
+    self::assertSame([], $this->service->repair()['repairs']);
+    self::assertNotSame($before, $this->snapshot());
+  }
 }
