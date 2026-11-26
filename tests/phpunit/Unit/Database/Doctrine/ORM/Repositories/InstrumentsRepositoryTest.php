@@ -24,6 +24,8 @@
 
 namespace OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Repositories;
 
+use ReflectionProperty;
+
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -136,6 +138,46 @@ class InstrumentsRepositoryTest extends TestCase
   ];
 
   /** @return void */
+  public function testFindNonInstrumentsWithDifferentFamilyLanguages(): void
+  {
+    $translatedFamily = $this->createStub(Entities\InstrumentFamily::class);
+    $translatedFamily->method('getFamily')->willReturn('Translated role family');
+    $translatedFamily->method('getUntranslatedFamily')->willReturn(Entities\ProjectInstrument::NOT_AN_INSTRUMENT_FAMILY);
+
+    $originalFamily = $this->createStub(Entities\InstrumentFamily::class);
+    $originalFamily->method('getFamily')->willReturn(Entities\ProjectInstrument::NOT_AN_INSTRUMENT_FAMILY);
+
+    $strings = $this->createStub(Entities\InstrumentFamily::class);
+    $strings->method('getFamily')->willReturn('Strings');
+
+    $translatedRole = new Entities\Instrument();
+    $translatedRole->setName('Translated role');
+    new ReflectionProperty(Entities\Instrument::class, 'untranslatedName')->setValue($translatedRole, 'role');
+    $translatedRole->getFamilies()->add($translatedFamily);
+
+    $originalRole = new Entities\Instrument();
+    $originalRole->setName('Other role');
+    $originalRole->getFamilies()->add($originalFamily);
+
+    $violin = new Entities\Instrument();
+    $violin->setName('Violin');
+    $violin->getFamilies()->add($strings);
+
+    $repository = $this->getStubBuilder(InstrumentsRepository::class)
+      ->disableOriginalConstructor()
+      ->onlyMethods(['findAll'])
+      ->getStub();
+    $repository->method('findAll')->willReturn([$violin, $translatedRole, $originalRole]);
+
+    $this->assertSame([$translatedRole, $originalRole], $repository->findNonInstruments());
+    $this->assertSame([$translatedRole, $originalRole], $repository->findNonInstruments([]));
+    $this->assertSame([$translatedRole], $repository->findNonInstruments(['role']));
+    $this->assertSame([$translatedRole], $repository->findNonInstruments(['Translated role']));
+    $this->assertSame([$originalRole], $repository->findNonInstruments(['Other role']));
+    $this->assertSame([], $repository->findNonInstruments(['Violin']));
+  }
+
+  /** @return void */
   public function testDatabaseSetup(): void
   {
     $this->applyMigrations('latest');
@@ -189,12 +231,12 @@ class InstrumentsRepositoryTest extends TestCase
     $this->assertEquals(1, count($onlyResult));
     $this->assertEquals($result[0], $onlyResult[0]);
 
-    // should fail as translations have not yet been flushed.
+    // Translated names are matched in memory, even before flushing.
     $only = reset($result)->getName();
     $onlyResult = $this->repository->findNonInstruments(only: [$only]);
-    $this->assertEquals(0, count($onlyResult));
+    $this->assertEquals(1, count($onlyResult));
+    $this->assertEquals($result[0], $onlyResult[0]);
 
-    // flush should "fix" this.
     $this->entityManager->flush();
     $onlyResult = $this->repository->findNonInstruments(only: [$only]);
     $this->assertEquals(1, count($onlyResult));

@@ -35,20 +35,23 @@ class InstrumentsRepository extends EntityRepository
    * Return a collection of non-instruments, that is, instruments which belong
    * to the family Entities\ProjectInstrument::NOT_AN_INSTRUMENT_FAMILY.
    *
-   * @param null|array $only If not empty restrict to the given instrument names.
+   * @param null|array $only If not empty restrict to the given instrument names,
+   * either translated or untranslated.
    *
-   * @return array<int, Entities\Instrument> The found instruments indexed by id.
+   * @return array<int, Entities\Instrument> Active instruments in display order.
    */
-  public function findNonInstruments(?array $only = null)
+  public function findNonInstruments(?array $only = null): array
   {
-    $l = $this->entityManagerDecorator->getTranslatableL10n();
-    $criteria = [
-      'families.family' => [ Entities\ProjectInstrument::NOT_AN_INSTRUMENT_FAMILY, $l->t(Entities\ProjectInstrument::NOT_AN_INSTRUMENT_FAMILY) ],
-    ];
-    if (!empty($only)) {
-      $criteria['name'] = array_unique(array_merge($only, array_map(fn(string $name) => $l->t($name), $only)));
+    $result = [];
+    foreach ($this->findAll() as $instrument) {
+      if ($instrument->isNotAnInstrument()
+          && (empty($only)
+              || in_array($instrument->getName(), $only, true)
+              || in_array($instrument->getUntranslatedName(), $only, true))) {
+        $result[] = $instrument;
+      }
     }
-    return $this->findBy($criteria, orderBy: [ 'id' => 'INDEX' ]);
+    return $result;
   }
 
   /**
