@@ -27,6 +27,7 @@ namespace OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\ORM as CAFEVDB;
 
 use OCA\CAFEVDB\Database\Doctrine\DBAL\Types;
+use OCA\CAFEVDB\Exceptions\DatabaseReadonlyException;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
 use OCA\CAFEVDB\Wrapped\Doctrine\Common\Collections\ArrayCollection;
 use OCA\CAFEVDB\Wrapped\Doctrine\Common\Collections\Collection;
@@ -73,9 +74,14 @@ class InsuranceBroker implements \ArrayAccess
    * @param string $shortName
    *
    * @return InsuranceBroker
+   *
+   * @throws DatabaseReadonlyException If the short name is in use by insurance rates.
    */
   public function setShortName(string $shortName):InsuranceBroker
   {
+    if (isset($this->shortName) && $this->shortName !== $shortName && !$this->insuranceRates->isEmpty()) {
+      throw new DatabaseReadonlyException('The short name of an insurance broker with insurance rates cannot be changed.');
+    }
     $this->shortName = $shortName;
 
     return $this;

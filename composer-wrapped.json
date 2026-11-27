@@ -17,7 +17,6 @@
   "require": {
     "beberlei/doctrineextensions": "^1.2.0",
     "bytestream/horde-imap-client": "*",
-    "cjh/doctrine-on-update-extension": "dev-master",
     "firehed/dbal-logger": "^2.0.0",
     "doctrine/annotations": "*",
     "doctrine/dbal": "^4.0",
@@ -72,13 +71,6 @@
         "versions": {
           "mediamonks/doctrine-extensions": "0.1.x-dev"
         },
-        "symlink": false
-      }
-    },
-    {
-      "type": "path",
-      "url": "3rdparty/doctrine-on-update-extension",
-      "options": {
         "symlink": false
       }
     },
