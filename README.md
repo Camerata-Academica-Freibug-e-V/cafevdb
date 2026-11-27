@@ -202,8 +202,10 @@ creates missing storage roots, deletes source entries, resurrects soft-deleted
 records, or grants ownership for a private field's link-only repair.
 Participant-field, composite-payment and debit-mandate references are pointed
 to their new participant entries; dedicated invoice/receipt entries are retained.
-Metadata is updated directly to avoid ORM orphan removal deleting shared source
-entries; the command clears the ORM identity map afterward.
+New directory entries are persisted through the ORM so its cache-coherency
+listeners record the corresponding changes. Business references are updated
+directly to avoid ORM orphan removal deleting shared source entries; the command
+clears the ORM identity map afterward.
 
 A missing or unusable participant public key does not prevent recording
 ownership. Seal reconciliation is explicitly deferred and reported, and no

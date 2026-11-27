@@ -62,7 +62,17 @@ class ParticipantFileRepairServiceTest extends TestCase
     ] as $sql) {
       $this->connection->executeStatement($sql);
     }
-    $this->service = new ParticipantFileRepairService($this->connection, 20, static fn(array $f) => ['Documents']);
+    $this->service = new ParticipantFileRepairService(
+      $this->connection,
+      20,
+      static fn(array $f) => ['Documents'],
+      fn(int $rootId, array $folders, string $fileName, int $fileId): int => $this->createFileEntry(
+        $rootId,
+        $folders,
+        $fileName,
+        $fileId,
+      ),
+    );
   }
 
   /** {@inheritdoc} */
@@ -82,6 +92,42 @@ class ParticipantFileRepairServiceTest extends TestCase
       $result[$table] = $this->connection->fetchAllAssociative('SELECT * FROM ' . $table);
     }
     return $result;
+  }
+
+  /**
+   * Create a test directory entry using SQL in the isolated unit fixture.
+   *
+   * @param int $rootId
+   * @param array $folders
+   * @param string $fileName
+   * @param int $fileId
+   *
+   * @return int
+   */
+  private function createFileEntry(int $rootId, array $folders, string $fileName, int $fileId): int
+  {
+    $parentId = $rootId;
+    foreach ($folders as $name) {
+      $folder = $this->connection->fetchAssociative(
+        'SELECT id, type FROM DatabaseStorageDirEntries WHERE parent_id = ? AND name = ?',
+        [$parentId, $name],
+      );
+      if ($folder !== false) {
+        if ($folder['type'] !== 'folder') {
+          throw new RuntimeException('Unexpected non-folder in test fixture.');
+        }
+        $parentId = (int)$folder['id'];
+        continue;
+      }
+      $this->connection->insert('DatabaseStorageDirEntries', [
+        'parent_id' => $parentId, 'name' => $name, 'type' => 'folder',
+      ]);
+      $parentId = (int)$this->connection->lastInsertId();
+    }
+    $this->connection->insert('DatabaseStorageDirEntries', [
+      'parent_id' => $parentId, 'name' => $fileName, 'type' => 'file', 'file_id' => $fileId,
+    ]);
+    return (int)$this->connection->lastInsertId();
   }
 
   /** @return void */
@@ -195,7 +241,17 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame(202, (int)$this->connection->fetchOne("SELECT supporting_document_id FROM ProjectParticipantFieldsData WHERE option_key = X'02'"));
     self::assertSame(2, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE id IN (201, 202)'));
     self::assertSame(1, $this->service->repair()['summary']['blocked']);
-    $retry = new ParticipantFileRepairService($this->connection, 20, static fn(array $f) => ['OtherDocuments']);
+    $retry = new ParticipantFileRepairService(
+      $this->connection,
+      20,
+      static fn(array $f) => ['OtherDocuments'],
+      fn(int $rootId, array $folders, string $fileName, int $fileId): int => $this->createFileEntry(
+        $rootId,
+        $folders,
+        $fileName,
+        $fileId,
+      ),
+    );
     self::assertSame(1, $retry->repair()['summary']['applied']);
     self::assertNotSame(202, (int)$this->connection->fetchOne("SELECT supporting_document_id FROM ProjectParticipantFieldsData WHERE option_key = X'02'"));
   }

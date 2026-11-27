@@ -408,6 +408,26 @@ class DatabaseStorage extends Command
           default => throw new RuntimeException('Unsupported participant document source.'),
         };
       },
+      function(int $rootId, array $folders, string $fileName, int $fileId): int {
+        $folder = $this->entityManager->find(Entities\DatabaseStorageFolder::class, $rootId);
+        if ($folder === null) {
+          throw new RuntimeException('The participant storage root disappeared during repair.');
+        }
+        foreach ($folders as $name) {
+          $folder = $folder->addSubFolder($name);
+        }
+        $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
+        if ($file === null) {
+          throw new RuntimeException('The encrypted file disappeared during repair.');
+        }
+        $entry = $folder->addDocument($file, $fileName);
+        if (!$entry instanceof Entities\DatabaseStorageFile) {
+          throw new RuntimeException('The ORM did not create a participant file entry.');
+        }
+        $this->entityManager->persist($entry);
+        $this->entityManager->flush();
+        return (int)$entry->getId();
+      },
     );
     try {
       $report = $service->repair($input->getOption('dry-run'));

@@ -24,11 +24,14 @@ class ParticipantFileRepairService
    * @param Connection $connection
    * @param int $clubMembersProjectId
    * @param Closure $destination Returns the folder components for a business reference.
+   * @param Closure(int, array<int, string>, string, int): int $createFileEntry
+   * Creates a file entry through the ORM and returns its ID.
    */
   public function __construct(
     private Connection $connection,
     private int $clubMembersProjectId,
     private Closure $destination,
+    private Closure $createFileEntry,
   ) {
   }
 
@@ -227,28 +230,12 @@ class ParticipantFileRepairService
       return ['status' => 'planned'];
     }
     $now = (new DateTimeImmutable())->format('Y-m-d H:i:s.u');
-    $parent = (int)$root;
-    foreach ($folders as $component) {
-      $id = $this->connection->fetchOne(
-        'SELECT id FROM DatabaseStorageDirEntries WHERE parent_id = ? AND name = ?',
-        [$parent, $component],
-      );
-      if (!$id) {
-        $this->connection->insert('DatabaseStorageDirEntries', [
-          'parent_id' => $parent, 'name' => $component, 'type' => 'folder',
-          'created' => $now, 'updated' => $now,
-        ]);
-        $id = $this->connection->lastInsertId();
-      }
-      $parent = (int)$id;
+    $entryId = $existing
+      ? (int)$existing['id']
+      : ($this->createFileEntry)((int)$root, $folders, $source['name'], (int)$finding['file_id']);
+    if ($entryId <= 0) {
+      throw new RuntimeException('The ORM did not return the repaired participant file entry ID.');
     }
-    if (!$existing) {
-      $this->connection->insert('DatabaseStorageDirEntries', [
-        'parent_id' => $parent, 'name' => $source['name'], 'type' => 'file',
-        'file_id' => $finding['file_id'], 'created' => $now, 'updated' => $now,
-      ]);
-    }
-    $entryId = $existing ? (int)$existing['id'] : (int)$this->connection->lastInsertId();
     if (in_array($finding['source'], ['participant-field', 'participant-field-support'], true)) {
       $column = $finding['source'] === 'participant-field' ? 'option_value' : 'supporting_document_id';
       $updated = $this->connection->executeStatement(
@@ -281,10 +268,6 @@ class ParticipantFileRepairService
       if ($updated !== 1) {
         throw new RuntimeException('The composite payment reference changed during repair.');
       }
-    }
-    while ($parent !== 0) {
-      $this->connection->update('DatabaseStorageDirEntries', ['updated' => $now], ['id' => $parent]);
-      $parent = (int)$this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = ?', [$parent]);
     }
     return ['status' => 'applied', 'participant_entry_id' => $entryId];
   }
