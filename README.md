@@ -429,6 +429,10 @@ For each linked musician this renews the row access token and recrypts their
 bank accounts and encrypted file data, including soft-deleted entries. Users
 with app permissions also receive the app encryption key.
 
+File data has separate creation and modification timestamps. For data that
+predates the timestamp migration these are initially unknown (NULL); subsequent
+content changes set the modification timestamp.
+
 Add `--dry-run` to enumerate without changing tokens, keys or encrypted entries.
 Add `-v` or `--verbose` to list each encrypted entity's class and identifier as
 it is processed (or would be processed in a dry run); decrypted contents are

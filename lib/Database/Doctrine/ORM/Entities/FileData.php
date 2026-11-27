@@ -53,6 +53,7 @@ class FileData implements \ArrayAccess
 {
   use CAFEVDB\Traits\ArrayTrait;
   use CAFEVDB\Traits\FactoryTrait;
+  use CAFEVDB\Traits\TimestampableEntity;
 
   public const DATA_FORMAT_BINARY = 'binary';
   public const DATA_FORMAT_BASE64 = 'base64';
