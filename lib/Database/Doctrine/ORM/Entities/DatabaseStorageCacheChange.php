@@ -13,7 +13,7 @@ namespace OCA\CAFEVDB\Database\Doctrine\ORM\Entities;
 use OCA\CAFEVDB\Database\Doctrine\ORM as CAFEVDB;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
 use OCA\CAFEVDB\Wrapped\Carbon\CarbonImmutable;
-use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Schema\DefaultExpression\CurrentTime;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Schema\DefaultExpression\CurrentTimestamp;
 use OCA\CAFEVDB\Wrapped\Doctrine\ORM\Mapping as ORM;
 
 /** Durable outbox entry for a post-commit file-cache update. */
@@ -25,7 +25,7 @@ class DatabaseStorageCacheChange
   use CAFEVDB\Traits\AutoIncrementTrait;
   use CAFEVDB\Traits\CreatedAt;
 
-  #[ORM\Column(type: 'datetime_immutable', insertable: false, updatable: false, generated: 'INSERT', options: ['default' => new CurrentTime()])]
+  #[ORM\Column(type: 'datetime_immutable', insertable: false, updatable: false, generated: 'INSERT', options: ['default' => new CurrentTimestamp()])]
   protected ?CarbonImmutable $created = null;
 
   #[ORM\Column(type: 'string', length: 512, nullable: false)]

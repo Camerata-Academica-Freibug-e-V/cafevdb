@@ -78,7 +78,7 @@ class OfflineEntityManagerTest extends TestCase
 
         self::assertSame($provider, $connection->getConfiguration()->getTypeProvider());
         foreach (['date', 'datetime', 'datetimetz'] as $name) {
-          self::assertSame(Carbon\Doctrine\DateTimeType::class, $provider->get($name)::class);
+          self::assertSame(Carbon\Doctrine\DateTimeImmutableType::class, $provider->get($name)::class);
           self::assertSame(Carbon\Doctrine\DateTimeImmutableType::class, $provider->get($name . '_immutable')::class);
         }
         foreach ([UuidType::class, DecimalRationalMonetaryType::class, ArrayType::class] as $typeClass) {
@@ -109,7 +109,7 @@ class OfflineEntityManagerTest extends TestCase
       self::assertInstanceOf($typeClass, $provider->get($typeClass::NAME));
       self::assertSame($typeClass::NAME, $platform->getDoctrineTypeMapping($typeClass::NAME));
     }
-    self::assertInstanceOf(Carbon\Doctrine\DateTimeType::class, $provider->get('datetime'));
+    self::assertInstanceOf(Carbon\Doctrine\DateTimeImmutableType::class, $provider->get('datetime'));
 
     $generator = new GenerateEntityMetadata(
       devScriptsFolder: dirname(__DIR__, 4) . '/dev-scripts',

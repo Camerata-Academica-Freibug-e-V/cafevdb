@@ -496,7 +496,7 @@ class EntityManager extends AbstractEntityManager
       }
       foreach (['date', 'datetime', 'datetimetz'] as $name) {
         foreach ([
-          $name => \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeType::class,
+          $name => \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeImmutableType::class,
           $name . '_immutable' => \OCA\CAFEVDB\Wrapped\Carbon\Doctrine\DateTimeImmutableType::class,
         ] as $typeName => $typeClass) {
           $type = new $typeClass();
@@ -650,6 +650,7 @@ class EntityManager extends AbstractEntityManager
     // Keep dev-mode in ORM disabled, instead we shoot down the ordinary cache
     // if we think we are in dev-mode.
     $config = ORMSetup::createAttributeMetadataConfig(self::ENTITY_PATHS, isDevMode: false);
+    $config->setUseSchemaEditorApi(true);
     $config->enableNativeLazyObjects(true);
     $config->setEntityListenerResolver(new class($this->appContainer) extends ORM\Mapping\DefaultEntityListenerResolver {
       /** {@inheritdoc} */

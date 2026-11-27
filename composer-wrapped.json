@@ -108,7 +108,8 @@
         "Add an optional progress callback to the Horde IMAP Client": "../dev-scripts/lib/patches/bytestream/horde-imap-client/write-progress-callback.patch"
       },
       "doctrine/dbal": {
-        "Fix Index::spansColumns() to also check the number of columns": "../dev-scripts/lib/patches/doctrine/dbal/fix-index-spans-columns.patch"
+        "Fix Index::spansColumns() to also check the number of columns": "../dev-scripts/lib/patches/doctrine/dbal/fix-index-spans-columns.patch",
+        "Sync with recent MariaDB information schema changs": "../dev-scripts/lib/patches/doctrine/dbal/fix-mariadb-information-schema-datetime-defaults.patch"
       },
       "doctrine/migrations": {
         "Make the DependencyFactory extendable": "../dev-scripts/lib/patches/doctrine/migrations/extendable-dependency-factory.patch",
