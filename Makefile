@@ -27,8 +27,7 @@ PHPDOC_PREREQ_TARGET = dev-setup
 WRAPPER_GIT_DEPENDENCIES =\
  3rdparty/doctrine-orm\
  3rdparty/gedmo-doctrine-extensions\
- 3rdparty/mediamonks-doctrine-extensions\
- 3rdparty/doctrine-on-update-extension
+ 3rdparty/mediamonks-doctrine-extensions
 SCOPED_VENDOR_LINK_DIRS = 3rdparty vendor
 # keep the dev-dependencies, composer-patches is one of them
 SCOPED_COMPOSER_UPDATE_OPTIONS =

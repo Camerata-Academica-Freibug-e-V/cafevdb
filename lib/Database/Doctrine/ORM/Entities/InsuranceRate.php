@@ -32,7 +32,6 @@ use OCA\CAFEVDB\Database\Doctrine\DBAL\Types;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\DBAL\Types\DecimalRationalP4S4Type as RateDatabaseType;
 use OCA\CAFEVDB\Database\Doctrine\ORM as CAFEVDB;
 use OCA\CAFEVDB\PageRenderer\DatabaseTables;
-use OCA\CAFEVDB\Wrapped\CJH\Doctrine\Extensions\Mapping\Annotation as CJH;
 use OCA\CAFEVDB\Wrapped\Carbon\CarbonImmutable as DateTimeImmutable;
 use OCA\CAFEVDB\Wrapped\Doctrine\Common\Collections\ArrayCollection;
 use OCA\CAFEVDB\Wrapped\Doctrine\Common\Collections\Collection;
@@ -51,11 +50,6 @@ class InsuranceRate implements \ArrayAccess
   use CAFEVDB\Traits\FactoryTrait;
   use CAFEVDB\Traits\DateTimeTrait;
 
-  #[CJH\ForeignKey(
-    targetEntity: 'InsuranceBroker',
-    referencedColumnName: 'short_name',
-    onUpdate: 'cascade',
-  )]
   #[ORM\JoinColumn(referencedColumnName: 'short_name')]
   #[ORM\ManyToOne(targetEntity: InsuranceBroker::class, inversedBy: 'insuranceRates', cascade: ['persist'], fetch: 'EXTRA_LAZY')]
   #[ORM\Id]

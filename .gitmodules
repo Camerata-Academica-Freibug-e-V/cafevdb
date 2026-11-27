@@ -2,10 +2,6 @@
 	path = 3rdparty/mediamonks-doctrine-extensions
 	url = https://github.com/rotdrop/mediamonks-doctrine-extensions.git
 	branch = feature/transform-context-field
-[submodule "3rdparty/doctrine-on-update-extension"]
-	path = 3rdparty/doctrine-on-update-extension
-	url = https://github.com/rotdrop/doctrine-on-update-extension.git
-        branch = feature/doctrine-orm-3.2.x
 [submodule "3rdparty/gedmo-doctrine-extensions"]
 	path = 3rdparty/gedmo-doctrine-extensions
 	url = https://github.com/rotdrop/DoctrineExtensions.git

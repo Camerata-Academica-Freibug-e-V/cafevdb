@@ -26,6 +26,7 @@ namespace OCA\CAFEVDB\Tests\Unit\PageRenderer;
 
 use DateTimeImmutable;
 use DOMDocument;
+use DOMXPath;
 
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes;
@@ -77,6 +78,8 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\CompositePayment::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\Instrument::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\InstrumentFamily::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\InsuranceBroker::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\InsuranceRate::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\LogEntry::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\Musician::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Entities\MusicianEmailAddress::class)]
@@ -298,6 +301,78 @@ class InsuranceBrokersTest extends TestCase
   }
 
   /**
+   * @param bool $used Whether the broker has a rate.
+   * @param string $operation The form operation.
+   * @param bool $readonly Whether the short-name input should be readonly.
+   *
+   * @return void
+   */
+  #[Attributes\Depends('testApplyMigrations')]
+  #[Attributes\DataProvider('shortNameFormCases')]
+  public function testShortNameForm(bool $used, string $operation, bool $readonly): void
+  {
+    $connection = $this->entityManager->getConnection();
+    $connection->insert(PageRenderer\DatabaseTables::INSURANCE_BROKERS_TABLE, [
+      'short_name' => 'test-broker',
+      'long_name' => 'Test broker',
+      'address' => 'Test address',
+    ]);
+    try {
+      if ($used) {
+        $connection->insert(PageRenderer\DatabaseTables::INSURANCE_RATES_TABLE, [
+          'broker_id' => 'test-broker',
+          'geographical_scope' => 'Germany',
+          'rate' => '0.0100',
+        ]);
+      }
+      $this->entityManager->clear();
+      $this->postData[$this->phpMyEdit->cgiSysName('operation')] = $this->phpMyEdit->labels[$operation];
+      $this->postData[$this->phpMyEdit->cgiSysName('rec')] = ['short_name' => 'test-broker'];
+      ob_start();
+      try {
+        $this->renderer->render(execute: true);
+        $html = ob_get_contents();
+      } finally {
+        ob_end_clean();
+      }
+      $document = new DOMDocument('1.0', 'UTF-8');
+      $this->assertTrue($document->loadHTML($html, LIBXML_PEDANTIC));
+      $xpath = new DOMXPath($document);
+      $inputs = $xpath->query('//input[@name="' . $this->phpMyEdit->cgiDataName('short_name') . '"]');
+      $this->assertCount(1, $inputs);
+      $this->assertSame($readonly, $inputs->item(0)->hasAttribute('readonly'));
+      if ($used) {
+        $broker = $this->entityManager->find(
+          \OCA\CAFEVDB\Database\Doctrine\ORM\Entities\InsuranceBroker::class,
+          'test-broker',
+        );
+        $broker->setShortName('test-broker');
+        try {
+          $broker->setShortName('changed');
+          $this->fail('Changing an in-use short name should fail.');
+        } catch (\LogicException) {
+          $this->assertSame('test-broker', $broker->getShortName());
+        }
+      }
+    } finally {
+      $connection->delete(PageRenderer\DatabaseTables::INSURANCE_RATES_TABLE, ['broker_id' => 'test-broker']);
+      $connection->delete(PageRenderer\DatabaseTables::INSURANCE_BROKERS_TABLE, ['short_name' => 'test-broker']);
+      $this->entityManager->clear();
+    }
+  }
+
+  /** @return array */
+  public static function shortNameFormCases(): array
+  {
+    return [
+      'unused change' => [false, 'Change', false],
+      'used change' => [true, 'Change', true],
+      'used copy' => [true, 'Copy', false],
+      'add' => [false, 'Add', false],
+    ];
+  }
+
+  /**
    * This is quas a tearDownAfterClass() but we need some mocked / stubbed
    * classes for the entity-manager.
    *
@@ -305,6 +380,7 @@ class InsuranceBrokersTest extends TestCase
    */
   #[Attributes\Depends('testApplyMigrations')]
   #[Attributes\Depends('testRenderList')]
+  #[Attributes\Depends('testShortNameForm')]
   public function testUnapplyMigrations(): void
   {
     $this->unapplyMigrations();

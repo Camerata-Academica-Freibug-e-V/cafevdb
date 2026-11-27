@@ -165,6 +165,14 @@ class InsuranceBrokers extends PMETableViewBase
       'select'   => 'T',
       'maxlen'   => 40,
       'sort'     => $sort,
+      'display|C' => [
+        'attributes' => function($op, $k, $row, $pme) {
+          /** @var Entities\InsuranceBroker $broker */
+          $broker = $this->getDatabaseRepository(Entities\InsuranceBroker::class)
+            ->find($row[PHPMyEdit::QUERY_FIELD . $k]);
+          return [ 'readonly' => !$broker->getInsuranceRates()->isEmpty() ];
+        },
+      ],
     ];
 
     $opts['fdd']['long_name'] = [

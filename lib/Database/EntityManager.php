@@ -62,7 +62,6 @@ use OCA\CAFEVDB\Service\EncryptionService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\AbstractEntityManager;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Doctrine\ORM\MutableTypeProvider;
-use OCA\CAFEVDB\Wrapped\CJH\Doctrine\Extensions as CJH;
 use OCA\CAFEVDB\Wrapped\Doctrine as Doctrine;
 use OCA\CAFEVDB\Wrapped\DoctrineExtensions;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL;
@@ -782,11 +781,6 @@ class EntityManager extends AbstractEntityManager
       translatableLocale: $localeCode,
       translationFallback: true,
     );
-
-    // handle extra foreign key constraints
-    $foreignKeyListener = new CJH\ForeignKey\Listener($this);
-    $foreignKeyListener->setAnnotationReader($attributeReader);
-    $evm->addEventSubscriber($foreignKeyListener);
 
     // Run after Sluggable so file-data hash updates are visible in this flush.
     $evm->addEventSubscriber(new Listeners\DatabaseStorageTimestampListener(

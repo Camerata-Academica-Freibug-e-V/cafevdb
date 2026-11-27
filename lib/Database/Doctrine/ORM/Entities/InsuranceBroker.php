@@ -73,9 +73,14 @@ class InsuranceBroker implements \ArrayAccess
    * @param string $shortName
    *
    * @return InsuranceBroker
+   *
+   * @throws \LogicException If the short name is in use by insurance rates.
    */
   public function setShortName(string $shortName):InsuranceBroker
   {
+    if (isset($this->shortName) && $this->shortName !== $shortName && !$this->insuranceRates->isEmpty()) {
+      throw new \LogicException('The short name of an insurance broker with insurance rates cannot be changed.');
+    }
     $this->shortName = $shortName;
 
     return $this;
