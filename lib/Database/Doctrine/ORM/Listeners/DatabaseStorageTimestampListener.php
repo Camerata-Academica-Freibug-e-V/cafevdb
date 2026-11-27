@@ -158,8 +158,10 @@ class DatabaseStorageTimestampListener implements EventSubscriber
       $oldPath = null;
       $storageId = null;
       if (!$inserted && $oldParent instanceof Entities\DatabaseStorageFolder) {
-        $oldPath = $this->path($oldParent, $oldName);
         $storageId = $oldParent->getRoot()->getAttachedStorage()?->getStorageId();
+        if ($storageId !== null) {
+          $oldPath = $this->path($oldParent, $oldName);
+        }
       }
       $newPath = null;
       if (!$deleted) {

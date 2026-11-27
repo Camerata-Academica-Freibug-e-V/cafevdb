@@ -597,7 +597,7 @@ class ParticipantFileAuditServiceTest extends TestCase
   }
 
   /** @return void */
-  public function testClubMandateReasonRequiresActiveMandatesAndNoLinkedCanonicalEntry(): void
+  public function testClubMandateReasonIgnoresRevocationWhenCanonicalLinkExists(): void
   {
     $this->createMissingMandateGrant();
     $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries VALUES (400, NULL, NULL, 'folder'), (401, 400, 1, 'file')");
@@ -609,6 +609,7 @@ class ParticipantFileAuditServiceTest extends TestCase
       'entry_id',
     );
     self::assertNotContains('club-mandate-source-link-missing', $findings[201]['repair_reasons'] ?? []);
+    self::assertNotContains('document-deleted', $findings[201]['repair_reasons'] ?? []);
 
     $this->connection->executeStatement('UPDATE SepaDebitMandates SET deleted = NULL');
     $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (2, 10, 20, 401, NULL)');
@@ -624,7 +625,6 @@ class ParticipantFileAuditServiceTest extends TestCase
   /** @return iterable */
   public static function unsafeMandateGrants(): iterable
   {
-    yield 'deleted mandate' => ["UPDATE SepaDebitMandates SET deleted = '2000-01-01'"];
     yield 'deleted musician' => ["UPDATE Musicians SET deleted = '2000-01-01'"];
     yield 'deleted source project' => ["UPDATE Projects SET deleted = '2000-01-01' WHERE id = 20"];
     yield 'deleted source participant' => ["UPDATE ProjectParticipants SET deleted = '2000-01-01' WHERE musician_id = 10 AND project_id = 20"];
@@ -648,6 +648,26 @@ class ParticipantFileAuditServiceTest extends TestCase
       self::assertFalse($finding['repairable']);
       self::assertArrayNotHasKey('repairsteps', $finding);
     }
+  }
+
+  /** @return void */
+  public function testRevokedMandateDocumentInOrphanTreeRemainsAuditableAndRepairable(): void
+  {
+    $this->connection->executeStatement(
+      "INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, '2000-01-01')",
+    );
+    $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder')");
+    $this->connection->executeStatement('UPDATE DatabaseStorageDirEntries SET parent_id = 200 WHERE id = 102');
+
+    $findings = array_values(array_filter(
+      $this->service->audit()['findings'],
+      static fn(array $finding) => ($finding['source'] ?? null) === 'debit-mandate',
+    ));
+    self::assertCount(1, $findings);
+    self::assertSame('missing-participant-link', $findings[0]['code']);
+    self::assertTrue($findings[0]['repairable']);
+    self::assertSame(['add-participant-link'], $findings[0]['repairsteps']);
+    self::assertNotContains('document-deleted', $findings[0]['repair_reasons'] ?? []);
   }
 
   /** @return iterable */
@@ -882,7 +902,6 @@ class ParticipantFileAuditServiceTest extends TestCase
         yield $source . ' ' . $name => [$source, $sql];
       }
     }
-    yield 'deleted mandate' => ['debit-mandate', "UPDATE SepaDebitMandates SET deleted = '2000-01-01'"];
     yield 'deleted invoice' => ['invoice', "UPDATE Invoices SET deleted = '2000-01-01'"];
     yield 'deleted receipt' => ['donation-receipt', "UPDATE DonationReceipts SET deleted = '2000-01-01'"];
   }

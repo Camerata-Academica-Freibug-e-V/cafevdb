@@ -55,14 +55,25 @@ class ParticipantFileRepairServiceTest extends TestCase
       "INSERT INTO DatabaseStorageDirEntries (id, parent_id, file_id, type, name) VALUES
        (100, NULL, NULL, 'folder', ''), (200, NULL, NULL, 'folder', ''),
        (201, 200, 1, 'file', 'original.PDF')",
-      'INSERT INTO DatabaseStorages VALUES (1, 100)',
+      'INSERT INTO DatabaseStorages VALUES (1, 100), (99, 200)',
       'INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (10, 20, 1)',
       'INSERT INTO Projects VALUES (20, NULL)',
       'INSERT INTO Musicians VALUES (10, NULL)',
     ] as $sql) {
       $this->connection->executeStatement($sql);
     }
-    $this->service = new ParticipantFileRepairService($this->connection, 20, static fn(array $f) => ['Documents']);
+    $this->service = new ParticipantFileRepairService(
+      $this->connection,
+      20,
+      static fn(array $f) => ['Documents'],
+      fn(int $rootId, array $folders, string $fileName, int $fileId, ?int $moveEntryId): int => $this->createFileEntry(
+        $rootId,
+        $folders,
+        $fileName,
+        $fileId,
+        $moveEntryId,
+      ),
+    );
   }
 
   /** {@inheritdoc} */
@@ -82,6 +93,47 @@ class ParticipantFileRepairServiceTest extends TestCase
       $result[$table] = $this->connection->fetchAllAssociative('SELECT * FROM ' . $table);
     }
     return $result;
+  }
+
+  /**
+   * Create a test directory entry using SQL in the isolated unit fixture.
+   *
+   * @param int $rootId
+   * @param array $folders
+   * @param string $fileName
+   * @param int $fileId
+   * @param null|int $moveEntryId
+   *
+   * @return int
+   */
+  private function createFileEntry(int $rootId, array $folders, string $fileName, int $fileId, ?int $moveEntryId): int
+  {
+    $parentId = $rootId;
+    foreach ($folders as $name) {
+      $folder = $this->connection->fetchAssociative(
+        'SELECT id, type FROM DatabaseStorageDirEntries WHERE parent_id = ? AND name = ?',
+        [$parentId, $name],
+      );
+      if ($folder !== false) {
+        if ($folder['type'] !== 'folder') {
+          throw new RuntimeException('Unexpected non-folder in test fixture.');
+        }
+        $parentId = (int)$folder['id'];
+        continue;
+      }
+      $this->connection->insert('DatabaseStorageDirEntries', [
+        'parent_id' => $parentId, 'name' => $name, 'type' => 'folder',
+      ]);
+      $parentId = (int)$this->connection->lastInsertId();
+    }
+    if ($moveEntryId !== null) {
+      $this->connection->update('DatabaseStorageDirEntries', ['parent_id' => $parentId], ['id' => $moveEntryId]);
+      return $moveEntryId;
+    }
+    $this->connection->insert('DatabaseStorageDirEntries', [
+      'parent_id' => $parentId, 'name' => $fileName, 'type' => 'file', 'file_id' => $fileId,
+    ]);
+    return (int)$this->connection->lastInsertId();
   }
 
   /** @return void */
@@ -141,6 +193,125 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertFalse($this->connection->isTransactionActive());
   }
 
+  /** @return void */
+  public function testOrphanWithOneTargetIsMovedAndPreviewIsReadOnly(): void
+  {
+    $this->connection->executeStatement('DELETE FROM DatabaseStorages WHERE id = 99');
+    $this->connection->executeStatement("INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 201, '2000-01-01')");
+    $before = $this->snapshot();
+    $preview = $this->service->repair(true);
+    $moves = array_values(array_filter($preview['repairs'], static fn(array $r) => ($r['action'] ?? null) === 'move'));
+    self::assertCount(1, $moves);
+    self::assertSame($before, $this->snapshot());
+
+    $report = $this->service->repair();
+    $moves = array_values(array_filter($report['repairs'], static fn(array $r) => ($r['action'] ?? null) === 'move'));
+    self::assertCount(1, $moves);
+    self::assertSame(201, $moves[0]['participant_entry_id']);
+    self::assertSame(201, (int)$this->connection->fetchOne('SELECT written_mandate_id FROM SepaDebitMandates'));
+    self::assertSame(1, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE file_id = 1'));
+    self::assertSame(
+      'Documents',
+      $this->connection->fetchOne(
+        'SELECT parent.name FROM DatabaseStorageDirEntries entry JOIN DatabaseStorageDirEntries parent ON parent.id = entry.parent_id WHERE entry.id = 201',
+      ),
+    );
+    self::assertSame([], $report['remaining']['findings']);
+    self::assertSame([], $this->service->repair()['repairs']);
+  }
+
+  /** @return void */
+  public function testOrphanWithMultipleTargetsIsNotMoved(): void
+  {
+    $this->connection->executeStatement('DELETE FROM DatabaseStorages WHERE id = 99');
+    $this->connection->executeStatement('INSERT INTO Projects VALUES (21, NULL)');
+    $this->connection->executeStatement("INSERT INTO DatabaseStorageDirEntries (id, type, name) VALUES (400, 'folder', '')");
+    $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 400)');
+    $this->connection->executeStatement('INSERT INTO ProjectParticipants (musician_id, project_id, database_documents_id) VALUES (10, 21, 2)');
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL), (2, 10, 21, 201, NULL)');
+    $report = $this->service->repair();
+    self::assertSame(200, (int)$this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = 201'));
+    self::assertSame(3, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE file_id = 1'));
+    self::assertSame([], $report['remaining']['findings']);
+  }
+
+  /** @return void */
+  public function testOrphanWithSeveralReferencesToOneTargetIsMoved(): void
+  {
+    $this->connection->executeStatement('DELETE FROM DatabaseStorages WHERE id = 99');
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL)');
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields (id, data_type, participant_access) VALUES (1, 'receivables', 'read')");
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', '12.34', 201, NULL, NULL)");
+    $report = $this->service->repair();
+    self::assertNotSame(200, (int)$this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = 201'));
+    self::assertSame(201, (int)$this->connection->fetchOne('SELECT supporting_document_id FROM ProjectParticipantFieldsData'));
+    self::assertSame(201, (int)$this->connection->fetchOne('SELECT written_invoice_id FROM Invoices'));
+    self::assertSame(1, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE file_id = 1'));
+    self::assertSame([], $report['remaining']['findings']);
+  }
+
+  /** @return void */
+  public function testOrphanWithDifferentFoldersForSameParticipantIsNotMoved(): void
+  {
+    $this->connection->executeStatement('DELETE FROM DatabaseStorages WHERE id = 99');
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL)');
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields (id, data_type, participant_access) VALUES (1, 'receivables', 'read')");
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFieldsData VALUES (1, 10, 20, X'01', '12.34', 201, NULL, NULL)");
+    $service = new ParticipantFileRepairService(
+      $this->connection,
+      20,
+      static fn(array $finding): array => [$finding['source'] === 'invoice' ? 'Invoices' : 'Fields'],
+      fn(int $rootId, array $folders, string $fileName, int $fileId, ?int $moveEntryId): int => $this->createFileEntry(
+        $rootId,
+        $folders,
+        $fileName,
+        $fileId,
+        $moveEntryId,
+      ),
+    );
+    $report = $service->repair();
+    self::assertSame(200, (int)$this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = 201'));
+    self::assertSame(3, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE file_id = 1'));
+    self::assertSame([], $report['remaining']['findings']);
+  }
+
+  /** @return void */
+  public function testOrphanMoveRollsBackOnLaterFailure(): void
+  {
+    $this->connection->executeStatement('DELETE FROM DatabaseStorages WHERE id = 99');
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL)');
+    $this->connection->executeStatement("CREATE TRIGGER fail_owner BEFORE INSERT ON EncryptedFileOwners BEGIN SELECT RAISE(ABORT, 'injected failure'); END");
+    $before = $this->snapshot();
+    try {
+      $this->service->repair();
+      self::fail('Expected the ownership write to fail.');
+    } catch (DBALException $exception) {
+      self::assertStringContainsString('injected failure', $exception->getMessage());
+    }
+    self::assertSame($before, $this->snapshot());
+  }
+
+  /** @return void */
+  public function testStandaloneOrphanFileIsMoved(): void
+  {
+    $this->connection->executeStatement('UPDATE DatabaseStorageDirEntries SET parent_id = NULL WHERE id = 201');
+    $this->connection->executeStatement('INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL)');
+    $report = $this->service->repair();
+    self::assertNotNull($this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = 201'));
+    self::assertSame(1, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE file_id = 1'));
+    self::assertSame([], $report['remaining']['findings']);
+  }
+
+  /** @return void */
+  public function testUnrepairableSharedReferencePreventsMovingOrphan(): void
+  {
+    $this->connection->executeStatement('DELETE FROM DatabaseStorages WHERE id = 99');
+    $this->connection->executeStatement("INSERT INTO Invoices VALUES (1, 10, 20, 201, NULL), (2, 10, 20, 201, '2000-01-01')");
+    $this->service->repair();
+    self::assertSame(200, (int)$this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = 201'));
+    self::assertSame(2, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE file_id = 1'));
+  }
+
   /** @return iterable */
   public static function otherDocuments(): iterable
   {
@@ -195,9 +366,21 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame(202, (int)$this->connection->fetchOne("SELECT supporting_document_id FROM ProjectParticipantFieldsData WHERE option_key = X'02'"));
     self::assertSame(2, (int)$this->connection->fetchOne('SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE id IN (201, 202)'));
     self::assertSame(1, $this->service->repair()['summary']['blocked']);
-    $retry = new ParticipantFileRepairService($this->connection, 20, static fn(array $f) => ['OtherDocuments']);
+    $retry = new ParticipantFileRepairService(
+      $this->connection,
+      20,
+      static fn(array $f) => ['OtherDocuments'],
+      fn(int $rootId, array $folders, string $fileName, int $fileId, ?int $moveEntryId): int => $this->createFileEntry(
+        $rootId,
+        $folders,
+        $fileName,
+        $fileId,
+        $moveEntryId,
+      ),
+    );
     self::assertSame(1, $retry->repair()['summary']['applied']);
-    self::assertNotSame(202, (int)$this->connection->fetchOne("SELECT supporting_document_id FROM ProjectParticipantFieldsData WHERE option_key = X'02'"));
+    self::assertSame(202, (int)$this->connection->fetchOne("SELECT supporting_document_id FROM ProjectParticipantFieldsData WHERE option_key = X'02'"));
+    self::assertNotSame(210, (int)$this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = 202'));
   }
 
   /** @return iterable */
@@ -304,5 +487,30 @@ class ParticipantFileRepairServiceTest extends TestCase
     self::assertSame(200, (int)$this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = 201'));
     self::assertSame([], $report['remaining']['findings']);
     self::assertSame([], $this->service->repair()['repairs']);
+  }
+
+  /** @return void */
+  public function testRevokedMandateDocumentIsRepairedFromOrphanTree(): void
+  {
+    $this->connection->executeStatement(
+      "INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 201, '2000-01-01')",
+    );
+    $before = $this->snapshot();
+    $report = $this->service->repair();
+
+    self::assertSame(['applied' => 2, 'deferred' => 1], $report['summary']);
+    self::assertSame([], $report['remaining']['findings']);
+    $relinkedEntryId = (int)$this->connection->fetchOne('SELECT written_mandate_id FROM SepaDebitMandates');
+    self::assertNotSame(201, $relinkedEntryId);
+    self::assertSame('2000-01-01', $this->connection->fetchOne('SELECT deleted FROM SepaDebitMandates'));
+    self::assertSame(
+      1,
+      (int)$this->connection->fetchOne(
+        'SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE id = ? AND file_id = 1 AND type = ?',
+        [$relinkedEntryId, 'file'],
+      ),
+    );
+    self::assertSame([], $this->service->repair()['repairs']);
+    self::assertNotSame($before, $this->snapshot());
   }
 }

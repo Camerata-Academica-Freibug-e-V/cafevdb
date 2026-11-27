@@ -77,11 +77,12 @@ class DatabaseStorage extends Command
         'audit-access',
         null,
         InputOption::VALUE_NONE,
-        'Read-only audit of musician file ownership, participant links and encryption access indicators.',
+        'Read-only audit of musician file ownership and participant links.',
       )
+      ->addOption('audit-encryption', null, InputOption::VALUE_NONE, 'Read-only audit of encryption seals and user key indicators.')
       ->addOption('repair-access', null, InputOption::VALUE_NONE, 'Backfill audit-approved participant links and ownership; does not reconcile seals.')
       ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Preview --repair-access without changing records.')
-      ->addOption('json', null, InputOption::VALUE_NONE, 'Output the access audit, repair report or orphan-tree listing as JSON.')
+      ->addOption('json', null, InputOption::VALUE_NONE, 'Output the audit, repair report or orphan-tree listing as JSON.')
       ->addOption(
         'include-file-names',
         null,
@@ -122,27 +123,31 @@ class DatabaseStorage extends Command
   protected function execute(InputInterface $input, OutputInterface $output):int
   {
     $audit = $input->getOption('audit-access');
+    $auditEncryption = $input->getOption('audit-encryption');
     $repair = $input->getOption('repair-access');
     $orphanMode = $input->getOption('find-orphan-trees');
     $orphanTrees = $orphanMode !== false;
     if (($orphanTrees && !in_array($orphanMode, [null, 'prune-empty'], true))
-        || ($repair && ($audit || $orphanTrees || $input->getOption('list-storages') !== false
+        || ($audit && $auditEncryption)
+        || ($repair && ($audit || $auditEncryption || $orphanTrees || $input->getOption('list-storages') !== false
                      || $input->getOption('find-orphans') || $input->getOption('remove-orphans')
                      || $input->getOption('include-file-names') || $input->getOption('include-field-names')))
         || ($input->getOption('dry-run') && !$repair)
-        || (($input->getOption('json') || $input->getOption('include-file-names')) && !$audit && !$orphanTrees && !$repair)
+        || ($input->getOption('json') && !$audit && !$auditEncryption && !$orphanTrees && !$repair)
+        || ($input->getOption('include-file-names') && !$audit && !$orphanTrees)
         || ($input->getOption('include-field-names') && !$audit)
-        || ($orphanTrees && ($audit || $input->getOption('list-storages') !== false
+        || ($orphanTrees && ($audit || $auditEncryption || $input->getOption('list-storages') !== false
                             || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))
-        || ($audit && ($input->getOption('list-storages') !== false
+        || (($audit || $auditEncryption) && ($input->getOption('list-storages') !== false
                       || $input->getOption('find-orphans') || $input->getOption('remove-orphans')))) {
       $output->writeln(
-        '<error>Use --audit-access or --find-orphan-trees[=prune-empty] alone, optionally with --json and --include-file-names. '
-        . '--include-field-names requires --audit-access. Use --repair-access alone, optionally with --dry-run and --json.</error>',
+        '<error>Use --audit-access, --audit-encryption, --repair-access or --find-orphan-trees[=prune-empty] alone, optionally with --json. '
+        . '--include-file-names requires --audit-access or --find-orphan-trees; --include-field-names requires --audit-access. '
+        . '--dry-run requires --repair-access.</error>',
       );
       return self::INVALID;
     }
-    $authenticationOutput = ($audit || $orphanTrees || $repair) && $input->getOption('json') && $output instanceof ConsoleOutputInterface
+    $authenticationOutput = ($audit || $auditEncryption || $orphanTrees || $repair) && $input->getOption('json') && $output instanceof ConsoleOutputInterface
       ? $output->getErrorOutput()
       : $output;
     $result = $this->authenticate($input, $authenticationOutput);
@@ -151,6 +156,9 @@ class DatabaseStorage extends Command
     }
     if ($audit) {
       return $this->auditAccess($input, $output);
+    }
+    if ($auditEncryption) {
+      return $this->auditEncryption($input, $output);
     }
     if ($repair) {
       return $this->repairAccess($input, $output);
@@ -290,7 +298,37 @@ class DatabaseStorage extends Command
       $includeFileNames,
       $includeFileNames ? $this->auditMountPaths($config) : [],
       $input->getOption('include-field-names'),
-      function(string $userId) use ($config): array {
+    );
+    if ($input->getOption('json')) {
+      $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
+    } else {
+      $output->writeln('Participant file access audit (read-only; includes soft-deleted records).');
+      $output->writeln('<info>Summary</info>');
+      $output->writeln(json_encode($report['summary'], JSON_THROW_ON_ERROR));
+      $output->writeln('');
+      $output->writeln('<info>Structural access findings</info>');
+      if ($report['findings'] === []) {
+        $output->writeln('<comment>No structural access findings.</comment>');
+      }
+      foreach ($report['findings'] as $finding) {
+        $output->writeln(OutputFormatter::escape(json_encode($finding, JSON_THROW_ON_ERROR)));
+      }
+    }
+    return $report['findings'] === [] ? self::SUCCESS : self::FAILURE;
+  }
+
+  /**
+   * @param InputInterface $input
+   * @param OutputInterface $output
+   *
+   * @return int
+   */
+  private function auditEncryption(InputInterface $input, OutputInterface $output): int
+  {
+    $config = $this->appContainer->get(ConfigService::class);
+    $clubProjectId = (int)$config->getConfigValue(ConfigConstants::CLUB_MEMBER_PROJECT_ID_KEY, 0);
+    $audit = (new ParticipantFileAuditService($this->entityManager->getConnection(), $clubProjectId))->audit(
+      userStatus: function(string $userId) use ($config): array {
         $user = $this->userManager->get($userId);
         $userConfig = $config->getCloudUserConfig();
         return [
@@ -311,19 +349,30 @@ class DatabaseStorage extends Command
         ];
       },
     );
+    $report = [
+      'summary' => ['encryption_issues' => $audit['summary']['encryption_issues']],
+      'encryption_diagnostics' => $audit['encryption_diagnostics'],
+    ];
     if ($input->getOption('json')) {
       $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
     } else {
-      $output->writeln('Participant file access audit (read-only; includes soft-deleted records).');
+      $output->writeln('Participant file encryption audit (read-only).');
+      $output->writeln('<info>Summary</info>');
       $output->writeln(json_encode($report['summary'], JSON_THROW_ON_ERROR));
-      foreach ($report['findings'] as $finding) {
-        $output->writeln(OutputFormatter::escape(json_encode($finding, JSON_THROW_ON_ERROR)));
+      $encryptionIssues = array_filter(
+        $report['encryption_diagnostics'],
+        ParticipantFileAuditService::encryptionDiagnosticIsIssue(...),
+      );
+      $output->writeln('');
+      $output->writeln('<info>Encryption issues</info>');
+      if ($encryptionIssues === []) {
+        $output->writeln('<comment>No encryption issues detected.</comment>');
       }
-      foreach ($report['encryption_diagnostics'] as $diagnostic) {
+      foreach ($encryptionIssues as $diagnostic) {
         $output->writeln(OutputFormatter::escape(json_encode($diagnostic, JSON_THROW_ON_ERROR)));
       }
     }
-    return $report['findings'] === [] && $report['summary']['encryption_issues'] === 0 ? self::SUCCESS : self::FAILURE;
+    return $report['summary']['encryption_issues'] === 0 ? self::SUCCESS : self::FAILURE;
   }
 
   /**
@@ -358,6 +407,35 @@ class DatabaseStorage extends Command
           'composite-payment' => [$l10n->t('SupportingDocuments'), $l10n->t('BankTransactions')],
           default => throw new RuntimeException('Unsupported participant document source.'),
         };
+      },
+      function(int $rootId, array $folders, string $fileName, int $fileId, ?int $moveEntryId): int {
+        $folder = $this->entityManager->find(Entities\DatabaseStorageFolder::class, $rootId);
+        if ($folder === null) {
+          throw new RuntimeException('The participant storage root disappeared during repair.');
+        }
+        foreach ($folders as $name) {
+          $folder = $folder->addSubFolder($name);
+          $this->entityManager->persist($folder);
+        }
+        if ($moveEntryId !== null) {
+          $entry = $this->entityManager->find(Entities\DatabaseStorageFile::class, $moveEntryId);
+          if (!$entry instanceof Entities\DatabaseStorageFile || $entry->getFile()?->getId() !== $fileId) {
+            throw new RuntimeException('The source file entry disappeared or changed during repair.');
+          }
+          $entry->setParent($folder);
+        } else {
+          $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
+          if ($file === null) {
+            throw new RuntimeException('The encrypted file disappeared during repair.');
+          }
+          $entry = $folder->addDocument($file, $fileName);
+        }
+        if (!$entry instanceof Entities\DatabaseStorageFile) {
+          throw new RuntimeException('The ORM did not create a participant file entry.');
+        }
+        $this->entityManager->persist($entry);
+        $this->entityManager->flush();
+        return (int)$entry->getId();
       },
     );
     try {

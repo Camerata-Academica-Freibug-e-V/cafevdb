@@ -65,14 +65,17 @@ To inspect an existing orchestra database before changing personalized storage
 views, run `occ cafevdb:storage:database --audit-access`. This authenticates with
 the usual interactive CafeVDB operator login. The audit itself only reads
 metadata; it does not decrypt file contents, repair links, flush ORM entities,
-or regenerate views. Use `--json` for a report with `summary`, `findings` and
-`encryption_diagnostics`; exit status is 0 for no findings or encryption
-issues, 1 for inconsistencies, and 2 for invalid option combinations.
+or regenerate views. Use `--json` for a report with `summary` and `findings`;
+exit status is 0 for no access findings, 1 for inconsistencies, and 2 for
+invalid option combinations.
 Database/query failures are errors, never a clean audit.
 
-The access audit also reports `encryption_diagnostics` for each encrypted-file
-owner and each audit-approved missing owner. It checks the seal's recipient IDs
-without decrypting the payload and reports whether the Nextcloud user exists,
+Run `occ cafevdb:storage:database --audit-encryption` separately to inspect
+encryption access. Its text output lists issues only; `--json` includes a
+summary and `encryption_diagnostics` for each encrypted-file owner and each
+audit-approved missing owner, including healthy entries. Its exit status depends
+only on encryption issues, not structural access findings. It checks the seal's
+recipient IDs without decrypting the payload and reports whether the Nextcloud user exists,
 has logged in, and has stored public and private key material. The report
 includes the user ID but never the seal keys or file contents. A missing user
 ID or an unsealed, malformed or missing payload leaves recipient status
@@ -103,7 +106,7 @@ a parentless root, not broken parent chains or cycles. It does not infer that
 their files are unused: business references and links elsewhere may still
 exist. This action never removes entries, files or directories, and cannot be
 combined with `--remove-orphans`, `--find-orphans`, `--list-storages` or
-`--audit-access`. Listing succeeds even when trees are found; query failures
+either audit option. Listing succeeds even when trees are found; query failures
 remain errors.
 
 The audit recognizes debit mandates, invoices, donation receipts, composite
@@ -148,8 +151,8 @@ connector grants or Nextcloud's file cache.
 Each finding has `repairable`; `true` identifies missing ownership supported by
 an active, participant-readable supporting-document reference in that
 participant's own storage and project, an active invoice, donation receipt or
-composite-payment supporting document, or an active debit mandate. Financial
-documents qualify only for their own musician and project, and only when a
+composite-payment supporting document, or a debit mandate, including a revoked
+mandate. Financial documents qualify only for their own musician and project, and only when a
 link to the same encrypted file already exists in that participant's storage;
 the financial document may use a separate directory entry. Financial documents
 are not excluded solely because the participant's status is `associated`.
@@ -176,8 +179,9 @@ source trees are excluded.
 If a financial link is also associated with a participant field, the
 personalized view's field-access filter still applies; the suggested ownership
 repair alone does not override it.
-Participant-only fields must match the participant's context. Deleted records, invalid files
-and ambiguous links are not candidates. Such findings include `repairsteps`:
+Participant-only fields must match the participant's context. Except for revoked
+debit mandates, deleted records, invalid files and ambiguous links are not
+candidates. Such findings include `repairsteps`:
 `add-ownership` and `reconcile-encryption-seal`. These are proposed steps, not
 repairs performed or proof that encryption keys and seals are usable. The audit
 does not validate decryption.
@@ -193,13 +197,17 @@ includes the remaining audit findings. A blocked operation gives a failing exit
 status; remaining findings and deferred seal work must still be reviewed.
 
 New links use the existing entry's filename and the app's localized document
-folders. Participant fields use their field folder path. The backfill never
+folders. Participant fields use their field folder path. An entry in a tree
+without a storage is moved when all its references have one repair destination;
+otherwise a participant link is created and the source entry is retained. The backfill never
 creates missing storage roots, deletes source entries, resurrects soft-deleted
 records, or grants ownership for a private field's link-only repair.
 Participant-field, composite-payment and debit-mandate references are pointed
 to their new participant entries; dedicated invoice/receipt entries are retained.
-Metadata is updated directly to avoid ORM orphan removal deleting shared source
-entries; the command clears the ORM identity map afterward.
+New and moved directory entries are persisted through the ORM so its cache-coherency
+listeners record the corresponding changes. Business references are updated
+directly to avoid ORM orphan removal deleting shared source entries; the command
+clears the ORM identity map afterward.
 
 A missing or unusable participant public key does not prevent recording
 ownership. Seal reconciliation is explicitly deferred and reported, and no
