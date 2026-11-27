@@ -4,22 +4,24 @@
  *
  * CAFEVDB -- Camerata Academica Freiburg e.V. DataBase.
  *
+ * @author Claus-Justus Heine <himself@claus-justus-heine.de>
  * @copyright 2026 Claus-Justus Heine
  * @license AGPL-3.0-or-later
  */
 
 namespace OCA\CAFEVDB\Tests\Unit\Database\Doctrine\ORM\Entities;
 
-use LogicException;
 use PHPUnit\Framework\Attributes;
 use PHPUnit\Framework\TestCase;
 
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities\InsuranceBroker;
 use OCA\CAFEVDB\Database\Doctrine\ORM\Entities\InsuranceRate;
+use OCA\CAFEVDB\Exceptions\DatabaseReadonlyException;
 
 /** Test the insurance broker's short-name invariant. */
 #[Attributes\CoversClass(InsuranceBroker::class)]
 #[Attributes\UsesClass(InsuranceRate::class)]
+#[Attributes\UsesClass(DatabaseReadonlyException::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\ArrayTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\FactoryTrait::class)]
 #[Attributes\UsesTrait(\OCA\CAFEVDB\Database\Doctrine\ORM\Traits\DateTimeTrait::class)]
@@ -48,7 +50,7 @@ class InsuranceBrokerTest extends TestCase
     try {
       $broker->setShortName('second');
       $this->fail('Changing an in-use short name should fail.');
-    } catch (LogicException) {
+    } catch (DatabaseReadonlyException) {
       $this->assertSame('first', $broker->getShortName());
     }
   }

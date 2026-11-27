@@ -36,6 +36,7 @@ use OCP\IRequest;
 
 use OCA\CAFEVDB\Common\TimeFactory;
 use OCA\CAFEVDB\Database\Legacy\PME\PHPMyEdit;
+use OCA\CAFEVDB\Exceptions\DatabaseReadonlyException;
 use OCA\CAFEVDB\PageRenderer;
 use OCA\CAFEVDB\PageRenderer\PersistentCGIKeys;
 use OCA\CAFEVDB\Service\MusicianService;
@@ -107,6 +108,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Repositories\ProjectsRepository::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\Doctrine\ORM\Repositories\RepositoryFactory::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Database\EntityManager::class)]
+#[Attributes\UsesClass(DatabaseReadonlyException::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EncryptionServiceBound::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\EntityManagerBoundEvent::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Events\MusicianEmailEvent::class)]
@@ -350,7 +352,7 @@ class InsuranceBrokersTest extends TestCase
         try {
           $broker->setShortName('changed');
           $this->fail('Changing an in-use short name should fail.');
-        } catch (\LogicException) {
+        } catch (DatabaseReadonlyException) {
           $this->assertSame('test-broker', $broker->getShortName());
         }
       }
