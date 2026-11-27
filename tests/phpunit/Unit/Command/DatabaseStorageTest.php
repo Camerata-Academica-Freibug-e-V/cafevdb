@@ -112,6 +112,7 @@ class DatabaseStorageTest extends TestCase
   public static function invalidOptions(): iterable
   {
     yield 'dry run without repair' => [['--dry-run' => true]];
+    yield 'lost found without repair' => [['--lost+found' => true]];
     yield 'repair with audit' => [['--repair-access' => true, '--audit-access' => true]];
     yield 'repair with encryption audit' => [['--repair-access' => true, '--audit-encryption' => true]];
     yield 'both audits' => [['--audit-access' => true, '--audit-encryption' => true]];
@@ -151,6 +152,16 @@ class DatabaseStorageTest extends TestCase
   {
     $this->connection->expects(self::never())->method('fetchAllAssociative');
     self::assertSame(DatabaseStorage::INVALID, $this->tester->execute($options));
+  }
+
+  /** @return void */
+  public function testCollectionRequiresOrchestraAdminMembership(): void
+  {
+    $this->connection->expects(self::never())->method('fetchOne');
+    self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(
+      ['--repair-access' => true, '--lost+found' => true],
+    ));
+    self::assertStringContainsString('orchestra admin group', $this->tester->getDisplay());
   }
 
   /** @return void */

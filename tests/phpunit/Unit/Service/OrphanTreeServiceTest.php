@@ -38,6 +38,8 @@ class OrphanTreeServiceTest extends TestCase
     $this->connection->executeStatement(
       'CREATE TABLE DatabaseStorages (id INTEGER PRIMARY KEY, root_id INTEGER REFERENCES DatabaseStorageDirEntries(id))',
     );
+    $this->connection->executeStatement('CREATE TABLE Files (id INTEGER PRIMARY KEY, type TEXT)');
+    $this->connection->executeStatement("INSERT INTO Files VALUES (50, 'encrypted'), (51, 'encrypted'), (53, 'encrypted')");
     $this->connection->executeStatement(
       "INSERT INTO DatabaseStorageDirEntries VALUES
        (1, NULL, NULL, 'folder', 'mounted'), (2, 1, NULL, 'folder', 'empty mounted'),
@@ -104,7 +106,9 @@ class OrphanTreeServiceTest extends TestCase
       "INSERT INTO DatabaseStorageDirEntries VALUES
        (70, NULL, NULL, 'folder', 'bad parent'),
        (71, 70, 53, 'file', 'file'),
-       (72, 71, NULL, 'folder', 'child')",
+       (72, 71, NULL, 'folder', 'child'),
+       (80, NULL, NULL, 'folder', 'missing file'),
+       (81, 80, 999, 'file', 'file')",
     );
     $before = $this->snapshot();
     $report = $this->service->classifyForCollection();
@@ -115,6 +119,7 @@ class OrphanTreeServiceTest extends TestCase
     self::assertContains('root-not-folder', $rejected[50]);
     self::assertContains('root-not-folder', $rejected[60]);
     self::assertContains('non-folder-parent', $rejected[70]);
+    self::assertContains('invalid-file-reference', $rejected[80]);
     self::assertSame($before, $this->snapshot());
   }
 

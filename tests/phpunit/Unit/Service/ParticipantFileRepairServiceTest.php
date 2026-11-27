@@ -221,6 +221,32 @@ class ParticipantFileRepairServiceTest extends TestCase
   }
 
   /** @return void */
+  public function testLostAndFoundEntryRemainsEligibleForRepair(): void
+  {
+    $this->connection->executeStatement('ALTER TABLE DatabaseStorages ADD COLUMN storage_id TEXT');
+    $this->connection->executeStatement("UPDATE DatabaseStorages SET storage_id = 'lost+found/' WHERE id = 99");
+    $this->connection->executeStatement("INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 201, '2000-01-01')");
+    $service = new ParticipantFileRepairService(
+      $this->connection,
+      20,
+      static fn(array $finding): array => ['Documents'],
+      fn(int $rootId, array $folders, string $fileName, int $fileId, ?int $moveEntryId): int => $this->createFileEntry(
+        $rootId, $folders, $fileName, $fileId, $moveEntryId,
+      ),
+      200,
+    );
+    $before = $this->snapshot();
+    $preview = $service->repair(true);
+    self::assertContains('move', array_column($preview['repairs'], 'action'));
+    self::assertSame($before, $this->snapshot());
+    $report = $service->repair();
+    self::assertContains('move', array_column($report['repairs'], 'action'));
+    self::assertNotSame(200, (int)$this->connection->fetchOne('SELECT parent_id FROM DatabaseStorageDirEntries WHERE id = 201'));
+    self::assertSame(201, (int)$this->connection->fetchOne('SELECT written_mandate_id FROM SepaDebitMandates'));
+    self::assertSame([], $service->repair()['repairs']);
+  }
+
+  /** @return void */
   public function testOrphanWithMultipleTargetsIsNotMoved(): void
   {
     $this->connection->executeStatement('DELETE FROM DatabaseStorages WHERE id = 99');

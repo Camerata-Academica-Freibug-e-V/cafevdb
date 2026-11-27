@@ -1175,6 +1175,28 @@ class ParticipantFileAuditServiceTest extends TestCase
   }
 
   /** @return void */
+  public function testRecoveredEntryRemainsVisibleToAuditWithItsRecoveryPath(): void
+  {
+    $this->connection->executeStatement('ALTER TABLE Files ADD COLUMN file_name TEXT');
+    $this->connection->executeStatement('ALTER TABLE DatabaseStorageDirEntries ADD COLUMN name TEXT');
+    $this->connection->executeStatement("UPDATE Files SET file_name = 'original.pdf' WHERE id = 1");
+    $this->connection->executeStatement("UPDATE DatabaseStorageDirEntries SET parent_id = 201, name = 'document.pdf' WHERE id = 102");
+    $this->connection->executeStatement(
+      "INSERT INTO DatabaseStorageDirEntries VALUES (200, NULL, NULL, 'folder', ''), (201, 200, NULL, 'folder', '2026-11-27_01-43-43')",
+    );
+    $this->connection->executeStatement('INSERT INTO DatabaseStorages VALUES (2, 200)');
+    $this->connection->executeStatement('INSERT INTO SepaDebitMandates VALUES (1, 10, 20, 102, NULL)');
+    $report = $this->service->audit(true, [200 => '/ORCHESTRA/lost+found']);
+    $findings = array_values(array_filter(
+      $report['findings'],
+      static fn(array $finding): bool => ($finding['entry_id'] ?? null) === 102,
+    ));
+    self::assertNotEmpty($findings);
+    self::assertSame('/ORCHESTRA/lost+found/2026-11-27_01-43-43/document.pdf', $findings[0]['entry_path']);
+    self::assertTrue($findings[0]['repairable']);
+  }
+
+  /** @return void */
   public function testOptionalNamesRemainNullForMissingRecords(): void
   {
     $this->connection->executeStatement('ALTER TABLE Files ADD COLUMN file_name TEXT');

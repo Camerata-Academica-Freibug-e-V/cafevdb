@@ -104,10 +104,32 @@ mount path. Registered roots and their descendants are excluded, including
 registered subtrees nested beneath an unregistered root. This lists trees with
 a parentless root, not broken parent chains or cycles. It does not infer that
 their files are unused: business references and links elsewhere may still
-exist. This action never removes entries, files or directories, and cannot be
+exist. The listing does not remove entries, files or directories, and cannot be
 combined with `--remove-orphans`, `--find-orphans`, `--list-storages` or
 either audit option. Listing succeeds even when trees are found; query failures
 remain errors.
+
+After reviewing the audit, an orchestra admin can run
+`occ cafevdb:storage:database --repair-access --lost+found` to repair
+participant links and then collect remaining structurally valid orphan trees.
+They appear under `<shared orchestra folder>/lost+found`, in UTC timestamped
+folders with second precision and collision suffixes. Only members of the
+configured orchestra-admin group receive this authenticated mount. It is
+read-only: rename and deletion are not yet supported. Files remain encrypted;
+mount access does not change their encryption recipients.
+
+Malformed trees, including non-folder parents, invalid file entries and nested
+registered storage roots, are reported and left untouched. A nonzero exit
+status also indicates rejected trees. Collection uses its own transaction
+after repair: if it fails, already committed repairs remain in place. Use
+`--dry-run` to preview repair and collection without changes; the collection
+preview describes the **current** trees, before the proposed repairs. Run
+during a quiet maintenance window.
+
+The access audit still examines business references beneath lost+found, and
+`--include-file-names` includes their recovery paths. Later repair runs may
+move a recovered entry to its participant storage when all known references
+justify the same destination; ambiguous entries stay in place.
 
 The audit recognizes debit mandates, invoices, donation receipts, composite
 payment supporting documents, participant `db-file` values and participant

@@ -97,6 +97,7 @@ class OrphanTreeService
   {
     $report = $this->listing(false);
     $rows = $this->connection->fetchAllAssociative('SELECT id, parent_id, file_id, type FROM DatabaseStorageDirEntries');
+    $files = array_column($this->connection->fetchAllAssociative('SELECT id, type FROM Files'), 'type', 'id');
     $children = [];
     foreach ($rows as $row) {
       if ($row['parent_id'] !== null) {
@@ -118,7 +119,8 @@ class OrphanTreeService
           $reasons['unsupported-entry-type'] = true;
         }
         if (($entry['type'] === 'folder' && $entry['file_id'] !== null)
-            || ($entry['type'] === 'file' && $entry['file_id'] === null)) {
+            || ($entry['type'] === 'file'
+                && ($entry['file_id'] === null || ($files[$entry['file_id']] ?? null) !== 'encrypted'))) {
           $reasons['invalid-file-reference'] = true;
         }
         if ($entry['type'] !== 'folder' && !empty($children[$entry['id']])) {
