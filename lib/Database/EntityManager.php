@@ -693,10 +693,6 @@ class EntityManager extends AbstractEntityManager
     \OCA\CAFEVDB\Wrapped\Gedmo\DoctrineExtensions::registerAbstractMappingIntoDriverChainORM(
       $driverChain, // our metadata driver chain, to hook into
     );
-    //<<< Further annotations can go here
-    \OCA\CAFEVDB\Wrapped\MediaMonks\Doctrine\DoctrineExtensions::registerAnnotations();
-    CJH\Setup::registerAnnotations();
-    //>>>
 
     // now we want to register our application entities,
     // for that we need another metadata driver used for Entity namespace
