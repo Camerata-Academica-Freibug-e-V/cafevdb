@@ -149,7 +149,7 @@ class MountProvider implements IMountProvider
   /**
    * @param IUser $user
    * @param IStorageFactory $loader
-   * @param bool $hasFilesystemPermission
+   * @param boolean $hasFilesystemPermission
    *
    * @return array
    */
@@ -170,7 +170,7 @@ class MountProvider implements IMountProvider
   /**
    * @param IUser $user
    * @param IStorageFactory $loader
-   * @param bool $hasFilesystemPermission
+   * @param boolean $hasFilesystemPermission
    *
    * @return array
    */
@@ -207,7 +207,7 @@ class MountProvider implements IMountProvider
         loader: $loader,
         mountOptions: [
           'filesystem_check_changes' => 1,
-          'readonly' => true,
+          'readonly' => false,
           'previews' => true,
           'enable_sharing' => false,
           'authenticated' => true,
@@ -539,7 +539,7 @@ class MountProvider implements IMountProvider
    * @param null|string $targetMountPath Only restore this exact mount path.
    * @param null|string $expectedStorageId Require this storage identity.
    * @param null|StorageNotAvailableException $failure The reason the mount is unavailable.
-   * @param bool $hasFilesystemPermission Whether other app mounts may be restored.
+   * @param boolean $hasFilesystemPermission Whether other app mounts may be restored.
    *
    * @return array
    */
@@ -634,7 +634,7 @@ class MountProvider implements IMountProvider
    * @param string $userId
    * @param string $mountPath
    *
-   * @return bool
+   * @return boolean
    */
   private function isFinanceMountPath(string $userId, string $mountPath):bool
   {

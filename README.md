@@ -114,9 +114,18 @@ After reviewing the audit, an orchestra admin can run
 participant links and then collect remaining structurally valid orphan trees.
 They appear under `<shared orchestra folder>/lost+found`, in UTC timestamped
 folders with second precision and collision suffixes. Only members of the
-configured orchestra-admin group receive this authenticated mount. It is
-read-only: rename and deletion are not yet supported. Files remain encrypted;
-mount access does not change their encryption recipients.
+configured orchestra-admin group receive this authenticated mount. Files remain
+encrypted; mount access does not change their encryption recipients.
+
+Administrators can delete unreferenced recovered files and folders. Deleting a
+folder checks the entire subtree and either deletes it completely or leaves it
+unchanged. Known references, including business documents, retained deleted
+field values and registered roots, block deletion. File owners alone do not
+block deletion; the encrypted file is removed when its last directory link is
+deleted. The operating user receives a Nextcloud notification identifying the
+blockers. Creation, editing and renaming are not supported.
+Deletion uses a serializable transaction on MySQL/MariaDB and locks the
+relevant metadata; as with repair, avoid concurrent maintenance operations.
 
 Malformed trees, including non-folder parents, invalid file entries and nested
 registered storage roots, are reported and left untouched. A nonzero exit
