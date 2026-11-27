@@ -573,7 +573,6 @@ class EntityManager extends AbstractEntityManager
     // $eventManager->addEventSubscriber(new DBALEventListeners\MysqlSessionInit($conParams['charset'], $conParams['collate']));
 
     $eventManager->addEventListener([
-      ORM\Tools\ToolEvents::postGenerateSchema,
       // ORM\Events::loadClassMetadata,
       // ORM\Events::preUpdate,
       // ORM\Events::postUpdate,
@@ -814,30 +813,6 @@ class EntityManager extends AbstractEntityManager
     $entity = $eventArgs->getObject();
     if (\method_exists($entity, '__wakeup')) {
       $entity->__wakeup();
-    }
-  }
-
-  /**
-   * Remove unwanted constraints after schema generation.
-   *
-   * @param ORM\Tools\Event\GenerateSchemaEventArgs $args
-   *
-   * @return void
-   *
-   * @todo See that this is not necessary.
-   */
-  public function postGenerateSchema(ORM\Tools\Event\GenerateSchemaEventArgs $args)
-  {
-    $schema = $args->getSchema();
-    // $entityManager = $args->getEntityManager();
-    foreach ($schema->getTables() as $table) {
-
-      // tweak foreign keys
-      foreach ($table->getForeignKeys() as $foreignKey) {
-        if (false && $foreignKey->getForeignTableName() == 'ProjectInstrumentationNumbers') {
-          $table->removeForeignKey($foreignKey->getName());
-        }
-      }
     }
   }
 
