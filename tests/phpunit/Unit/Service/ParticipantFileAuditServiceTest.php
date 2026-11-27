@@ -195,6 +195,30 @@ class ParticipantFileAuditServiceTest extends TestCase
   }
 
   /** @return void */
+  public function testDocumentReferencesPreserveDuplicatesAndUnmatchedReceipts(): void
+  {
+    $this->connection->executeStatement("INSERT INTO Invoices VALUES (1, 10, 20, 102, '2000-01-01')");
+    $this->connection->executeStatement('INSERT INTO DonationReceipts VALUES (2, 999, 102, NULL)');
+    $this->connection->executeStatement("INSERT INTO ProjectParticipantFields (id, data_type) VALUES (3, 'db-file')");
+    $this->connection->executeStatement(
+      "INSERT INTO ProjectParticipantFieldsData VALUES (3, 10, 20, X'01AB', '102', NULL, NULL), "
+      . "(3, 10, 20, X'01AB', '102', NULL, NULL)",
+    );
+
+    $references = $this->service->documentReferences();
+    self::assertCount(4, $references);
+    $invoices = array_values(array_filter($references, static fn(array $row): bool => $row['source'] === 'invoice'));
+    self::assertSame('2000-01-01', $invoices[0]['deleted']);
+    $receipts = array_values(array_filter($references, static fn(array $row): bool => $row['source'] === 'donation-receipt'));
+    self::assertNull($receipts[0]['musician_id']);
+    self::assertNull($receipts[0]['project_id']);
+    $fields = array_values(array_filter($references, static fn(array $row): bool => $row['source'] === 'participant-field'));
+    self::assertCount(2, $fields);
+    self::assertSame('01AB', $fields[0]['option_key']);
+    self::assertSame($fields[0], $fields[1]);
+  }
+
+  /** @return void */
   public function testUnrecognizedGrantIsNotJustifiedByParticipantLinkOrTextField(): void
   {
     $this->connection->executeStatement("INSERT INTO ProjectParticipantFields (id, data_type) VALUES (1, 'text')");

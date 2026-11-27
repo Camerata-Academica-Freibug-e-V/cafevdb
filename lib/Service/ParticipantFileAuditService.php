@@ -12,6 +12,7 @@ namespace OCA\CAFEVDB\Service;
 use RuntimeException;
 
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Query\QueryBuilder;
 
 /** Inspect file grants and participant links without loading encrypted data or ORM entities. */
 class ParticipantFileAuditService
@@ -53,24 +54,27 @@ class ParticipantFileAuditService
    */
   private function inspect(bool $includeFileNames, array $mountPaths, bool $includeFieldNames, ?callable $userStatus): array
   {
-    $files = array_column($this->connection->fetchAllAssociative(
-      'SELECT id, type' . ($includeFileNames ? ', file_name' : '') . ' FROM Files',
-    ), null, 'id');
+    $filesQuery = $this->connection->createQueryBuilder()->select('id', 'type')->from('Files');
+    if ($includeFileNames) {
+      $filesQuery->addSelect('file_name');
+    }
+    $files = array_column($filesQuery->fetchAllAssociative(), null, 'id');
     $owners = [];
-    foreach ($this->connection->fetchAllAssociative('SELECT encrypted_file_id, musician_id FROM EncryptedFileOwners') as $owner) {
+    foreach ($this->connection->createQueryBuilder()->select('encrypted_file_id', 'musician_id')
+      ->from('EncryptedFileOwners')->fetchAllAssociative() as $owner) {
       $owners[$owner['encrypted_file_id']][(int)$owner['musician_id']] = true;
     }
-    $entries = array_column(
-      $this->connection->fetchAllAssociative(
-        'SELECT id, parent_id, file_id, type' . ($includeFileNames ? ', name' : '') . ' FROM DatabaseStorageDirEntries',
-      ),
-      null,
-      'id',
-    );
-    $participants = $this->connection->fetchAllAssociative(
-      'SELECT p.musician_id, p.project_id, p.deleted, p.participation_status, s.root_id
-       FROM ProjectParticipants p LEFT JOIN DatabaseStorages s ON s.id = p.database_documents_id',
-    );
+    $entriesQuery = $this->connection->createQueryBuilder()->select('id', 'parent_id', 'file_id', 'type')
+      ->from('DatabaseStorageDirEntries');
+    if ($includeFileNames) {
+      $entriesQuery->addSelect('name');
+    }
+    $entries = array_column($entriesQuery->fetchAllAssociative(), null, 'id');
+    $participants = $this->connection->createQueryBuilder()
+      ->select('p.musician_id', 'p.project_id', 'p.deleted', 'p.participation_status', 's.root_id')
+      ->from('ProjectParticipants', 'p')
+      ->leftJoin('p', 'DatabaseStorages', 's', 's.id = p.database_documents_id')
+      ->fetchAllAssociative();
     $participantRoots = [];
     $rootParticipants = [];
     $participantRecords = [];
@@ -179,7 +183,11 @@ class ParticipantFileAuditService
         $grants[$finding['file_id']][$finding['musician_id']] = false;
       }
     }
-    $musicians = array_column($this->connection->fetchAllAssociative('SELECT id, user_id_slug FROM Musicians'), 'user_id_slug', 'id');
+    $musicians = array_column(
+      $this->connection->createQueryBuilder()->select('id', 'user_id_slug')->from('Musicians')->fetchAllAssociative(),
+      'user_id_slug',
+      'id',
+    );
     $statuses = [];
     $diagnostics = [];
     ksort($grants);
@@ -221,10 +229,9 @@ class ParticipantFileAuditService
    */
   private function sealRecipients(int $fileId): array
   {
-    $header = $this->connection->fetchAssociative(
-      'SELECT SUBSTR(data, 1, 9) AS header, LENGTH(data) AS data_length FROM FileData WHERE file_id = ?',
-      [$fileId],
-    );
+    $header = $this->connection->createQueryBuilder()
+      ->select('SUBSTR(data, 1, 9) AS header', 'LENGTH(data) AS data_length')
+      ->from('FileData')->where('file_id = :fileId')->setParameter('fileId', $fileId)->fetchAssociative();
     if ($header === false) {
       return ['status' => 'missing-data', 'recipients' => []];
     }
@@ -236,10 +243,11 @@ class ParticipantFileAuditService
     if ((int)$header['data_length'] < $length + 10) {
       return ['status' => 'invalid-seal', 'recipients' => []];
     }
-    $trailer = $this->connection->fetchAssociative(
-      'SELECT SUBSTR(data, ?, 1) AS seal_delimiter, SUBSTR(data, ?) AS recipients FROM FileData WHERE file_id = ?',
-      [$length + 10, $length + 11, $fileId],
-    );
+    $trailer = $this->connection->createQueryBuilder()
+      ->select('SUBSTR(data, :delimiter, 1) AS seal_delimiter', 'SUBSTR(data, :recipients) AS recipients')
+      ->from('FileData')->where('file_id = :fileId')
+      ->setParameter('delimiter', $length + 10)->setParameter('recipients', $length + 11)
+      ->setParameter('fileId', $fileId)->fetchAssociative();
     if ($trailer === false || $this->metadataString($trailer['seal_delimiter']) !== '|') {
       return ['status' => 'invalid-seal', 'recipients' => []];
     }
@@ -290,11 +298,19 @@ class ParticipantFileAuditService
     array $rootParticipants,
     array $links,
   ): void {
-    $musicians = array_column($this->connection->fetchAllAssociative('SELECT id, deleted FROM Musicians'), null, 'id');
-    $projects = array_column($this->connection->fetchAllAssociative('SELECT id, deleted FROM Projects'), null, 'id');
-    $fields = array_column($this->connection->fetchAllAssociative(
-      'SELECT id, project_id, deleted, participant_access, participation_context FROM ProjectParticipantFields',
-    ), null, 'id');
+    $musicians = array_column(
+      $this->connection->createQueryBuilder()->select('id', 'deleted')->from('Musicians')->fetchAllAssociative(),
+      null,
+      'id',
+    );
+    $projects = array_column(
+      $this->connection->createQueryBuilder()->select('id', 'deleted')->from('Projects')->fetchAllAssociative(),
+      null,
+      'id',
+    );
+    $fields = array_column($this->connection->createQueryBuilder()
+      ->select('id', 'project_id', 'deleted', 'participant_access', 'participation_context')
+      ->from('ProjectParticipantFields')->fetchAllAssociative(), null, 'id');
     $related = [];
     foreach ($references as $reference) {
       $entryId = $reference['entry_id'];
@@ -424,9 +440,12 @@ class ParticipantFileAuditService
    */
   private function annotateFields(array &$findings, array $references, array $entries, bool $includeFieldNames): void
   {
-    $fields = array_column($this->connection->fetchAllAssociative(
-      'SELECT id, data_type, multiplicity, participant_access' . ($includeFieldNames ? ', name' : '') . ' FROM ProjectParticipantFields',
-    ), null, 'id');
+    $fieldsQuery = $this->connection->createQueryBuilder()
+      ->select('id', 'data_type', 'multiplicity', 'participant_access')->from('ProjectParticipantFields');
+    if ($includeFieldNames) {
+      $fieldsQuery->addSelect('name');
+    }
+    $fields = array_column($fieldsQuery->fetchAllAssociative(), null, 'id');
     $byFile = [];
     $byEntry = [];
     $byReference = [];
@@ -580,29 +599,47 @@ class ParticipantFileAuditService
    */
   public function documentReferences(): array
   {
-    return $this->connection->fetchAllAssociative(
-      "SELECT 'debit-mandate' AS source, sequence AS source_id, musician_id, project_id,
-              written_mandate_id AS entry_id, deleted, NULL AS option_key
-       FROM SepaDebitMandates WHERE written_mandate_id IS NOT NULL
-       UNION ALL
-       SELECT 'invoice', id, debitor_id, project_id, written_invoice_id, deleted, NULL
-       FROM Invoices WHERE written_invoice_id IS NOT NULL
-       UNION ALL
-       SELECT 'donation-receipt', r.id, p.musician_id, p.project_id, r.supporting_document_id, r.deleted, NULL
-       FROM DonationReceipts r LEFT JOIN CompositePayments p ON p.id = r.donation_id
-       WHERE r.supporting_document_id IS NOT NULL
-       UNION ALL
-       SELECT 'composite-payment', id, musician_id, project_id, supporting_document_id, NULL, NULL
-       FROM CompositePayments WHERE supporting_document_id IS NOT NULL
-       UNION ALL
-       SELECT 'participant-field', d.field_id, d.musician_id, d.project_id, d.option_value, d.deleted, HEX(d.option_key)
-       FROM ProjectParticipantFieldsData d JOIN ProjectParticipantFields f ON f.id = d.field_id
-       WHERE f.data_type = 'db-file' AND d.option_value IS NOT NULL AND d.option_value <> ''
-       UNION ALL
-       SELECT 'participant-field-support', d.field_id, d.musician_id, d.project_id,
-              d.supporting_document_id, d.deleted, HEX(d.option_key)
-       FROM ProjectParticipantFieldsData d WHERE d.supporting_document_id IS NOT NULL",
-    );
+    $queries = [
+      $this->connection->createQueryBuilder()
+        ->select(
+          "'debit-mandate' AS source", 'sequence AS source_id', 'musician_id', 'project_id',
+          'written_mandate_id AS entry_id', 'deleted', 'NULL AS option_key')
+        ->from('SepaDebitMandates')->where('written_mandate_id IS NOT NULL'),
+      $this->connection->createQueryBuilder()
+        ->select("'invoice'", 'id', 'debitor_id', 'project_id', 'written_invoice_id', 'deleted', 'NULL')
+        ->from('Invoices')->where('written_invoice_id IS NOT NULL'),
+      $this->connection->createQueryBuilder()
+        ->select("'donation-receipt'", 'r.id', 'p.musician_id', 'p.project_id', 'r.supporting_document_id', 'r.deleted', 'NULL')
+        ->from('DonationReceipts', 'r')->leftJoin('r', 'CompositePayments', 'p', 'p.id = r.donation_id')
+        ->where('r.supporting_document_id IS NOT NULL'),
+      $this->connection->createQueryBuilder()
+        ->select("'composite-payment'", 'id', 'musician_id', 'project_id', 'supporting_document_id', 'NULL', 'NULL')
+        ->from('CompositePayments')->where('supporting_document_id IS NOT NULL'),
+      $this->connection->createQueryBuilder()
+        ->select("'participant-field'", 'd.field_id', 'd.musician_id', 'd.project_id', 'd.option_value', 'd.deleted', 'HEX(d.option_key)')
+        ->from('ProjectParticipantFieldsData', 'd')->innerJoin('d', 'ProjectParticipantFields', 'f', 'f.id = d.field_id')
+        ->where("f.data_type = 'db-file'")->andWhere('d.option_value IS NOT NULL')->andWhere("d.option_value <> ''"),
+      $this->connection->createQueryBuilder()
+        ->select(
+          "'participant-field-support'", 'd.field_id', 'd.musician_id', 'd.project_id',
+          'd.supporting_document_id', 'd.deleted', 'HEX(d.option_key)')
+        ->from('ProjectParticipantFieldsData', 'd')->where('d.supporting_document_id IS NOT NULL'),
+    ];
+    return $this->connection->createQueryBuilder()->select('*')->from('(' . $this->unionAll($queries) . ')', 'documents')
+      ->fetchAllAssociative();
+  }
+
+  /**
+   * DBAL 4.0 does not expose a UNION builder. The component SELECTs still use
+   * the query builder, and their SQL contains no bound parameters.
+   *
+   * @param array<QueryBuilder> $queries
+   *
+   * @return string
+   */
+  private function unionAll(array $queries): string
+  {
+    return implode(' UNION ALL ', array_map(static fn(QueryBuilder $query): string => $query->getSQL(), $queries));
   }
 
   /**
@@ -656,16 +693,15 @@ class ParticipantFileAuditService
     $mandates = $this->repairableMandates($files, $entries, $links, $participantRoots, $rootParticipants);
     $financialDocuments = $this->repairableFinancialDocuments($files, $entries, $links, $participantRoots, $rootParticipants);
     $fieldLinks = [];
-    foreach ($this->connection->fetchAllAssociative(
-      "SELECT d.field_id, d.musician_id, d.project_id, d.option_value AS entry_id, HEX(d.option_key) AS option_key
-       FROM ProjectParticipantFieldsData d
-       JOIN ProjectParticipantFields f ON f.id = d.field_id AND f.project_id = d.project_id
-       JOIN ProjectParticipants pp ON pp.musician_id = d.musician_id AND pp.project_id = d.project_id
-       JOIN Projects p ON p.id = d.project_id
-       JOIN Musicians m ON m.id = d.musician_id
-       WHERE f.data_type = 'db-file' AND d.deleted IS NULL AND f.deleted IS NULL
-         AND pp.deleted IS NULL AND p.deleted IS NULL AND m.deleted IS NULL",
-    ) as $candidate) {
+    foreach ($this->connection->createQueryBuilder()
+      ->select('d.field_id', 'd.musician_id', 'd.project_id', 'd.option_value AS entry_id', 'HEX(d.option_key) AS option_key')
+      ->from('ProjectParticipantFieldsData', 'd')
+      ->innerJoin('d', 'ProjectParticipantFields', 'f', 'f.id = d.field_id AND f.project_id = d.project_id')
+      ->innerJoin('d', 'ProjectParticipants', 'pp', 'pp.musician_id = d.musician_id AND pp.project_id = d.project_id')
+      ->innerJoin('d', 'Projects', 'p', 'p.id = d.project_id')->innerJoin('d', 'Musicians', 'm', 'm.id = d.musician_id')
+      ->where("f.data_type = 'db-file'")->andWhere('d.deleted IS NULL')->andWhere('f.deleted IS NULL')
+      ->andWhere('pp.deleted IS NULL')->andWhere('p.deleted IS NULL')->andWhere('m.deleted IS NULL')
+      ->fetchAllAssociative() as $candidate) {
       $entryId = $candidate['entry_id'];
       if (!is_scalar($entryId) || !ctype_digit((string)$entryId)
           || (string)(int)$entryId !== ltrim((string)$entryId, '0') || (int)$entryId <= 0) {
@@ -731,27 +767,31 @@ class ParticipantFileAuditService
     array $participantRoots,
     array $rootParticipants,
   ): array {
-    $rows = $this->connection->fetchAllAssociative(
-      "SELECT documents.source, documents.source_id, documents.musician_id, documents.project_id, documents.entry_id
-       FROM (
-         SELECT 'invoice' AS source, id AS source_id, debitor_id AS musician_id, project_id, written_invoice_id AS entry_id
-         FROM Invoices WHERE deleted IS NULL AND written_invoice_id IS NOT NULL
-         UNION ALL
-         SELECT 'composite-payment', id, musician_id, project_id, supporting_document_id
-         FROM CompositePayments WHERE supporting_document_id IS NOT NULL
-         UNION ALL
-         SELECT 'donation-receipt', receipt.id, payment.musician_id, payment.project_id, receipt.supporting_document_id
-         FROM DonationReceipts receipt JOIN CompositePayments payment ON payment.id = receipt.donation_id
-         WHERE receipt.deleted IS NULL AND receipt.supporting_document_id IS NOT NULL
-         UNION ALL
-         SELECT 'debit-mandate', sequence, musician_id, project_id, written_mandate_id
-         FROM SepaDebitMandates WHERE written_mandate_id IS NOT NULL
-       ) documents
-       JOIN Musicians musician ON musician.id = documents.musician_id AND musician.deleted IS NULL
-       JOIN Projects project ON project.id = documents.project_id AND project.deleted IS NULL
-       JOIN ProjectParticipants participant ON participant.musician_id = documents.musician_id
-         AND participant.project_id = documents.project_id AND participant.deleted IS NULL",
-    );
+    $queries = [
+      $this->connection->createQueryBuilder()
+        ->select("'invoice' AS source", 'id AS source_id', 'debitor_id AS musician_id', 'project_id', 'written_invoice_id AS entry_id')
+        ->from('Invoices')->where('deleted IS NULL')->andWhere('written_invoice_id IS NOT NULL'),
+      $this->connection->createQueryBuilder()
+        ->select("'composite-payment'", 'id', 'musician_id', 'project_id', 'supporting_document_id')
+        ->from('CompositePayments')->where('supporting_document_id IS NOT NULL'),
+      $this->connection->createQueryBuilder()
+        ->select("'donation-receipt'", 'receipt.id', 'payment.musician_id', 'payment.project_id', 'receipt.supporting_document_id')
+        ->from('DonationReceipts', 'receipt')
+        ->innerJoin('receipt', 'CompositePayments', 'payment', 'payment.id = receipt.donation_id')
+        ->where('receipt.deleted IS NULL')->andWhere('receipt.supporting_document_id IS NOT NULL'),
+      $this->connection->createQueryBuilder()
+        ->select("'debit-mandate'", 'sequence', 'musician_id', 'project_id', 'written_mandate_id')
+        ->from('SepaDebitMandates')->where('written_mandate_id IS NOT NULL'),
+    ];
+    $rows = $this->connection->createQueryBuilder()
+      ->select('documents.source', 'documents.source_id', 'documents.musician_id', 'documents.project_id', 'documents.entry_id')
+      ->from('(' . $this->unionAll($queries) . ')', 'documents')
+      ->innerJoin('documents', 'Musicians', 'musician', 'musician.id = documents.musician_id AND musician.deleted IS NULL')
+      ->innerJoin('documents', 'Projects', 'project', 'project.id = documents.project_id AND project.deleted IS NULL')
+      ->innerJoin(
+        'documents', 'ProjectParticipants', 'participant',
+        'participant.musician_id = documents.musician_id AND participant.project_id = documents.project_id AND participant.deleted IS NULL')
+      ->fetchAllAssociative();
     $candidates = [];
     foreach ($rows as $document) {
       $entryId = (int)$document['entry_id'];
@@ -846,20 +886,23 @@ class ParticipantFileAuditService
     array $rootParticipants,
   ): array {
     $candidates = [];
-    $rows = $this->connection->fetchAllAssociative(
-      'SELECT mandate.sequence, mandate.musician_id, mandate.project_id, mandate.written_mandate_id,
-              target.project_id AS target_project_id
-       FROM SepaDebitMandates mandate
-       JOIN Musicians musician ON musician.id = mandate.musician_id AND musician.deleted IS NULL
-       JOIN Projects source_project ON source_project.id = mandate.project_id AND source_project.deleted IS NULL
-       JOIN ProjectParticipants source_participant ON source_participant.project_id = mandate.project_id
-         AND source_participant.musician_id = mandate.musician_id AND source_participant.deleted IS NULL
-       JOIN ProjectParticipants target ON target.musician_id = mandate.musician_id AND target.deleted IS NULL
-       JOIN Projects target_project ON target_project.id = target.project_id AND target_project.deleted IS NULL
-       WHERE mandate.written_mandate_id IS NOT NULL
-         AND (target.project_id = mandate.project_id OR (? > 0 AND mandate.project_id = ?))',
-      [$this->clubMembersProjectId, $this->clubMembersProjectId],
-    );
+    $rows = $this->connection->createQueryBuilder()
+      ->select(
+        'mandate.sequence', 'mandate.musician_id', 'mandate.project_id', 'mandate.written_mandate_id',
+        'target.project_id AS target_project_id')
+      ->from('SepaDebitMandates', 'mandate')
+      ->innerJoin('mandate', 'Musicians', 'musician', 'musician.id = mandate.musician_id AND musician.deleted IS NULL')
+      ->innerJoin('mandate', 'Projects', 'source_project', 'source_project.id = mandate.project_id AND source_project.deleted IS NULL')
+      ->innerJoin(
+        'mandate', 'ProjectParticipants', 'source_participant',
+        'source_participant.project_id = mandate.project_id AND source_participant.musician_id = mandate.musician_id'
+        . ' AND source_participant.deleted IS NULL')
+      ->innerJoin('mandate', 'ProjectParticipants', 'target', 'target.musician_id = mandate.musician_id AND target.deleted IS NULL')
+      ->innerJoin('target', 'Projects', 'target_project', 'target_project.id = target.project_id AND target_project.deleted IS NULL')
+      ->where('mandate.written_mandate_id IS NOT NULL')
+      ->andWhere('(target.project_id = mandate.project_id OR (:clubEnabled > 0 AND mandate.project_id = :clubId))')
+      ->setParameter('clubEnabled', $this->clubMembersProjectId)->setParameter('clubId', $this->clubMembersProjectId)
+      ->fetchAllAssociative();
     foreach ($rows as $mandate) {
       $sourceProjectId = (int)$mandate['project_id'];
       $targetProjectId = (int)$mandate['target_project_id'];
@@ -906,39 +949,39 @@ class ParticipantFileAuditService
   /** @return array */
   private function repairableSupportingDocuments(): array
   {
-    return $this->connection->fetchAllAssociative(
-      "SELECT d.field_id, d.musician_id, d.project_id, d.supporting_document_id AS entry_id, HEX(d.option_key) AS option_key
-       FROM ProjectParticipantFieldsData d
-       JOIN ProjectParticipantFields f ON f.id = d.field_id AND f.project_id = d.project_id
-       JOIN ProjectParticipants pp ON pp.musician_id = d.musician_id AND pp.project_id = d.project_id
-       JOIN Projects p ON p.id = d.project_id
-       JOIN Musicians m ON m.id = d.musician_id
-       WHERE d.supporting_document_id IS NOT NULL AND d.deleted IS NULL AND f.deleted IS NULL
-         AND pp.deleted IS NULL AND p.deleted IS NULL AND m.deleted IS NULL
-         AND f.participant_access IN ('read', 'read-write')
-         AND (
-           f.participation_context = 'unrestricted'
-           OR (f.participation_context = 'participants' AND pp.participation_status <> 'associated'
-               AND (
-                 NOT EXISTS (
-                   SELECT 1 FROM ProjectInstruments pi
-                   JOIN instrument_instrument_family iif ON iif.instrument_id = pi.instrument_id
-                   JOIN InstrumentFamilies fam ON fam.id = iif.instrument_family_id
-                   WHERE pi.project_id = pp.project_id AND pi.musician_id = pp.musician_id
-                     AND fam.family = 'not an instrument'
-                 )
-                 OR EXISTS (
-                   SELECT 1 FROM ProjectInstruments pi
-                   WHERE pi.project_id = pp.project_id AND pi.musician_id = pp.musician_id
-                     AND NOT EXISTS (
-                       SELECT 1 FROM instrument_instrument_family iif
-                       JOIN InstrumentFamilies fam ON fam.id = iif.instrument_family_id
-                       WHERE iif.instrument_id = pi.instrument_id AND fam.family = 'not an instrument'
-                     )
-                 )
-               ))
-         )",
-    );
+    $nonInstrumentFamily = $this->connection->createQueryBuilder()
+      ->select('1')->from('instrument_instrument_family', 'iif')
+      ->innerJoin('iif', 'InstrumentFamilies', 'fam', 'fam.id = iif.instrument_family_id')
+      ->where('iif.instrument_id = pi.instrument_id')->andWhere("fam.family = 'not an instrument'");
+    $nonInstrument = $this->connection->createQueryBuilder()
+      ->select('1')->from('ProjectInstruments', 'pi')
+      ->innerJoin('pi', 'instrument_instrument_family', 'iif', 'iif.instrument_id = pi.instrument_id')
+      ->innerJoin('iif', 'InstrumentFamilies', 'fam', 'fam.id = iif.instrument_family_id')
+      ->where('pi.project_id = pp.project_id')->andWhere('pi.musician_id = pp.musician_id')
+      ->andWhere("fam.family = 'not an instrument'");
+    $instrument = $this->connection->createQueryBuilder()
+      ->select('1')->from('ProjectInstruments', 'pi')
+      ->where('pi.project_id = pp.project_id')->andWhere('pi.musician_id = pp.musician_id')
+      ->andWhere('NOT EXISTS (' . $nonInstrumentFamily->getSQL() . ')');
+    $query = $this->connection->createQueryBuilder();
+    $expr = $query->expr();
+    return $query
+      ->select('d.field_id', 'd.musician_id', 'd.project_id', 'd.supporting_document_id AS entry_id', 'HEX(d.option_key) AS option_key')
+      ->from('ProjectParticipantFieldsData', 'd')
+      ->innerJoin('d', 'ProjectParticipantFields', 'f', 'f.id = d.field_id AND f.project_id = d.project_id')
+      ->innerJoin('d', 'ProjectParticipants', 'pp', 'pp.musician_id = d.musician_id AND pp.project_id = d.project_id')
+      ->innerJoin('d', 'Projects', 'p', 'p.id = d.project_id')->innerJoin('d', 'Musicians', 'm', 'm.id = d.musician_id')
+      ->where('d.supporting_document_id IS NOT NULL')->andWhere('d.deleted IS NULL')->andWhere('f.deleted IS NULL')
+      ->andWhere('pp.deleted IS NULL')->andWhere('p.deleted IS NULL')->andWhere('m.deleted IS NULL')
+      ->andWhere($expr->in('f.participant_access', ["'read'", "'read-write'"]))
+      ->andWhere($expr->or(
+        "f.participation_context = 'unrestricted'",
+        $expr->and(
+          "f.participation_context = 'participants'",
+          "pp.participation_status <> 'associated'",
+          $expr->or('NOT EXISTS (' . $nonInstrument->getSQL() . ')', 'EXISTS (' . $instrument->getSQL() . ')'),
+        ),
+      ))->fetchAllAssociative();
   }
 
   /**

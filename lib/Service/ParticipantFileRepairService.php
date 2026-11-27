@@ -60,7 +60,7 @@ class ParticipantFileRepairService
           'ProjectInstruments', 'instrument_instrument_family', 'InstrumentFamilies',
           'SepaDebitMandates', 'Invoices', 'CompositePayments', 'DonationReceipts', 'EncryptedFileOwners',
         ] as $table) {
-          $this->connection->executeQuery('SELECT * FROM ' . $table . ' FOR UPDATE')->fetchAllAssociative();
+          $this->connection->createQueryBuilder()->select('*')->from($table)->forUpdate()->fetchAllAssociative();
         }
       }
       $audit = new ParticipantFileAuditService($this->connection, $this->clubMembersProjectId);
@@ -97,10 +97,9 @@ class ParticipantFileRepairService
           if ($step === 'reconcile-encryption-seal') {
             $result += ['status' => 'deferred', 'reason' => 'seal-reconciliation-deferred'];
           } elseif ($step === 'add-ownership') {
-            $exists = $this->connection->fetchOne(
-              'SELECT 1 FROM EncryptedFileOwners WHERE encrypted_file_id = ? AND musician_id = ?',
-              [$finding['file_id'], $finding['musician_id']],
-            );
+            $exists = $this->connection->createQueryBuilder()->select('1')->from('EncryptedFileOwners')
+              ->where('encrypted_file_id = :fileId')->andWhere('musician_id = :musicianId')
+              ->setParameter('fileId', $finding['file_id'])->setParameter('musicianId', $finding['musician_id'])->fetchOne();
             if (!$exists && !$dryRun) {
               $this->connection->insert('EncryptedFileOwners', [
                 'encrypted_file_id' => $finding['file_id'],
@@ -153,10 +152,9 @@ class ParticipantFileRepairService
     $targets = [];
     $covered = [];
     $participantRoots = [];
-    foreach ($this->connection->fetchAllAssociative(
-      'SELECT p.musician_id, p.project_id, s.root_id FROM ProjectParticipants p
-       JOIN DatabaseStorages s ON s.id = p.database_documents_id',
-    ) as $participant) {
+    foreach ($this->connection->createQueryBuilder()->select('p.musician_id', 'p.project_id', 's.root_id')
+      ->from('ProjectParticipants', 'p')->innerJoin('p', 'DatabaseStorages', 's', 's.id = p.database_documents_id')
+      ->fetchAllAssociative() as $participant) {
       $participantRoots[$participant['musician_id'] . ':' . $participant['project_id']] = (int)$participant['root_id'];
     }
     foreach ($findings as $finding) {
@@ -178,16 +176,15 @@ class ParticipantFileRepairService
       }
     }
     $entries = array_column(
-      $this->connection->fetchAllAssociative('SELECT id, parent_id, type FROM DatabaseStorageDirEntries'),
+      $this->connection->createQueryBuilder()->select('id', 'parent_id', 'type')->from('DatabaseStorageDirEntries')->fetchAllAssociative(),
       null,
       'id',
     );
-    $roots = array_fill_keys($this->connection->fetchFirstColumn('SELECT root_id FROM DatabaseStorages'), true);
+    $roots = array_fill_keys($this->connection->createQueryBuilder()->select('root_id')->from('DatabaseStorages')->fetchFirstColumn(), true);
     $recoveryRootId = $this->recoveryRootId;
-    if ($recoveryRootId !== null && !$this->connection->fetchOne(
-      'SELECT 1 FROM DatabaseStorages WHERE root_id = ? AND storage_id = ?',
-      [$recoveryRootId, LostAndFoundStorage::SHORT_ID],
-    )) {
+    if ($recoveryRootId !== null && !$this->connection->createQueryBuilder()->select('1')->from('DatabaseStorages')
+      ->where('root_id = :rootId')->andWhere('storage_id = :storageId')
+      ->setParameter('rootId', $recoveryRootId)->setParameter('storageId', LostAndFoundStorage::SHORT_ID)->fetchOne()) {
       throw new RuntimeException('The lost+found storage root changed during repair.');
     }
     $movable = [];
@@ -241,18 +238,15 @@ class ParticipantFileRepairService
    */
   private function addLink(array $finding, bool $dryRun, array &$destinations, array $movableEntries): array
   {
-    $source = $this->connection->fetchAssociative(
-      'SELECT name, file_id FROM DatabaseStorageDirEntries WHERE id = ?',
-      [$finding['entry_id']],
-    );
+    $source = $this->connection->createQueryBuilder()->select('name', 'file_id')->from('DatabaseStorageDirEntries')
+      ->where('id = :id')->setParameter('id', $finding['entry_id'])->fetchAssociative();
     if (!$source || (int)$source['file_id'] !== (int)$finding['file_id']) {
       throw new RuntimeException('The source file entry changed during participant repair.');
     }
-    $root = $this->connection->fetchOne(
-      'SELECT s.root_id FROM ProjectParticipants p JOIN DatabaseStorages s ON s.id = p.database_documents_id
-       WHERE p.musician_id = ? AND p.project_id = ?',
-      [$finding['musician_id'], $finding['project_id']],
-    );
+    $root = $this->connection->createQueryBuilder()->select('s.root_id')->from('ProjectParticipants', 'p')
+      ->innerJoin('p', 'DatabaseStorages', 's', 's.id = p.database_documents_id')
+      ->where('p.musician_id = :musicianId')->andWhere('p.project_id = :projectId')
+      ->setParameter('musicianId', $finding['musician_id'])->setParameter('projectId', $finding['project_id'])->fetchOne();
     if (!$root) {
       throw new RuntimeException('The participant storage disappeared during repair.');
     }
@@ -287,10 +281,7 @@ class ParticipantFileRepairService
       if ($missing) {
         continue;
       }
-      $entry = $this->connection->fetchAssociative(
-        'SELECT id, type, file_id FROM DatabaseStorageDirEntries WHERE parent_id = ? AND name = ?',
-        [$parent, $component],
-      );
+      $entry = $this->findEntry($parent, $component);
       if ($entry && $entry['type'] !== 'folder') {
         return ['status' => 'blocked', 'reason' => 'destination-name-conflict'];
       }
@@ -300,22 +291,17 @@ class ParticipantFileRepairService
         $parent = (int)$entry['id'];
       }
     }
-    $existing = $missing ? false : $this->connection->fetchAssociative(
-      'SELECT id, type, file_id FROM DatabaseStorageDirEntries WHERE parent_id = ? AND name = ?',
-      [$parent, $source['name']],
-    );
+    $existing = $missing ? false : $this->findEntry($parent, $source['name']);
     if ($existing && ($existing['type'] !== 'file' || (int)$existing['file_id'] !== (int)$finding['file_id'])) {
       return ['status' => 'blocked', 'reason' => 'destination-name-conflict'];
     }
     if ($existing && (int)$existing['id'] !== (int)$finding['entry_id'] && (
-      ($finding['source'] === 'participant-field-support' && $this->connection->fetchOne(
-        'SELECT 1 FROM ProjectParticipantFieldsData WHERE supporting_document_id = ?',
-        [$existing['id']],
-      ))
-      || ($finding['source'] === 'debit-mandate' && $this->connection->fetchOne(
-        'SELECT 1 FROM SepaDebitMandates WHERE written_mandate_id = ?',
-        [$existing['id']],
-      ))
+      ($finding['source'] === 'participant-field-support' && $this->connection->createQueryBuilder()
+        ->select('1')->from('ProjectParticipantFieldsData')->where('supporting_document_id = :entryId')
+        ->setParameter('entryId', $existing['id'])->fetchOne())
+      || ($finding['source'] === 'debit-mandate' && $this->connection->createQueryBuilder()
+        ->select('1')->from('SepaDebitMandates')->where('written_mandate_id = :entryId')
+        ->setParameter('entryId', $existing['id'])->fetchOne())
     )) {
       return ['status' => 'blocked', 'reason' => 'destination-reference-conflict'];
     }
@@ -343,37 +329,51 @@ class ParticipantFileRepairService
     }
     if (in_array($finding['source'], ['participant-field', 'participant-field-support'], true)) {
       $column = $finding['source'] === 'participant-field' ? 'option_value' : 'supporting_document_id';
-      $updated = $this->connection->executeStatement(
-        'UPDATE ProjectParticipantFieldsData SET ' . $column . ' = ?, updated = ?
-         WHERE field_id = ? AND musician_id = ? AND project_id = ? AND HEX(option_key) = ?
-           AND ' . $column . ' = ? AND deleted IS NULL',
-        [
-          $entryId, $now, $finding['source_id'], $finding['musician_id'],
-          $finding['project_id'], strtoupper($finding['option_key']), $finding['entry_id'],
-        ],
-      );
+      $updated = $this->connection->createQueryBuilder()->update('ProjectParticipantFieldsData')
+        ->set($column, ':newEntry')->set('updated', ':updated')
+        ->where('field_id = :sourceId')->andWhere('musician_id = :musicianId')->andWhere('project_id = :projectId')
+        ->andWhere('HEX(option_key) = :optionKey')->andWhere($column . ' = :oldEntry')->andWhere('deleted IS NULL')
+        ->setParameter('newEntry', $entryId)->setParameter('updated', $now)->setParameter('sourceId', $finding['source_id'])
+        ->setParameter('musicianId', $finding['musician_id'])->setParameter('projectId', $finding['project_id'])
+        ->setParameter('optionKey', strtoupper($finding['option_key']))->setParameter('oldEntry', $finding['entry_id'])
+        ->executeStatement();
       if ($updated !== 1) {
         throw new RuntimeException('The participant field reference changed during repair.');
       }
     } elseif ($finding['source'] === 'debit-mandate') {
-      $updated = $this->connection->executeStatement(
-        'UPDATE SepaDebitMandates SET written_mandate_id = ?
-         WHERE sequence = ? AND musician_id = ? AND project_id = ? AND written_mandate_id = ?',
-        [$entryId, $finding['source_id'], $finding['musician_id'], $finding['project_id'], $finding['entry_id']],
-      );
+      $updated = $this->connection->createQueryBuilder()->update('SepaDebitMandates')
+        ->set('written_mandate_id', ':newEntry')->where('sequence = :sourceId')
+        ->andWhere('musician_id = :musicianId')->andWhere('project_id = :projectId')->andWhere('written_mandate_id = :oldEntry')
+        ->setParameter('newEntry', $entryId)->setParameter('sourceId', $finding['source_id'])
+        ->setParameter('musicianId', $finding['musician_id'])->setParameter('projectId', $finding['project_id'])
+        ->setParameter('oldEntry', $finding['entry_id'])->executeStatement();
       if ($updated !== 1) {
         throw new RuntimeException('The debit mandate reference changed during repair.');
       }
     } elseif ($finding['source'] === 'composite-payment') {
-      $updated = $this->connection->executeStatement(
-        'UPDATE CompositePayments SET supporting_document_id = ?
-         WHERE id = ? AND musician_id = ? AND project_id = ? AND supporting_document_id = ?',
-        [$entryId, $finding['source_id'], $finding['musician_id'], $finding['project_id'], $finding['entry_id']],
-      );
+      $updated = $this->connection->createQueryBuilder()->update('CompositePayments')
+        ->set('supporting_document_id', ':newEntry')->where('id = :sourceId')
+        ->andWhere('musician_id = :musicianId')->andWhere('project_id = :projectId')->andWhere('supporting_document_id = :oldEntry')
+        ->setParameter('newEntry', $entryId)->setParameter('sourceId', $finding['source_id'])
+        ->setParameter('musicianId', $finding['musician_id'])->setParameter('projectId', $finding['project_id'])
+        ->setParameter('oldEntry', $finding['entry_id'])->executeStatement();
       if ($updated !== 1) {
         throw new RuntimeException('The composite payment reference changed during repair.');
       }
     }
     return ['status' => 'applied', 'action' => 'link', 'participant_entry_id' => $entryId];
+  }
+
+  /**
+   * @param int $parentId
+   * @param string $name
+   *
+   * @return array|false
+   */
+  private function findEntry(int $parentId, string $name): array|false
+  {
+    return $this->connection->createQueryBuilder()->select('id', 'type', 'file_id')->from('DatabaseStorageDirEntries')
+      ->where('parent_id = :parentId')->andWhere('name = :name')
+      ->setParameter('parentId', $parentId)->setParameter('name', $name)->fetchAssociative();
   }
 }

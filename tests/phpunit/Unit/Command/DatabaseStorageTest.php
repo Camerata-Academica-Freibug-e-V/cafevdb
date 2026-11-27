@@ -19,6 +19,10 @@ use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\DriverManager;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Platforms\SQLitePlatform;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Query\Expression\ExpressionBuilder;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Query\QueryBuilder;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Result;
 use OCP\IL10N;
 use OCP\Config\IUserConfig;
 use OCP\IUser;
@@ -57,6 +61,15 @@ class DatabaseStorageTest extends TestCase
     $this->entityManager = $this->createMock(EntityManager::class);
     $this->entityManager->method('getConnection')->willReturn($this->connection);
     $this->connection->method('transactional')->willReturnCallback(fn(callable $callback) => $callback($this->connection));
+    $this->connection->method('getDatabasePlatform')->willReturn(new SQLitePlatform());
+    $this->connection->method('createExpressionBuilder')->willReturn(new ExpressionBuilder($this->connection));
+    $this->connection->method('createQueryBuilder')->willReturnCallback(fn() => new QueryBuilder($this->connection));
+    $this->connection->method('executeQuery')->willReturnCallback(function(string $sql, array $params = [], array $types = []): Result {
+      $result = $this->createStub(Result::class);
+      $result->method('fetchAllAssociative')->willReturnCallback(fn() => $this->connection->fetchAllAssociative($sql, $params, $types));
+      $result->method('fetchAssociative')->willReturnCallback(fn() => $this->connection->fetchAssociative($sql, $params, $types));
+      return $result;
+    });
     $this->connection->method('fetchAssociative')->willReturnCallback(static fn(string $sql) => str_contains($sql, 'AS header')
       ? ['header' => '00000001|', 'data_length' => 20]
       : ['seal_delimiter' => '|', 'recipients' => 'alice:key']);
@@ -151,6 +164,7 @@ class DatabaseStorageTest extends TestCase
   public function testInvalidOptionsDoNotQueryDatabase(array $options): void
   {
     $this->connection->expects(self::never())->method('fetchAllAssociative');
+    $this->connection->expects(self::never())->method('createQueryBuilder');
     self::assertSame(DatabaseStorage::INVALID, $this->tester->execute($options));
   }
 
@@ -583,6 +597,7 @@ class DatabaseStorageTest extends TestCase
   {
     $this->loginSuccessful = false;
     $this->connection->expects(self::never())->method('fetchAllAssociative');
+    $this->connection->expects(self::never())->method('createQueryBuilder');
     self::assertSame(DatabaseStorage::FAILURE, $this->tester->execute(['--audit-access' => true]));
     self::assertStringContainsString('Login failed.', $this->tester->getDisplay());
   }
