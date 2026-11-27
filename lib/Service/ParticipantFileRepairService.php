@@ -24,7 +24,7 @@ class ParticipantFileRepairService
    * @param Connection $connection
    * @param int $clubMembersProjectId
    * @param Closure $destination Returns the folder components for a business reference.
-   * @param Closure $createFileEntry Creates a file entry through the ORM and returns its ID.
+   * @param Closure $createFileEntry Creates or moves a file entry through the ORM and returns its ID.
    */
   public function __construct(
     private Connection $connection,
@@ -62,6 +62,7 @@ class ParticipantFileRepairService
       }
       $audit = new ParticipantFileAuditService($this->connection, $this->clubMembersProjectId);
       $before = $audit->audit();
+      $movableEntries = $this->movableEntries($before['findings'], $audit->documentReferences());
       $results = [];
       $seen = [];
       $destinations = [];
@@ -111,7 +112,7 @@ class ParticipantFileRepairService
               'entry_id' => $finding['entry_id'],
               'option_key' => $finding['option_key'] ?? null,
             ];
-            $result += $this->addLink($finding, $dryRun, $destinations);
+            $result += $this->addLink($finding, $dryRun, $destinations, $movableEntries);
           }
           $results[] = $result;
         }
@@ -137,13 +138,97 @@ class ParticipantFileRepairService
   }
 
   /**
-   * @param array $finding
-   * @param bool $dryRun
-   * @param array $destinations
+   * Only move an orphan when every reference is covered by the same destination.
+   *
+   * @param array $findings
+   * @param array $references
    *
    * @return array
    */
-  private function addLink(array $finding, bool $dryRun, array &$destinations): array
+  private function movableEntries(array $findings, array $references): array
+  {
+    $targets = [];
+    $covered = [];
+    $participantRoots = [];
+    foreach ($this->connection->fetchAllAssociative(
+      'SELECT p.musician_id, p.project_id, s.root_id FROM ProjectParticipants p
+       JOIN DatabaseStorages s ON s.id = p.database_documents_id',
+    ) as $participant) {
+      $participantRoots[$participant['musician_id'] . ':' . $participant['project_id']] = (int)$participant['root_id'];
+    }
+    foreach ($findings as $finding) {
+      if (!$finding['repairable'] || !in_array('add-participant-link', $finding['repairsteps'], true)) {
+        continue;
+      }
+      $entryId = (int)$finding['entry_id'];
+      $key = $this->referenceKey($finding);
+      $covered[$entryId][$key] = true;
+      $targets[$entryId][json_encode([
+        $participantRoots[$finding['musician_id'] . ':' . $finding['project_id']] ?? null,
+        ($this->destination)($finding),
+      ], JSON_THROW_ON_ERROR)] = true;
+    }
+    foreach ($references as $reference) {
+      $entryId = (int)$reference['entry_id'];
+      if (isset($targets[$entryId]) && !isset($covered[$entryId][$this->referenceKey($reference)])) {
+        unset($targets[$entryId]);
+      }
+    }
+    $entries = array_column(
+      $this->connection->fetchAllAssociative('SELECT id, parent_id, type FROM DatabaseStorageDirEntries'),
+      null,
+      'id',
+    );
+    $roots = array_fill_keys($this->connection->fetchFirstColumn('SELECT root_id FROM DatabaseStorages'), true);
+    $movable = [];
+    foreach ($targets as $entryId => $paths) {
+      if (count($paths) !== 1 || !isset($entries[$entryId])) {
+        continue;
+      }
+      $current = $entries[$entryId];
+      $visited = [];
+      $attached = false;
+      while ($current['parent_id'] !== null && !isset($visited[$current['id']])) {
+        if (isset($roots[$current['id']])) {
+          $attached = true;
+          break;
+        }
+        $visited[$current['id']] = true;
+        $parent = $entries[$current['parent_id']] ?? null;
+        if ($parent === null || $parent['type'] !== 'folder') {
+          break;
+        }
+        $current = $parent;
+      }
+      if (!$attached && $current['parent_id'] === null && !isset($roots[$current['id']])) {
+        $movable[$entryId] = true;
+      }
+    }
+    return $movable;
+  }
+
+  /**
+   * @param array $reference
+   *
+   * @return string
+   */
+  private function referenceKey(array $reference): string
+  {
+    return implode(':', [
+      $reference['source'], $reference['source_id'], $reference['musician_id'],
+      $reference['project_id'], $reference['option_key'] ?? '',
+    ]);
+  }
+
+  /**
+   * @param array $finding
+   * @param bool $dryRun
+   * @param array $destinations
+   * @param array $movableEntries
+   *
+   * @return array
+   */
+  private function addLink(array $finding, bool $dryRun, array &$destinations, array $movableEntries): array
   {
     $source = $this->connection->fetchAssociative(
       'SELECT name, file_id FROM DatabaseStorageDirEntries WHERE id = ?',
@@ -211,7 +296,7 @@ class ParticipantFileRepairService
     if ($existing && ($existing['type'] !== 'file' || (int)$existing['file_id'] !== (int)$finding['file_id'])) {
       return ['status' => 'blocked', 'reason' => 'destination-name-conflict'];
     }
-    if ($existing && (
+    if ($existing && (int)$existing['id'] !== (int)$finding['entry_id'] && (
       ($finding['source'] === 'participant-field-support' && $this->connection->fetchOne(
         'SELECT 1 FROM ProjectParticipantFieldsData WHERE supporting_document_id = ?',
         [$existing['id']],
@@ -225,15 +310,25 @@ class ParticipantFileRepairService
     }
     $destinations[$pathKey]['file_id'] = $finding['file_id'];
     $destinations[$pathKey][$finding['source']] = $referenceKey;
+    $move = !$existing && isset($movableEntries[(int)$finding['entry_id']]);
     if ($dryRun) {
-      return ['status' => 'planned'];
+      return ['status' => 'planned', 'action' => $move ? 'move' : 'link'];
     }
     $now = (new DateTimeImmutable())->format('Y-m-d H:i:s.u');
     $entryId = $existing
       ? (int)$existing['id']
-      : ($this->createFileEntry)((int)$root, $folders, $source['name'], (int)$finding['file_id']);
+      : ($this->createFileEntry)(
+        (int)$root,
+        $folders,
+        $source['name'],
+        (int)$finding['file_id'],
+        $move ? (int)$finding['entry_id'] : null,
+      );
     if ($entryId <= 0) {
       throw new RuntimeException('The ORM did not return the repaired participant file entry ID.');
+    }
+    if ($entryId === (int)$finding['entry_id']) {
+      return ['status' => 'applied', 'action' => $move ? 'move' : 'link', 'participant_entry_id' => $entryId];
     }
     if (in_array($finding['source'], ['participant-field', 'participant-field-support'], true)) {
       $column = $finding['source'] === 'participant-field' ? 'option_value' : 'supporting_document_id';
@@ -268,6 +363,6 @@ class ParticipantFileRepairService
         throw new RuntimeException('The composite payment reference changed during repair.');
       }
     }
-    return ['status' => 'applied', 'participant_entry_id' => $entryId];
+    return ['status' => 'applied', 'action' => 'link', 'participant_entry_id' => $entryId];
   }
 }

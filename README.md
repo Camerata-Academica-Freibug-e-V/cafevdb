@@ -197,12 +197,14 @@ includes the remaining audit findings. A blocked operation gives a failing exit
 status; remaining findings and deferred seal work must still be reviewed.
 
 New links use the existing entry's filename and the app's localized document
-folders. Participant fields use their field folder path. The backfill never
+folders. Participant fields use their field folder path. An entry in a tree
+without a storage is moved when all its references have one repair destination;
+otherwise a participant link is created and the source entry is retained. The backfill never
 creates missing storage roots, deletes source entries, resurrects soft-deleted
 records, or grants ownership for a private field's link-only repair.
 Participant-field, composite-payment and debit-mandate references are pointed
 to their new participant entries; dedicated invoice/receipt entries are retained.
-New directory entries are persisted through the ORM so its cache-coherency
+New and moved directory entries are persisted through the ORM so its cache-coherency
 listeners record the corresponding changes. Business references are updated
 directly to avoid ORM orphan removal deleting shared source entries; the command
 clears the ORM identity map afterward.

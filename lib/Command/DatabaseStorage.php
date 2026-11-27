@@ -408,7 +408,7 @@ class DatabaseStorage extends Command
           default => throw new RuntimeException('Unsupported participant document source.'),
         };
       },
-      function(int $rootId, array $folders, string $fileName, int $fileId): int {
+      function(int $rootId, array $folders, string $fileName, int $fileId, ?int $moveEntryId): int {
         $folder = $this->entityManager->find(Entities\DatabaseStorageFolder::class, $rootId);
         if ($folder === null) {
           throw new RuntimeException('The participant storage root disappeared during repair.');
@@ -417,11 +417,19 @@ class DatabaseStorage extends Command
           $folder = $folder->addSubFolder($name);
           $this->entityManager->persist($folder);
         }
-        $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
-        if ($file === null) {
-          throw new RuntimeException('The encrypted file disappeared during repair.');
+        if ($moveEntryId !== null) {
+          $entry = $this->entityManager->find(Entities\DatabaseStorageFile::class, $moveEntryId);
+          if (!$entry instanceof Entities\DatabaseStorageFile || $entry->getFile()?->getId() !== $fileId) {
+            throw new RuntimeException('The source file entry disappeared or changed during repair.');
+          }
+          $entry->setParent($folder);
+        } else {
+          $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
+          if ($file === null) {
+            throw new RuntimeException('The encrypted file disappeared during repair.');
+          }
+          $entry = $folder->addDocument($file, $fileName);
         }
-        $entry = $folder->addDocument($file, $fileName);
         if (!$entry instanceof Entities\DatabaseStorageFile) {
           throw new RuntimeException('The ORM did not create a participant file entry.');
         }

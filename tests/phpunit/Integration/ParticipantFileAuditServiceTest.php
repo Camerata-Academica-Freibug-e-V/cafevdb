@@ -76,7 +76,7 @@ class ParticipantFileAuditServiceTest extends TestCase
   }
 
   /** @return void */
-  public function testRepairCreatesFileEntriesThroughOrmAndRecordsCacheChanges(): void
+  public function testRepairMovesOrphanEntryThroughOrmAndRecordsCacheChanges(): void
   {
     $this->generateCalendarBackend();
     $this->applyMigrations('latest');
@@ -115,7 +115,7 @@ class ParticipantFileAuditServiceTest extends TestCase
         $connection,
         0,
         fn(array $finding): array => [$mandatesFolder],
-        function(int $rootId, array $folders, string $fileName, int $fileId): int {
+        function(int $rootId, array $folders, string $fileName, int $fileId, ?int $moveEntryId): int {
           $folder = $this->entityManager->find(Entities\DatabaseStorageFolder::class, $rootId);
           if ($folder === null) {
             throw new RuntimeException('The participant storage root disappeared during test repair.');
@@ -124,11 +124,19 @@ class ParticipantFileAuditServiceTest extends TestCase
             $folder = $folder->addSubFolder($name);
             $this->entityManager->persist($folder);
           }
-          $fileEntity = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
-          if ($fileEntity === null) {
-            throw new RuntimeException('The encrypted file disappeared during test repair.');
+          if ($moveEntryId !== null) {
+            $entry = $this->entityManager->find(Entities\DatabaseStorageFile::class, $moveEntryId);
+            if (!$entry instanceof Entities\DatabaseStorageFile || $entry->getFile()?->getId() !== $fileId) {
+              throw new RuntimeException('The source file entry disappeared during test repair.');
+            }
+            $entry->setParent($folder);
+          } else {
+            $fileEntity = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
+            if ($fileEntity === null) {
+              throw new RuntimeException('The encrypted file disappeared during test repair.');
+            }
+            $entry = $folder->addDocument($fileEntity, $fileName);
           }
-          $entry = $folder->addDocument($fileEntity, $fileName);
           if (!$entry instanceof Entities\DatabaseStorageFile) {
             throw new RuntimeException('The ORM did not create the participant file entry.');
           }
@@ -140,10 +148,14 @@ class ParticipantFileAuditServiceTest extends TestCase
       $report = $service->repair();
 
       self::assertSame([], $report['remaining']['findings']);
-      self::assertNotSame(
+      self::assertSame(
         $orphanEntryId,
         (int)$connection->fetchOne('SELECT written_mandate_id FROM SepaDebitMandates WHERE sequence = ?', [1]),
       );
+      self::assertSame(1, (int)$connection->fetchOne(
+        'SELECT COUNT(*) FROM DatabaseStorageDirEntries WHERE file_id = ?',
+        [$file->getId()],
+      ));
       $deleted = $connection->fetchOne('SELECT deleted FROM SepaDebitMandates WHERE sequence = ?', [1]);
       self::assertSame('2000-01-01', (new DateTimeImmutable((string)$deleted))->format('Y-m-d'));
       $paths = $connection->fetchFirstColumn(
@@ -151,6 +163,10 @@ class ParticipantFileAuditServiceTest extends TestCase
         [$storageId],
       );
       self::assertContains($mandatesFolder . '/mandate.pdf', $paths);
+      self::assertNull($connection->fetchOne(
+        'SELECT old_path FROM ' . DatabaseTables::DATABASE_STORAGE_CACHE_CHANGES_TABLE . ' WHERE storage_id = ? AND path = ?',
+        [$storageId, $mandatesFolder . '/mandate.pdf'],
+      ));
       self::assertSame(
         1,
         (int)$connection->fetchOne(

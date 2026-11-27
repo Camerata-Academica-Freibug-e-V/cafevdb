@@ -83,7 +83,7 @@ class ParticipantFileAuditService
       }
     }
     $findings = [];
-    $references = $this->references();
+    $references = $this->documentReferences();
     $clubMandates = [];
     $documentContexts = [];
     $expected = $this->documentContexts($references, $entries, $owners, $participantRoots, $findings, $clubMandates, $documentContexts);
@@ -578,7 +578,7 @@ class ParticipantFileAuditService
    *
    * Revocation invalidates the mandate, not the participant's access to its written document.
    */
-  private function references(): array
+  public function documentReferences(): array
   {
     return $this->connection->fetchAllAssociative(
       "SELECT 'debit-mandate' AS source, sequence AS source_id, musician_id, project_id,
