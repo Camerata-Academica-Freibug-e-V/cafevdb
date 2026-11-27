@@ -98,6 +98,27 @@ class OrphanTreeServiceTest extends TestCase
   }
 
   /** @return void */
+  public function testCollectionClassificationRejectsMalformedTrees(): void
+  {
+    $this->connection->executeStatement(
+      "INSERT INTO DatabaseStorageDirEntries VALUES
+       (70, NULL, NULL, 'folder', 'bad parent'),
+       (71, 70, 53, 'file', 'file'),
+       (72, 71, NULL, 'folder', 'child')",
+    );
+    $before = $this->snapshot();
+    $report = $this->service->classifyForCollection();
+    self::assertSame([10, 20], $report['eligible_root_ids']);
+    $rejected = array_column($report['rejected'], 'reasons', 'root_id');
+    self::assertContains('registered-descendant', $rejected[30]);
+    self::assertContains('invalid-file-reference', $rejected[40]);
+    self::assertContains('root-not-folder', $rejected[50]);
+    self::assertContains('root-not-folder', $rejected[60]);
+    self::assertContains('non-folder-parent', $rejected[70]);
+    self::assertSame($before, $this->snapshot());
+  }
+
+  /** @return void */
   public function testFailureRollsBackPreviouslyDeletedFolders(): void
   {
     $this->connection->executeStatement(

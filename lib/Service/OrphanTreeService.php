@@ -85,6 +85,61 @@ class OrphanTreeService
   }
 
   /**
+   * Classify parentless trees before attempting to attach them to a storage.
+   * Registered descendants are not included in the listing, so inspect their
+   * parent links separately rather than treating the listing as a complete tree.
+   * Callers that modify trees must lock the metadata and classify within the
+   * same transaction as the changes.
+   *
+   * @return array{eligible_root_ids: int[], rejected: array<int, array{root_id: int, reasons: string[]}>}
+   */
+  public function classifyForCollection(): array
+  {
+    $report = $this->listing(false);
+    $rows = $this->connection->fetchAllAssociative('SELECT id, parent_id, file_id, type FROM DatabaseStorageDirEntries');
+    $children = [];
+    foreach ($rows as $row) {
+      if ($row['parent_id'] !== null) {
+        $children[(int)$row['parent_id']][] = (int)$row['id'];
+      }
+    }
+
+    $eligible = [];
+    $rejected = [];
+    foreach ($report['trees'] as $tree) {
+      $entries = array_column($tree['entries'], null, 'id');
+      $root = $entries[$tree['root_id']];
+      $reasons = [];
+      if ($root['type'] !== 'folder') {
+        $reasons['root-not-folder'] = true;
+      }
+      foreach ($entries as $entry) {
+        if ($entry['type'] !== 'folder' && $entry['type'] !== 'file') {
+          $reasons['unsupported-entry-type'] = true;
+        }
+        if (($entry['type'] === 'folder' && $entry['file_id'] !== null)
+            || ($entry['type'] === 'file' && $entry['file_id'] === null)) {
+          $reasons['invalid-file-reference'] = true;
+        }
+        if ($entry['type'] !== 'folder' && !empty($children[$entry['id']])) {
+          $reasons['non-folder-parent'] = true;
+        }
+        foreach ($children[$entry['id']] ?? [] as $childId) {
+          if (!isset($entries[$childId])) {
+            $reasons['registered-descendant'] = true;
+          }
+        }
+      }
+      if ($reasons === []) {
+        $eligible[] = $tree['root_id'];
+      } else {
+        $rejected[] = ['root_id' => $tree['root_id'], 'reasons' => array_keys($reasons)];
+      }
+    }
+    return ['eligible_root_ids' => $eligible, 'rejected' => $rejected];
+  }
+
+  /**
    * @param bool $includeNames
    *
    * @return array
