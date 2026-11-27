@@ -24,8 +24,7 @@ class ParticipantFileRepairService
    * @param Connection $connection
    * @param int $clubMembersProjectId
    * @param Closure $destination Returns the folder components for a business reference.
-   * @param Closure(int, array<int, string>, string, int): int $createFileEntry
-   * Creates a file entry through the ORM and returns its ID.
+   * @param Closure $createFileEntry Creates a file entry through the ORM and returns its ID.
    */
   public function __construct(
     private Connection $connection,

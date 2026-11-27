@@ -10,6 +10,7 @@
 namespace OCA\CAFEVDB\Tests\Integration;
 
 use DateTimeImmutable;
+use RuntimeException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
@@ -103,6 +104,7 @@ class ParticipantFileAuditServiceTest extends TestCase
         ->setDeleted(new DateTimeImmutable('2000-01-01'))
         ->setWrittenMandate($orphanEntry);
       $this->entityManager->persist($storage);
+      $this->entityManager->persist($participantRoot);
       $this->entityManager->persist($orphanRoot);
       $this->entityManager->persist($mandate);
       $this->entityManager->flush();
@@ -116,18 +118,19 @@ class ParticipantFileAuditServiceTest extends TestCase
         function(int $rootId, array $folders, string $fileName, int $fileId): int {
           $folder = $this->entityManager->find(Entities\DatabaseStorageFolder::class, $rootId);
           if ($folder === null) {
-            throw new \RuntimeException('The participant storage root disappeared during test repair.');
+            throw new RuntimeException('The participant storage root disappeared during test repair.');
           }
           foreach ($folders as $name) {
             $folder = $folder->addSubFolder($name);
+            $this->entityManager->persist($folder);
           }
           $fileEntity = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
           if ($fileEntity === null) {
-            throw new \RuntimeException('The encrypted file disappeared during test repair.');
+            throw new RuntimeException('The encrypted file disappeared during test repair.');
           }
           $entry = $folder->addDocument($fileEntity, $fileName);
           if (!$entry instanceof Entities\DatabaseStorageFile) {
-            throw new \RuntimeException('The ORM did not create the participant file entry.');
+            throw new RuntimeException('The ORM did not create the participant file entry.');
           }
           $this->entityManager->persist($entry);
           $this->entityManager->flush();

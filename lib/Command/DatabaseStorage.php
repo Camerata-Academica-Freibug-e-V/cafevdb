@@ -415,6 +415,7 @@ class DatabaseStorage extends Command
         }
         foreach ($folders as $name) {
           $folder = $folder->addSubFolder($name);
+          $this->entityManager->persist($folder);
         }
         $file = $this->entityManager->find(Entities\EncryptedFile::class, $fileId);
         if ($file === null) {
