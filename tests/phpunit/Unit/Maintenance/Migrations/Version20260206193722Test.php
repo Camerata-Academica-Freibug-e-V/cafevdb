@@ -59,6 +59,7 @@ use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Exception\DriverException;
 #[Attributes\UsesClass(MigrationsNamespace\Version20261125155000::class)]
 #[Attributes\UsesClass(MigrationsNamespace\Version20261125161000::class)]
 #[Attributes\UsesClass(MigrationsNamespace\Version20261127091000::class)]
+#[Attributes\UsesClass(MigrationsNamespace\Version20261127120000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\AbstractUndoable::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\ConsoleLogger::class)]

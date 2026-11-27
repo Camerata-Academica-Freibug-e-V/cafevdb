@@ -125,7 +125,7 @@ class InsuranceRates extends PMETableViewBase
     ];
 
     // Name of field which is the unique key
-    $opts['key'] = [ 'broker_id' => 'string', 'geographical_scope' => 'string', ];
+    $opts['key'] = [ 'broker_id' => 'int', 'geographical_scope' => 'string', ];
 
     // Sorting field(s)
     $opts['sort_field'] = [ 'broker_id', 'geographical_scope', ];
@@ -163,7 +163,7 @@ class InsuranceRates extends PMETableViewBase
       'sort'     => $sort,
       'values'   => [
         'table' => DatabaseTables::INSURANCE_BROKERS_TABLE,
-        'column' => 'short_name',
+        'column' => 'id',
         'description' => [
           'columns' => [ 'long_name', 'REPLACE($table.address, "\n", "<br/>")' ],
           'divs' => '<br/>',

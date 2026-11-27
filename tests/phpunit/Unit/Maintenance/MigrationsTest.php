@@ -53,6 +53,7 @@ use OCA\CAFEVDB\Tests\Unit\Maintenance\Migrations\SetupMigrationTrait;
 #[Attributes\CoversClass(MigrationsNamespace\Version20261125155000::class)]
 #[Attributes\CoversClass(MigrationsNamespace\Version20261125161000::class)]
 #[Attributes\CoversClass(MigrationsNamespace\Version20261127091000::class)]
+#[Attributes\CoversClass(MigrationsNamespace\Version20261127120000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\AppInfo\Application::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Common\ConsoleLogger::class)]
@@ -400,6 +401,64 @@ class MigrationsTest extends TestCase
   #[Attributes\Depends('testVersion20261101120000')]
   public function testUpToLatest(): void
   {
+    $this->applyMigrations('20261127091000');
+    $connection = $this->getEntityManager()->getConnection();
+    $connection->executeStatement(
+      'INSERT INTO InsuranceBrokers (short_name, long_name, address) VALUES (?, ?, ?)',
+      ['MigrationBroker', 'Migration Broker', 'Address'],
+    );
+    $connection->executeStatement(
+      'INSERT INTO InsuranceRates (broker_id, geographical_scope, rate) VALUES (?, ?, ?)',
+      ['MigrationBroker', 'Germany', '0.0010'],
+    );
+    $connection->executeStatement(
+      'INSERT INTO Musicians (id, first_name, sur_name, uuid) VALUES (900000001, ?, ?, UNHEX(?))',
+      ['Migration', 'Musician', '00000000000000000000000000000091'],
+    );
+    $connection->executeStatement(
+      'INSERT INTO InstrumentInsurances (instrument_holder_id, bill_to_party_id, broker_id, geographical_scope,
+        object, manufacturer, year_of_construction, insurance_amount, start_of_insurance)
+       VALUES (900000001, 900000001, ?, ?, ?, ?, ?, 100, ?)',
+      ['MigrationBroker', 'Germany', 'Violin', 'Maker', '2000', '2026-01-01'],
+    );
+    $connection->executeStatement(
+      'INSERT INTO Projects (id, name, year) VALUES (900000001, ?, 2026)',
+      ['Broker Migration Project'],
+    );
+    $connection->executeStatement(
+      'INSERT INTO ProjectParticipantFields (id, project_id, name, multiplicity, data_type) VALUES (900000001, 900000001, ?, ?, ?)',
+      ['Broker Migration Field', 'recurring', 'receivables'],
+    );
+    $connection->executeStatement(
+      'INSERT INTO ProjectParticipantFieldsDataOptions (field_id, `key`, data) VALUES (900000001, UNHEX(?), ?), (900000001, UNHEX(?), ?)',
+      [
+        '00000000000000000000000000000000',
+        \OCA\CAFEVDB\Service\Finance\InstrumentInsuranceReceivablesGenerator::class,
+        '00000000000000000000000000000001',
+        '{"year":"2025","broker":"MigrationBroker"}',
+      ],
+    );
+
+    $this->applyMigrations('latest');
+    $id = (int)$connection->fetchOne('SELECT id FROM InsuranceBrokers WHERE short_name = ?', ['MigrationBroker']);
+    $this->assertGreaterThan(0, $id);
+    $this->assertSame($id, (int)$connection->fetchOne('SELECT broker_id FROM InsuranceRates WHERE broker_id = ?', [$id]));
+    $this->assertSame($id, (int)$connection->fetchOne('SELECT broker_id FROM InstrumentInsurances WHERE broker_id = ?', [$id]));
+    $this->assertSame(
+      '{"year":"2025","brokerId":' . $id . '}',
+      $connection->fetchOne('SELECT data FROM ProjectParticipantFieldsDataOptions WHERE field_id = 900000001 AND `key` = UNHEX(?)', ['00000000000000000000000000000001']),
+    );
+    $connection->executeStatement('UPDATE InsuranceBrokers SET short_name = ? WHERE id = ?', ['RenamedBroker', $id]);
+    $this->unapplyMigrations('20261127120000');
+    $this->assertSame('RenamedBroker', $connection->fetchOne(
+      'SELECT broker_id FROM InsuranceRates WHERE geographical_scope = ? AND broker_id = ?',
+      ['Germany', 'RenamedBroker'],
+    ));
+    $this->assertSame('RenamedBroker', $connection->fetchOne('SELECT broker_id FROM InstrumentInsurances WHERE instrument_holder_id = 900000001'));
+    $this->assertSame(
+      '{"year":"2025","broker":"RenamedBroker"}',
+      $connection->fetchOne('SELECT data FROM ProjectParticipantFieldsDataOptions WHERE field_id = 900000001 AND `key` = UNHEX(?)', ['00000000000000000000000000000001']),
+    );
     $this->applyMigrations('latest');
   }
 

@@ -116,6 +116,7 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Service\RequestService;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261125155000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261125161000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261127091000::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261127120000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialStore::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\ConnectorDatabaseCredentials::class)]
@@ -735,10 +736,48 @@ class CloudUserConnectorServiceTest extends TestCase
         $this->assertSame($fileIds, array_map('intval', $actualFileIds));
       }
       $this->assertParticipantFieldStorageVisibility($cloudConnectorDatabase);
+      $this->assertInsuranceBrokerViewCompatibility($cloudConnectorDatabase);
     } finally {
       $connection->executeStatement('SET @' . Constants::SQL_CLOUD_USER_ID . ' = NULL');
       $connection->executeStatement('SET @' . Constants::SQL_ROW_ACCESS_TOKEN . ' = NULL');
       $connection->rollBack();
+    }
+  }
+
+  /**
+   * @param string $cloudConnectorDatabase Connector view database.
+   *
+   * @return void
+   */
+  private function assertInsuranceBrokerViewCompatibility(string $cloudConnectorDatabase): void
+  {
+    $connection = $this->getEntityManager()->getConnection();
+    $connection->executeStatement('SET @' . Constants::SQL_CLOUD_USER_ID . ' = ?', ['first-owner']);
+    $connection->executeStatement('SET @' . Constants::SQL_ROW_ACCESS_TOKEN . ' = ?', ['first-token']);
+    $connection->executeStatement(
+      'INSERT INTO InsuranceBrokers (id, short_name, long_name, address) VALUES (10, ?, ?, ?)',
+      ['BrokerBefore', 'Broker', 'Address'],
+    );
+    $connection->executeStatement(
+      'INSERT INTO InsuranceRates (broker_id, geographical_scope, rate) VALUES (10, ?, ?)',
+      ['Germany', '0.0010'],
+    );
+    $connection->executeStatement(
+      'INSERT INTO InstrumentInsurances (instrument_holder_id, bill_to_party_id, broker_id, geographical_scope,
+        object, manufacturer, year_of_construction, insurance_amount, start_of_insurance)
+       VALUES (1, 1, 10, ?, ?, ?, ?, 100, ?)',
+      ['Germany', 'Violin', 'Maker', '2000', '2026-01-01'],
+    );
+    foreach (['BrokerBefore', 'BrokerAfter'] as $name) {
+      if ($name === 'BrokerAfter') {
+        $connection->executeStatement('UPDATE InsuranceBrokers SET short_name = ? WHERE id = 10', [$name]);
+      }
+      foreach (['InsuranceRates', 'InstrumentInsurances'] as $table) {
+        $this->assertSame(
+          $name,
+          $connection->fetchOne('SELECT broker_id FROM ' . $cloudConnectorDatabase . '.Personalized' . $table . 'View'),
+        );
+      }
     }
   }
 

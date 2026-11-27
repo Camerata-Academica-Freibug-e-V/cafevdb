@@ -421,6 +421,7 @@ class InstrumentInsurances extends PMETableViewBase
       $opts['fdd']['broker_id'] = [
         'name'     => $this->l->t('Insurance Broker'),
         'select'   => 'T',
+        'sql'      => '(SELECT b.short_name FROM ' . DatabaseTables::INSURANCE_BROKERS_TABLE . ' b WHERE b.id = $join_col_fqn)',
       ];
     } else {
       $joinTables[DatabaseTables::INSURANCE_BROKERS_TABLE] = 'PMEjoin'.count($opts['fdd']);
@@ -445,9 +446,9 @@ class InstrumentInsurances extends PMETableViewBase
 ) ORDER BY r.geographical_scope ASC),"]") AS insurance_rates
 FROM '.DatabaseTables::INSURANCE_BROKERS_TABLE.' b
 LEFT JOIN '.DatabaseTables::INSURANCE_RATES_TABLE.' r
-  ON r.broker_id = b.short_name
-GROUP BY b.short_name',
-          'column' => 'short_name',
+  ON r.broker_id = b.id
+GROUP BY b.id',
+          'column' => 'id',
           'description' => [
             'columns' => [ 'long_name', 'REPLACE($table.address, "\n", "<br/>")' ],
             'divs' => '<br/>',

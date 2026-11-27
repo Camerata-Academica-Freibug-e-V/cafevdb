@@ -164,11 +164,9 @@ class InstrumentInsuranceReceivablesGenerator extends AbstractReceivablesGenerat
           $tooltipTemplate = $this->toolTipsService['instrument-insurance:annual-service-fee'] ?? '';
           $tooltipText = $this->l->t($tooltipTemplate);
         }
-        // new style data with year and broker
-        $data = '{"year":"' . $year . '","broker":"' . $brokerShortName . '"}';
+        $data = json_encode(['year' => $year, 'brokerId' => $broker->getId()], JSON_THROW_ON_ERROR);
         $yearReceivables = $receivableOptions->matching(self::criteriaWhere([
           '(|data' => $year,
-          // {"year":"1234","broker":"blahblub"}
           'data' => $data,
         ]));
         if ($yearReceivables->isEmpty()) {
@@ -234,6 +232,25 @@ class InstrumentInsuranceReceivablesGenerator extends AbstractReceivablesGenerat
   }
 
   /**
+   * @param string $data Serialized receivable identity.
+   *
+   * @return array{string, Entities\InsuranceBroker}
+   */
+  private function resolveReceivableBroker(string $data): array
+  {
+    $identity = json_decode($data, true, flags: JSON_THROW_ON_ERROR);
+    if (!is_array($identity) || !isset($identity['year'], $identity['brokerId'])
+        || !is_string($identity['year']) || !is_int($identity['brokerId'])) {
+      throw new UnexpectedValueException('Invalid insurance receivable identity.');
+    }
+    $broker = $this->getDatabaseRepository(Entities\InsuranceBroker::class)->find($identity['brokerId']);
+    if (!$broker instanceof Entities\InsuranceBroker) {
+      throw new UnexpectedValueException('Insurance receivable references a missing broker.');
+    }
+    return [$identity['year'], $broker];
+  }
+
+  /**
    * Try to generate a balancing account for a legacy item without broker information.
    *
    * @param Entities\ProjectParticipantFieldDatum $receivable
@@ -268,8 +285,8 @@ class InstrumentInsuranceReceivablesGenerator extends AbstractReceivablesGenerat
     $option = $receivable->getDataOption();
     $data = $option->getData();
     if (str_starts_with($data, '{')) {
-      // non legacy case
-      list('year' => $year, 'broker' => $brokerShortName) = json_decode($data, true);
+      [$year, $broker] = $this->resolveReceivableBroker($data);
+      $brokerShortName = $broker->getShortName();
     } else {
       $year = $data;
       // Just take the first insurance found in order to have some valid account. Must be cleaned up later then.
@@ -311,9 +328,9 @@ class InstrumentInsuranceReceivablesGenerator extends AbstractReceivablesGenerat
     if (!str_starts_with($data, '{')) {
       // legacy item
       $year = $data;
-      $brokerShortName = null;
+      $broker = null;
     } else {
-      list('year' => $year, 'broker' => $brokerShortName) = json_decode($data, true);
+      [$year, $broker] = $this->resolveReceivableBroker($data);
     }
 
     $openingBalance = $year === '0000';
@@ -337,12 +354,12 @@ class InstrumentInsuranceReceivablesGenerator extends AbstractReceivablesGenerat
 
       // Compute the actual fee
       $dueInterval = null;
-      $fee = $this->insuranceService->insuranceFee($musician, $brokerShortName, $referenceDate, $dueInterval);
+      $fee = $this->insuranceService->insuranceFee($musician, $broker, $referenceDate, $dueInterval);
 
       // Generate the overview letter as supporting document
-      $overview = $this->insuranceService->musicianOverview($musician, $brokerShortName, $referenceDate);
+      $overview = $this->insuranceService->musicianOverview($musician, $broker, $referenceDate);
     } else {
-      if (0 == count($this->insuranceService->billableInsurances($musician, $brokerShortName))) {
+      if (0 == count($this->insuranceService->billableInsurances($musician, $broker))) {
         // bail out early, DO NOT ADD an opening balance
         return [
           'added' => 0,

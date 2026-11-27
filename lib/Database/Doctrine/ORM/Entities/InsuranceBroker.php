@@ -42,9 +42,9 @@ class InsuranceBroker implements \ArrayAccess
 {
   use CAFEVDB\Traits\ArrayTrait;
   use CAFEVDB\Traits\FactoryTrait;
+  use CAFEVDB\Traits\AutoIncrementTrait;
 
-  #[ORM\Column(type: 'string', length: 40, nullable: false)]
-  #[ORM\Id]
+  #[ORM\Column(type: 'string', length: 40, nullable: false, unique: true)]
   private string $shortName;
 
   #[ORM\Column(type: 'string', length: 512, nullable: false)]
