@@ -34,6 +34,8 @@ use PHPUnit\Framework\MockObject\MockObject;
 use OCP\IRequest;
 
 use OCA\CAFEVDB\Common\TimeFactory;
+use OCA\CAFEVDB\Database\Doctrine\ORM\Entities\InsuranceBroker;
+use OCA\CAFEVDB\Database\Doctrine\ORM\Entities\InsuranceRate;
 use OCA\CAFEVDB\Database\Legacy\PME\PHPMyEdit;
 use OCA\CAFEVDB\PageRenderer;
 use OCA\CAFEVDB\PageRenderer\PersistentCGIKeys;
@@ -47,6 +49,8 @@ use OCA\RotDrop\Tests\DeprecationException;
 /** Test aspects of the InsuranceBrokers page renderer. */
 #[Attributes\CoversClass(PageRenderer\DTO\SidebarNavigationItem::class)]
 #[Attributes\CoversClass(PageRenderer\InsuranceBrokers::class)]
+#[Attributes\CoversClass(InsuranceBroker::class)]
+#[Attributes\UsesClass(InsuranceRate::class)]
 #[Attributes\CoversClass(PageRenderer\PME\Config::class)]
 #[Attributes\CoversClass(PageRenderer\Projects::class)]
 #[Attributes\CoversClass(PageRenderer\Registration::class)]
@@ -134,6 +138,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261125155000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261125161000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261127091000::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261127120000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EmailTemplateDefaultsService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\PageRenderer\Util\Navigation::class)]
@@ -297,6 +302,41 @@ class InsuranceBrokersTest extends TestCase
     $domDoc->loadHTML($html, LIBXML_PEDANTIC);
   }
 
+  /** @return void */
+  #[Attributes\Depends('testApplyMigrations')]
+  public function testRenamingBrokerPreservesRateAssociation(): void
+  {
+    $broker = (new InsuranceBroker())
+      ->setShortName('RenameTestBroker')
+      ->setLongName('Rename Test Broker')
+      ->setAddress('Test');
+    $this->entityManager->persist($broker);
+    $this->entityManager->flush();
+    $id = $broker->getId();
+    $connection = $this->entityManager->getConnection();
+    try {
+      $connection->executeStatement(
+        'INSERT INTO InsuranceRates (broker_id, geographical_scope, rate) VALUES (?, ?, ?)',
+        [$id, 'Germany', '0.0010'],
+      );
+      $broker->setShortName('RenamedTestBroker');
+      $this->entityManager->flush();
+      $this->assertSame($broker, $this->entityManager->find(InsuranceBroker::class, $id));
+      $this->entityManager->clear();
+
+      $rate = $this->entityManager->getRepository(InsuranceRate::class)->findOneBy([
+        'broker' => $id,
+      ]);
+      $this->assertInstanceOf(InsuranceRate::class, $rate);
+      $this->assertSame('RenamedTestBroker', $rate->getBroker()->getShortName());
+      $this->assertSame($id, $rate->getBroker()->getId());
+    } finally {
+      $connection->executeStatement('DELETE FROM InsuranceRates WHERE broker_id = ?', [$id]);
+      $connection->executeStatement('DELETE FROM InsuranceBrokers WHERE id = ?', [$id]);
+      $this->entityManager->clear();
+    }
+  }
+
   /**
    * This is quas a tearDownAfterClass() but we need some mocked / stubbed
    * classes for the entity-manager.
@@ -305,6 +345,7 @@ class InsuranceBrokersTest extends TestCase
    */
   #[Attributes\Depends('testApplyMigrations')]
   #[Attributes\Depends('testRenderList')]
+  #[Attributes\Depends('testRenamingBrokerPreservesRateAssociation')]
   public function testUnapplyMigrations(): void
   {
     $this->unapplyMigrations();

@@ -27,6 +27,7 @@ namespace OCA\CAFEVDB\Service\Finance;
 use DateTimeZone;
 use DateTimeImmutable as DateTime;
 use DateTimeInterface;
+use UnexpectedValueException;
 
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Common\RationalNumber;
 use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Common\DecimalRationalMonetary as MonetaryNumberType;
@@ -181,7 +182,7 @@ class InstrumentInsuranceService
    *
    * @param int|string|Entities\Musician $musicianOrId
    *
-   * @param null|string|Entities\InsuranceBroker $broker Short name (db id) or
+   * @param null|string|Entities\InsuranceBroker $broker Short name or
    * database entity or null. If null compute the fee for all brokers,
    * otherwise only for the given one.
    *
@@ -193,6 +194,12 @@ class InstrumentInsuranceService
   ):array {
     $criteria = [ 'billToParty' => $musicianOrId ];
     if ($broker !== null) {
+      if (is_string($broker)) {
+        $broker = $this->getDatabaseRepository(Entities\InsuranceBroker::class)->findOneBy(['shortName' => $broker]);
+        if ($broker === null) {
+          throw new UnexpectedValueException('Insurance broker not found.');
+        }
+      }
       $criteria['insuranceRate.broker'] = $broker;
     }
     return $this->insurancesRepository->findBy($criteria);
@@ -235,7 +242,7 @@ class InstrumentInsuranceService
    *
    * @param int|Entities\Musician $musicianOrId Database entity or id.
    *
-   * @param null|string|Entities\InsuranceBroker $broker Short name (db id) or
+   * @param null|string|Entities\InsuranceBroker $broker Short name or
    * database entity or null. If null compute the fee for all brokers,
    * otherwise only for the given one.
    *
@@ -401,7 +408,7 @@ class InstrumentInsuranceService
    *
    * @param int|Entities\Musician $musicianOrId Database entity or its id.
    *
-   * @param null|string|Entities\InsuranceBroker $broker Short name (db id) or
+   * @param null|string|Entities\InsuranceBroker $broker Short name or
    * database entity or null. If null compute the fee for all brokers,
    * otherwise only for the given one.
    *

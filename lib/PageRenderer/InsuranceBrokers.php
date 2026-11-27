@@ -128,10 +128,10 @@ class InsuranceBrokers extends PMETableViewBase
     ];
 
     // Name of field which is the unique key
-    $opts['key'] = 'short_name';
+    $opts['key'] = 'id';
 
     // Type of key field (int/real/string/date etc.)
-    $opts['key_type'] = 'string';
+    $opts['key_type'] = 'int';
 
     // Sorting field(s)
     $opts['sort_field'] = [ 'long_name' ];
@@ -157,6 +157,14 @@ class InsuranceBrokers extends PMETableViewBase
       'time'  => true,
       'tabs'  => false,
       'navigation' => 'VCPD'
+    ];
+
+    $opts['fdd']['id'] = [
+      'name' => 'id',
+      'select' => 'N',
+      'input' => 'RH',
+      'options' => 'VCPDL',
+      'default' => null,
     ];
 
     $opts['fdd']['short_name'] = [

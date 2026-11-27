@@ -310,6 +310,12 @@ Members can inherit the schema while retaining an explicit local override and
 its own connection/access checks. Changing schemas still removes the old views;
 coordinate such changes with active consumers.
 
+The insurance-broker identity migration preserves broker names in the
+personalized views used by the members app and refreshes enabled views. It
+stops before changing the schema if an insurance receivable refers to a
+missing broker; repair that reference before retrying. Broker-based balancing
+accounts follow the current short name when receivables are regenerated.
+
 For **WOPI access to DB-Storage**, configure a separate restricted account and
 its password. CafeVDB needs these credentials before its app key is unlocked.
 The fields are write-only, and CafeVDB encrypts the credentials with Nextcloud's

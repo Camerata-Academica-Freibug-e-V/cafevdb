@@ -1182,11 +1182,12 @@ WHERE t.calendar_uri IN ('" . implode("','", $calendarUris) . "')";
 
     $table = 'InstrumentInsurances';
     $viewName = $this->personalizedViewName($dataBaseName, $table);
+    [$insuranceColumns, $insuranceBrokerJoin] = $this->insuranceViewColumns($table);
     $statements[$viewName] = "CREATE OR REPLACE
 SQL SECURITY DEFINER
 VIEW " . $viewName . "
 AS
-SELECT t.*,
+SELECT " . $insuranceColumns . ",
   at.musician_id AS musician_id,
   (t.bill_to_party_id IS NULL OR at.musician_id = t.bill_to_party_id) AS is_debitor,
   (at.musician_id = t.instrument_holder_id) AS is_holder,
@@ -1195,7 +1196,8 @@ SELECT t.*,
   INNER JOIN " . $table . " t
     ON t.instrument_holder_id = at.musician_id
     OR t.bill_to_party_id = musician_id
-    OR t.instrument_owner_id = musician_id ";
+    OR t.instrument_owner_id = musician_id
+  " . $insuranceBrokerJoin;
 
     $table = 'Files';
     $viewName = $this->personalizedViewName($dataBaseName, $table);
@@ -1282,13 +1284,51 @@ SELECT t.*
 
     foreach (self::UNRESTRICTED_TABLES as $table) {
       $viewName = $this->personalizedViewName($dataBaseName, $table);
+      [$columns, $brokerJoin] = $table === DatabaseTables::INSURANCE_RATES_TABLE
+        ? $this->insuranceViewColumns($table)
+        : ['t.*', ''];
       $statements[$viewName] = "CREATE OR REPLACE
 SQL SECURITY DEFINER
 VIEW " . $viewName . "
 AS
-SELECT t.* FROM " . $table . " t";
+SELECT " . $columns . " FROM " . $table . " t " . $brokerJoin;
     }
     return $statements;
+  }
+
+  /**
+   * Keep the companion app's broker references as short names in its views.
+   *
+   * @param string $table Insurance table whose columns are projected.
+   *
+   * @return array{string, string} Projection and join.
+   */
+  private function insuranceViewColumns(string $table): array
+  {
+    $columnQuery = 'SELECT COLUMN_NAME FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION';
+    $brokerColumns = $this->connection->fetchFirstColumn($columnQuery, [DatabaseTables::INSURANCE_BROKERS_TABLE]);
+    if ($brokerColumns === []) {
+      throw new UnexpectedValueException('Insurance broker table not found.');
+    }
+    if (!in_array('id', $brokerColumns, true)) {
+      return ['t.*', ''];
+    }
+
+    $tableColumns = $this->connection->fetchFirstColumn($columnQuery, [$table]);
+    if (!in_array('broker_id', $tableColumns, true)) {
+      throw new UnexpectedValueException('Insurance broker reference not found in ' . $table);
+    }
+    $columns = [];
+    foreach ($tableColumns as $name) {
+      $columns[] = $name === 'broker_id'
+        ? 'b.short_name AS broker_id'
+        : 't.' . $this->connection->quoteIdentifier($name);
+    }
+    return [
+      implode(', ', $columns),
+      'INNER JOIN ' . DatabaseTables::INSURANCE_BROKERS_TABLE . ' b ON b.id = t.broker_id',
+    ];
   }
 
   /**
