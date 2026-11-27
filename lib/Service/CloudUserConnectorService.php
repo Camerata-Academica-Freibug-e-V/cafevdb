@@ -1323,7 +1323,7 @@ SELECT " . $columns . " FROM " . $table . " t " . $brokerJoin;
     foreach ($tableColumns as $name) {
       $columns[] = $name === 'broker_id'
         ? 'b.short_name AS broker_id'
-        : 't.' . $this->connection->quoteIdentifier($name);
+        : 't.' . $this->connection->getDatabasePlatform()->quoteSingleIdentifier($name);
     }
     return [
       implode(', ', $columns),
