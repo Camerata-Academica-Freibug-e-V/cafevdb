@@ -132,6 +132,7 @@ use OCA\RotDrop\Tests\DeprecationException;
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261118191044::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261125155000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261125161000::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Maintenance\Migrations\Version20261127091000::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\WopiCredentialsViewService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Service\EmailTemplateDefaultsService::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\PageRenderer\Util\Navigation::class)]
