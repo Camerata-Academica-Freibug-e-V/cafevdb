@@ -46,6 +46,7 @@ class Notifier implements \OCP\Notification\INotifier
   const RECRYPT_USER_HANDLED_SUBJECT = 'recrypt_user_handled';
   const WORD_SPLITTER_LOCALE_SUBJECT = 'word_splitter_locale';
   const PARTICIPANT_FIELD_UPLOAD_CONFLICT_SUBJECT = 'participant_field_upload_conflict';
+  const LOST_FOUND_DELETE_BLOCKED_SUBJECT = 'lost_found_delete_blocked';
   const ACCEPT_ACTION = 'accept';
   const DECLINE_ACTION = 'decline';
   const PROTEST_ACTION = 'protest';
@@ -199,6 +200,19 @@ class Notifier implements \OCP\Notification\INotifier
         $notification->setParsedMessage(isset($parameters['destination'])
           ? $l->t('The file "%1$s" was renamed to "%2$s".', [$parameters['source'], $parameters['destination']])
           : $l->t('The file "%s" could not be renamed automatically. Move or rename it to free the reserved folder path.', [$parameters['source']]));
+        return $notification;
+
+      case self::LOST_FOUND_DELETE_BLOCKED_SUBJECT:
+        $parameters = $notification->getSubjectParameters();
+        $references = array_map(
+          static fn(array $blocker): string => $blocker['reference'] . ' (entry ' . $blocker['entry_id'] . ')',
+          $parameters['blockers'],
+        );
+        $notification->setParsedSubject($l->t('Lost+found deletion blocked'));
+        $notification->setParsedMessage($l->t(
+          'The entry "%1$s" was not deleted because it has references: %2$s',
+          [$parameters['path'], implode(', ', array_unique($references))],
+        ));
         return $notification;
 
       case self::WORD_SPLITTER_LOCALE_SUBJECT:

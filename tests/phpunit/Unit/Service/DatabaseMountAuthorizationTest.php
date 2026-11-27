@@ -85,6 +85,33 @@ class DatabaseMountAuthorizationTest extends TestCase
   }
 
   /** @return void */
+  public function testOrchestraAdminCanAuthenticateWithoutGeneralFilesystemPermission(): void
+  {
+    $user = $this->createStub(IUser::class);
+    $user->method('getUID')->willReturn('alice');
+    $config = $this->createStub(ConfigService::class);
+    $config->method('getL10n')->willReturn($this->createStub(IL10N::class));
+    $config->method('logger')->willReturn($this->createStub(LoggerInterface::class));
+    $config->method('inSubAdminGroup')->willReturn(true);
+    $authorization = $this->createStub(AuthorizationService::class);
+    $authorization->method('authorized')->willReturn(false);
+    $authentication = $this->createMock(MountAuthenticationService::class);
+    $authentication->expects($this->once())->method('authenticate')->with($user)->willReturn(false);
+    $mountCache = $this->createMock(IUserMountCache::class);
+    $mountCache->expects($this->once())->method('getMountsForUser')->with($user)->willReturn([]);
+    $provider = new MountProvider(
+      $config,
+      $authorization,
+      $this->createStub(Factory::class),
+      $mountCache,
+      $this->createStub(IDBConnection::class),
+      $this->createStub(IUserSession::class),
+      $authentication,
+    );
+    self::assertSame([], $provider->getMountsForUser($user, $this->createStub(IStorageFactory::class)));
+  }
+
+  /** @return void */
   public function testMountAuthenticationPrecedesUnavailableMountLookup(): void
   {
     $user = $this->createStub(IUser::class);

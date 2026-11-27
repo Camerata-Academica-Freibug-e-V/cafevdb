@@ -79,6 +79,12 @@ class Factory
     return $this->di(DebitMandatesStorage::class);
   }
 
+  /** @return LostAndFoundStorage */
+  public function getLostAndFoundStorage():LostAndFoundStorage
+  {
+    return $this->di(LostAndFoundStorage::class);
+  }
+
   /**
    * @param Entities\Project $project
    *

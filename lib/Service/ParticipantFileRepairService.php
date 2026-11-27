@@ -16,6 +16,7 @@ use Throwable;
 
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Connection;
 use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Platforms\SQLitePlatform;
+use OCA\CAFEVDB\Storage\Database\LostAndFoundStorage;
 
 /** Explicit metadata backfill; never changes encrypted data or deletes source entries. */
 class ParticipantFileRepairService
@@ -25,12 +26,14 @@ class ParticipantFileRepairService
    * @param int $clubMembersProjectId
    * @param Closure $destination Returns the folder components for a business reference.
    * @param Closure $createFileEntry Creates or moves a file entry through the ORM and returns its ID.
+   * @param null|int $recoveryRootId Registered lost+found root, if present.
    */
   public function __construct(
     private Connection $connection,
     private int $clubMembersProjectId,
     private Closure $destination,
     private Closure $createFileEntry,
+    private ?int $recoveryRootId = null,
   ) {
   }
 
@@ -180,6 +183,13 @@ class ParticipantFileRepairService
       'id',
     );
     $roots = array_fill_keys($this->connection->fetchFirstColumn('SELECT root_id FROM DatabaseStorages'), true);
+    $recoveryRootId = $this->recoveryRootId;
+    if ($recoveryRootId !== null && !$this->connection->fetchOne(
+      'SELECT 1 FROM DatabaseStorages WHERE root_id = ? AND storage_id = ?',
+      [$recoveryRootId, LostAndFoundStorage::SHORT_ID],
+    )) {
+      throw new RuntimeException('The lost+found storage root changed during repair.');
+    }
     $movable = [];
     foreach ($targets as $entryId => $paths) {
       if (count($paths) !== 1 || !isset($entries[$entryId])) {
@@ -200,7 +210,8 @@ class ParticipantFileRepairService
         }
         $current = $parent;
       }
-      if (!$attached && $current['parent_id'] === null && !isset($roots[$current['id']])) {
+      if (!$attached && $current['parent_id'] === null
+          && (!isset($roots[$current['id']]) || (int)$current['id'] === $recoveryRootId)) {
         $movable[$entryId] = true;
       }
     }

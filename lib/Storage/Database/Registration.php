@@ -67,5 +67,8 @@ class Registration
     $context->registerService(DebitMandatesStorage::class, function(ContainerInterface $container) {
       return new DebitMandatesStorage([ 'configService' => $container->get(ConfigService::class), ]);
     });
+    $context->registerService(LostAndFoundStorage::class, function(ContainerInterface $container) {
+      return new LostAndFoundStorage([ 'configService' => $container->get(ConfigService::class), ]);
+    });
   }
 }

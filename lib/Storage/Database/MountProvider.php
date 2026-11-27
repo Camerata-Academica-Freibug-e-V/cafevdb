@@ -113,7 +113,8 @@ class MountProvider implements IMountProvider
   {
     $userId = $user->getUID();
 
-    if (!$this->authorizationService->authorized($userId, AuthorizationService::PERMISSION_FILESYSTEM)) {
+    $hasFilesystemPermission = $this->authorizationService->authorized($userId, AuthorizationService::PERMISSION_FILESYSTEM);
+    if (!$hasFilesystemPermission && !$this->configService->inSubAdminGroup($userId)) {
       $this->logDebug('User is not authorized: ' . $userId);
       return [];
     }
@@ -126,7 +127,7 @@ class MountProvider implements IMountProvider
     if (!$this->mountAuthenticationService->authenticate($user)
         || $this->userSession->getUser()?->getUID() !== $userId) {
       $this->logDebug('No authenticated credentials for user ' . $userId);
-      return $this->getUnavailableMounts($user);
+      return $this->getUnavailableMounts($user, hasFilesystemPermission: $hasFilesystemPermission);
     }
 
     try {
@@ -136,22 +137,23 @@ class MountProvider implements IMountProvider
       $entityManager = $this->di(EntityManager::class);
       if ($entityManager->getUserId() === $userId && $entityManager->connected()) {
         $this->entityManager = $entityManager;
-        return $this->getAuthenticatedMountsForUser($user, $loader);
+        return $this->getAuthenticatedMountsForUser($user, $loader, $hasFilesystemPermission);
       }
     } catch (Throwable $t) {
       $this->logException($t, 'Unable to refresh database mounts for ' . $userId);
     }
 
-    return $this->getUnavailableMounts($user);
+    return $this->getUnavailableMounts($user, hasFilesystemPermission: $hasFilesystemPermission);
   }
 
   /**
    * @param IUser $user
    * @param IStorageFactory $loader
+   * @param boolean $hasFilesystemPermission
    *
    * @return array
    */
-  private function getAuthenticatedMountsForUser(IUser $user, IStorageFactory $loader):array
+  private function getAuthenticatedMountsForUser(IUser $user, IStorageFactory $loader, bool $hasFilesystemPermission):array
   {
     // disable soft-deleteable here in order to cope with the case that the
     // musician underlying the project-participation is alreay soft-deleted.
@@ -159,7 +161,7 @@ class MountProvider implements IMountProvider
     $filterState = $this->disableFilter(EntityManager::SOFT_DELETEABLE_FILTER);
 
     try {
-      return $this->buildAuthenticatedMountsForUser($user, $loader);
+      return $this->buildAuthenticatedMountsForUser($user, $loader, $hasFilesystemPermission);
     } finally {
       $filterState && $this->enableFilter(EntityManager::SOFT_DELETEABLE_FILTER);
     }
@@ -168,10 +170,11 @@ class MountProvider implements IMountProvider
   /**
    * @param IUser $user
    * @param IStorageFactory $loader
+   * @param boolean $hasFilesystemPermission
    *
    * @return array
    */
-  private function buildAuthenticatedMountsForUser(IUser $user, IStorageFactory $loader):array
+  private function buildAuthenticatedMountsForUser(IUser $user, IStorageFactory $loader, bool $hasFilesystemPermission):array
   {
     $userId = $user->getUID();
     $sharedFolder = $this->getSharedFolderPath();
@@ -179,10 +182,6 @@ class MountProvider implements IMountProvider
     if (empty($sharedFolder)) {
       throw new UnexpectedValueException('Shared folder is not configured');
     }
-    if (empty($projectsFolder)) {
-      throw new MissingProjectsFolderException('Projects folder is not configured');
-    }
-
     /** @var GroupFoldersService $groupFoldersService */
     $groupFoldersService = $this->di(GroupFoldersService::class);
     $folderInfo = $groupFoldersService->getFolderForUser($sharedFolder, $user);
@@ -195,6 +194,43 @@ class MountProvider implements IMountProvider
 
     $mounts = [];
     $bulkLoadStorageIds = [];
+
+    if ($this->configService->inSubAdminGroup($userId)) {
+      $storage = $this->storageFactory->getLostAndFoundStorage();
+      $bulkLoadStorageIds[] = $storage->getId();
+      $mounts[] = new class(
+        storage: $storage,
+        mountpoint: UserStorage::PATH_SEP . implode(UserStorage::PATH_SEP, [
+          $userId, 'files', trim($sharedFolder, '/'), LostAndFoundStorage::FOLDER_NAME,
+        ]),
+        arguments: null,
+        loader: $loader,
+        mountOptions: [
+          'filesystem_check_changes' => 1,
+          'readonly' => false,
+          'previews' => true,
+          'enable_sharing' => false,
+          'authenticated' => true,
+        ],
+        mountProvider: MountProvider::class,
+      ) extends MountPoint
+      {
+        /** {@inheritdoc} */
+        public function getMountType()
+        {
+          return MountProvider::MOUNT_TYPE;
+        }
+      };
+    }
+
+    if (!$hasFilesystemPermission) {
+      \OC\Files\Cache\Storage::getGlobalCache()->loadForStorageIds($bulkLoadStorageIds);
+      return $mounts;
+    }
+
+    if (empty($projectsFolder)) {
+      throw new MissingProjectsFolderException('Projects folder is not configured');
+    }
 
     // allow only treasurers or similar folk
     if ($this->authorizationService->authorized($userId, AuthorizationService::PERMISSION_FINANCE)) {
@@ -503,6 +539,7 @@ class MountProvider implements IMountProvider
    * @param null|string $targetMountPath Only restore this exact mount path.
    * @param null|string $expectedStorageId Require this storage identity.
    * @param null|StorageNotAvailableException $failure The reason the mount is unavailable.
+   * @param boolean $hasFilesystemPermission Whether other app mounts may be restored.
    *
    * @return array
    */
@@ -511,6 +548,7 @@ class MountProvider implements IMountProvider
     ?string $targetMountPath = null,
     ?string $expectedStorageId = null,
     ?StorageNotAvailableException $failure = null,
+    bool $hasFilesystemPermission = true,
   ):array {
     $mounts = [];
     $userId = $user->getUID();
@@ -563,6 +601,19 @@ class MountProvider implements IMountProvider
           continue;
         }
 
+        $lostAndFoundPath = '/' . $userId . '/files/' . trim((string)$this->getSharedFolderPath(), '/')
+          . '/' . LostAndFoundStorage::FOLDER_NAME . '/';
+        $lostAndFoundId = \OC\Files\Cache\Storage::adjustStorageId(
+          self::APP_ID . Storage::STORAGE_ID_TAG . Storage::PATH_SEPARATOR . LostAndFoundStorage::SHORT_ID,
+        );
+        if (($mountPath === $lostAndFoundPath || $storageId === $lostAndFoundId)
+            && !$this->configService->inSubAdminGroup($userId)) {
+          continue;
+        }
+        if (!$hasFilesystemPermission && $storageId !== $lostAndFoundId) {
+          continue;
+        }
+
         $mounts[] = new UnavailableMount($storageId, $cachedMount, $failure);
       }
     } catch (Throwable $t) {
@@ -583,7 +634,7 @@ class MountProvider implements IMountProvider
    * @param string $userId
    * @param string $mountPath
    *
-   * @return bool
+   * @return boolean
    */
   private function isFinanceMountPath(string $userId, string $mountPath):bool
   {

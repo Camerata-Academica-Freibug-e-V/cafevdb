@@ -49,6 +49,9 @@ use OCA\CAFEVDB\Service\ParticipantFileAuditService;
 use OCA\CAFEVDB\Service\ParticipantFileRepairService;
 use OCA\CAFEVDB\Service\ProjectService;
 use OCA\CAFEVDB\Settings\ConfigConstants;
+use OCA\CAFEVDB\Storage\Database\Factory as StorageFactory;
+use OCA\CAFEVDB\Storage\Database\LostAndFoundStorage;
+use OCA\CAFEVDB\Wrapped\Doctrine\DBAL\Platforms\SQLitePlatform;
 
 /** Maintenance for the database file-system backend. */
 class DatabaseStorage extends Command
@@ -81,6 +84,7 @@ class DatabaseStorage extends Command
       )
       ->addOption('audit-encryption', null, InputOption::VALUE_NONE, 'Read-only audit of encryption seals and user key indicators.')
       ->addOption('repair-access', null, InputOption::VALUE_NONE, 'Backfill audit-approved participant links and ownership; does not reconcile seals.')
+      ->addOption('lost+found', null, InputOption::VALUE_NONE, 'Collect remaining orphan trees after --repair-access.')
       ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Preview --repair-access without changing records.')
       ->addOption('json', null, InputOption::VALUE_NONE, 'Output the audit, repair report or orphan-tree listing as JSON.')
       ->addOption(
@@ -133,6 +137,7 @@ class DatabaseStorage extends Command
                      || $input->getOption('find-orphans') || $input->getOption('remove-orphans')
                      || $input->getOption('include-file-names') || $input->getOption('include-field-names')))
         || ($input->getOption('dry-run') && !$repair)
+        || ($input->getOption('lost+found') && !$repair)
         || ($input->getOption('json') && !$audit && !$auditEncryption && !$orphanTrees && !$repair)
         || ($input->getOption('include-file-names') && !$audit && !$orphanTrees)
         || ($input->getOption('include-field-names') && !$audit)
@@ -143,7 +148,7 @@ class DatabaseStorage extends Command
       $output->writeln(
         '<error>Use --audit-access, --audit-encryption, --repair-access or --find-orphan-trees[=prune-empty] alone, optionally with --json. '
         . '--include-file-names requires --audit-access or --find-orphan-trees; --include-field-names requires --audit-access. '
-        . '--dry-run requires --repair-access.</error>',
+        . '--dry-run and --lost+found require --repair-access.</error>',
       );
       return self::INVALID;
     }
@@ -384,6 +389,16 @@ class DatabaseStorage extends Command
   private function repairAccess(InputInterface $input, OutputInterface $output): int
   {
     $config = $this->appContainer->get(ConfigService::class);
+    $collect = $input->getOption('lost+found');
+    if ($collect && !$config->inSubAdminGroup($this->userSession->getUser()?->getUID())) {
+      $output->writeln('<error>Collecting orphan trees requires membership in the orchestra admin group.</error>');
+      return self::FAILURE;
+    }
+    $connection = $this->entityManager->getConnection();
+    $rootId = $connection->fetchOne(
+      'SELECT root_id FROM DatabaseStorages WHERE storage_id = ?',
+      [LostAndFoundStorage::SHORT_ID],
+    );
     $l10n = $config->getAppL10n();
     $service = new ParticipantFileRepairService(
       $this->entityManager->getConnection(),
@@ -437,12 +452,16 @@ class DatabaseStorage extends Command
         $this->entityManager->flush();
         return (int)$entry->getId();
       },
+      $rootId === false || $rootId === null ? null : (int)$rootId,
     );
     try {
       $report = $service->repair($input->getOption('dry-run'));
     } finally {
       // The metadata backfill bypasses ORM orphan-removal on shared source entries.
       $this->entityManager->clear();
+    }
+    if ($collect) {
+      $report['lost_found'] = $this->collectOrphanTrees($input->getOption('dry-run'));
     }
     if ($input->getOption('json')) {
       $output->writeln(json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
@@ -453,26 +472,105 @@ class DatabaseStorage extends Command
         $output->writeln(OutputFormatter::escape(json_encode($repair, JSON_THROW_ON_ERROR)));
       }
       $output->writeln('Remaining access findings: ' . count($report['remaining']['findings']));
+      if ($collect) {
+        $output->writeln('Lost+found: ' . OutputFormatter::escape(json_encode($report['lost_found'], JSON_THROW_ON_ERROR)));
+      }
     }
-    return isset($report['summary']['blocked']) ? self::FAILURE : self::SUCCESS;
+    return isset($report['summary']['blocked']) || !empty($report['lost_found']['rejected']) ? self::FAILURE : self::SUCCESS;
+  }
+
+  /**
+   * Preview the current orphan trees or attach them after participant repair.
+   *
+   * @param bool $dryRun
+   *
+   * @return array
+   */
+  private function collectOrphanTrees(bool $dryRun): array
+  {
+    $connection = $this->entityManager->getConnection();
+    if ($connection->isTransactionActive()) {
+      throw new RuntimeException('Lost+found collection requires its own transaction.');
+    }
+    $this->entityManager->beginTransaction();
+    try {
+      if (!($connection->getDatabasePlatform() instanceof SQLitePlatform)) {
+        foreach (['Files', 'DatabaseStorages', 'DatabaseStorageDirEntries'] as $table) {
+          $connection->fetchAllAssociative('SELECT * FROM ' . $table . ' FOR UPDATE');
+        }
+      }
+      $classification = (new OrphanTreeService($connection))->classifyForCollection();
+      $collected = [];
+      if (!$dryRun && $classification['eligible_root_ids'] !== []) {
+        $storage = $this->appContainer->get(StorageFactory::class)->getLostAndFoundStorage();
+        $root = $storage->getCollectionRoot();
+        $names = array_fill_keys($connection->fetchFirstColumn(
+          'SELECT name FROM DatabaseStorageDirEntries WHERE parent_id = ?',
+          [$root->getId()],
+        ), true);
+        $timestamp = gmdate('Y-m-d_H-i-s');
+        foreach ($classification['eligible_root_ids'] as $id) {
+          $entry = $this->entityManager->find(Entities\DatabaseStorageFolder::class, $id);
+          if (!$entry instanceof Entities\DatabaseStorageFolder || $entry->getParent() !== null
+              || $entry->getAttachedStorage() !== null) {
+            throw new RuntimeException('An orphan root changed during lost+found collection.');
+          }
+          $name = $timestamp;
+          for ($suffix = 1; isset($names[$name]); ++$suffix) {
+            $name = $timestamp . '-' . $suffix;
+          }
+          $names[$name] = true;
+          $entry->setName($name)->setParent($root);
+          $collected[] = ['root_id' => $id, 'name' => $name];
+        }
+        $this->entityManager->flush();
+        $this->entityManager->commit();
+        $storage->clearPathCache();
+      } else {
+        $this->entityManager->rollback();
+      }
+      return [
+        'dry_run' => $dryRun,
+        'preview_before_repair' => $dryRun,
+        'eligible_root_ids' => $classification['eligible_root_ids'],
+        'collected' => $collected,
+        'rejected' => $classification['rejected'],
+      ];
+    } catch (\Throwable $exception) {
+      if ($this->entityManager->isTransactionActive()) {
+        $this->entityManager->rollback();
+      }
+      $this->entityManager->clear();
+      throw $exception;
+    }
   }
 
   /**
    * @param ConfigService $config
    *
-   * @return array<int, string> Participant mount paths, without a Nextcloud user's files prefix.
+   * @return array<int, string> Known mount paths, without a Nextcloud user's files prefix.
    */
   private function auditMountPaths(ConfigService $config): array
   {
     $sharedFolder = $config->getConfigValue(ConfigConstants::SHARED_FOLDER);
     $projectsFolder = $config->getConfigValue(ConfigConstants::PROJECTS_FOLDER);
     $participantsFolder = $config->getConfigValue(ConfigConstants::PROJECT_PARTICIPANTS_FOLDER);
-    if (empty($sharedFolder) || empty($projectsFolder) || empty($participantsFolder)) {
+    if (empty($sharedFolder)) {
       return [];
+    }
+    $paths = [];
+    $recoveryRoot = $this->entityManager->getConnection()->fetchOne(
+      'SELECT root_id FROM DatabaseStorages WHERE storage_id = ?',
+      [LostAndFoundStorage::SHORT_ID],
+    );
+    if ($recoveryRoot !== false && $recoveryRoot !== null) {
+      $paths[(int)$recoveryRoot] = '/' . trim($sharedFolder, '/') . '/' . LostAndFoundStorage::FOLDER_NAME;
+    }
+    if (empty($projectsFolder) || empty($participantsFolder)) {
+      return $paths;
     }
     $projectService = $this->appContainer->get(ProjectService::class);
     $documentsFolder = $config->getAppL10n()->t('Documents');
-    $paths = [];
     foreach ($this->entityManager->getConnection()->fetchAllAssociative(
       'SELECT s.root_id, p.name, p.year, p.type, m.user_id_slug
        FROM ProjectParticipants pp

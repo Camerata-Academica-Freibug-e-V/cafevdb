@@ -38,6 +38,8 @@ class OrphanTreeServiceTest extends TestCase
     $this->connection->executeStatement(
       'CREATE TABLE DatabaseStorages (id INTEGER PRIMARY KEY, root_id INTEGER REFERENCES DatabaseStorageDirEntries(id))',
     );
+    $this->connection->executeStatement('CREATE TABLE Files (id INTEGER PRIMARY KEY, type TEXT)');
+    $this->connection->executeStatement("INSERT INTO Files VALUES (50, 'encrypted'), (51, 'encrypted'), (53, 'encrypted')");
     $this->connection->executeStatement(
       "INSERT INTO DatabaseStorageDirEntries VALUES
        (1, NULL, NULL, 'folder', 'mounted'), (2, 1, NULL, 'folder', 'empty mounted'),
@@ -95,6 +97,30 @@ class OrphanTreeServiceTest extends TestCase
     $this->connection->executeStatement("UPDATE DatabaseStorageDirEntries SET name = '' WHERE id = 10");
     $tree = $this->service->inspect(true)['trees'][0]['entries'];
     self::assertSame(['/', '/', '/', '/z-folder', '/z-folder'], array_column($tree, 'parent_path'));
+  }
+
+  /** @return void */
+  public function testCollectionClassificationRejectsMalformedTrees(): void
+  {
+    $this->connection->executeStatement(
+      "INSERT INTO DatabaseStorageDirEntries VALUES
+       (70, NULL, NULL, 'folder', 'bad parent'),
+       (71, 70, 53, 'file', 'file'),
+       (72, 71, NULL, 'folder', 'child'),
+       (80, NULL, NULL, 'folder', 'missing file'),
+       (81, 80, 999, 'file', 'file')",
+    );
+    $before = $this->snapshot();
+    $report = $this->service->classifyForCollection();
+    self::assertSame([10, 20], $report['eligible_root_ids']);
+    $rejected = array_column($report['rejected'], 'reasons', 'root_id');
+    self::assertContains('registered-descendant', $rejected[30]);
+    self::assertContains('invalid-file-reference', $rejected[40]);
+    self::assertContains('root-not-folder', $rejected[50]);
+    self::assertContains('root-not-folder', $rejected[60]);
+    self::assertContains('non-folder-parent', $rejected[70]);
+    self::assertContains('invalid-file-reference', $rejected[80]);
+    self::assertSame($before, $this->snapshot());
   }
 
   /** @return void */
