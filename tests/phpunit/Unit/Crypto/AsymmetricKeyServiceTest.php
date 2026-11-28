@@ -30,10 +30,17 @@ use PHPUnit\Framework\TestCase;
 
 use OCP\Authentication\Exceptions\CredentialsUnavailableException;
 use OCP\Authentication\LoginCredentials\IStore as ICredentialsStore;
+use OCP\Config\IUserConfig;
+use OCP\Config\ValueType;
+use OCP\Notification\IManager as NotificationManager;
+use OCP\Notification\INotification;
+use Psr\Container\ContainerInterface;
 
 use OCA\CAFEVDB\Crypto;
 use OCA\CAFEVDB\Crypto\AsymmetricKeyService;
 use OCA\CAFEVDB\Events;
+use OCA\CAFEVDB\Exceptions\RecryptionRequestNotFoundException;
+use OCA\CAFEVDB\Notifications\Notifier;
 use OCA\CAFEVDB\Tests\MockProvider;
 use OCA\RotDrop\Tests\DeprecationException;
 
@@ -164,5 +171,65 @@ class AsymmetricKeyServiceTest extends TestCase
 
     $this->assertArrayHasKey(Crypto\AsymmetricKeyService::PRIVATE_ENCRYPTION_KEY_CONFIG, $keyPair);
     $this->assertArrayHasKey(Crypto\AsymmetricKeyService::PUBLIC_ENCRYPTION_KEY_CONFIG, $keyPair);
+  }
+
+  /** @return void */
+  public function testHandledNotificationUsesPendingRequestTimestamp(): void
+  {
+    $notification = $this->createMock(INotification::class);
+    $notification->method('setApp')->willReturnSelf();
+    $notification->method('setUser')->willReturnSelf();
+    $notification->method('setDateTime')->willReturnSelf();
+    $notification->method('setObject')->willReturnSelf();
+    $notification->expects(self::once())->method('setSubject')
+      ->with(Notifier::RECRYPT_USER_HANDLED_SUBJECT, ['timestamp' => 123])
+      ->willReturnSelf();
+    $manager = $this->createMock(NotificationManager::class);
+    $manager->expects(self::once())->method('createNotification')->willReturn($notification);
+    $manager->expects(self::once())->method('notify')->with($notification);
+
+    self::assertSame($notification, $this->requestNotificationService(123, $manager)
+      ->pushRecryptionRequestHandledNotification('member'));
+  }
+
+  /** @return void */
+  public function testHandledNotificationRequiresPendingRequest(): void
+  {
+    $manager = $this->createMock(NotificationManager::class);
+    $manager->expects(self::never())->method('createNotification');
+    $this->expectException(RecryptionRequestNotFoundException::class);
+    $this->requestNotificationService(0, $manager)->pushRecryptionRequestHandledNotification('member');
+  }
+
+  /**
+   * @param int $timestamp
+   *
+   * @param NotificationManager $manager
+   *
+   * @return AsymmetricKeyService
+   */
+  private function requestNotificationService(int $timestamp, NotificationManager $manager): AsymmetricKeyService
+  {
+    $config = $this->createMock(IUserConfig::class);
+    $config->method('getValueType')->willReturn(ValueType::INT);
+    $config->expects(self::once())->method('getValueInt')
+      ->with('member', $this->mockProvider->appName, AsymmetricKeyService::RECRYPTION_REQUEST_KEY, 0)
+      ->willReturn($timestamp);
+    $container = $this->createStub(ContainerInterface::class);
+    $container->method('get')->with(NotificationManager::class)->willReturn($manager);
+    $appContainer = $this->mockProvider->getAppContainer();
+
+    return new AsymmetricKeyService(
+      appName: $this->mockProvider->appName,
+      appContainer: $container,
+      userSession: $this->mockProvider->getUserSession(),
+      credentialsStore: $this->mockProvider->getCredentialsStore(),
+      cloudUserConfig: $config,
+      eventDispatcher: $this->mockProvider->getEventDispatcher(),
+      l: $this->mockProvider->getL10N(),
+      logger: $this->mockProvider->getLoggerInterface(),
+      keyStorage: $appContainer->get(Crypto\AsymmetricKeyStorageInterface::class),
+      cryptorPrototype: $appContainer->get(Crypto\AsymmetricCryptorInterface::class),
+    );
   }
 }
