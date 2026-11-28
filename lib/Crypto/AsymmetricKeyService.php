@@ -609,7 +609,7 @@ class AsymmetricKeyService
    */
   public function pushRecryptionRequestHandledNotification(string $ownerId):INotification
   {
-    $requestData = $this->getUserValue($this->appName, self::RECRYPTION_REQUEST_KEY, userId: $ownerId);
+    $requestData = $this->getUserValue(self::RECRYPTION_REQUEST_KEY, userId: $ownerId);
 
     if (empty($requestData)) {
       throw new Exceptions\RecryptionRequestNotFoundException($this->l->t('No pending recryption-request for user "%s".', $ownerId));

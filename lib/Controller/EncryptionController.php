@@ -237,6 +237,10 @@ class EncryptionController extends OCSController
   public function handleRecryptRequest(string $userId, bool $notifyUser = true, bool $allowFailure = false):Response
   {
     try {
+      if ($notifyUser && empty($this->keyService->getRecryptionRequests($userId)[$userId])) {
+        throw new OCS\OCSNotFoundException($this->l->t('Recryption-request for user "%s" not found.', $userId));
+      }
+
       try {
         $appEncryptionKey = $this->userEncryptionService->recrypt($userId);
       } catch (Throwable $t) {

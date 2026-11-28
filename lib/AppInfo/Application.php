@@ -178,6 +178,7 @@ class Application extends AbstractApplication
    */
   public function register(IRegistrationContext $context): void
   {
+    $context->registerServiceAlias(ExceptionMiddleware::class, Middleware\ExceptionMiddleware::class);
     $context->registerService(AbstractApplication::MIDDLEWARE_OPTIONS, fn() => [
       ExceptionMiddleware::class => [
         'catchAll' => true,
