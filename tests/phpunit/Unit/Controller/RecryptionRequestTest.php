@@ -20,7 +20,6 @@ use OCP\IUser;
 use OCP\IUserSession;
 use OCP\Notification\INotification;
 use PHPUnit\Framework\Attributes;
-use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Psr\Log\NullLogger;
@@ -40,11 +39,14 @@ use OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Middleware\ExceptionMiddleware as To
 #[Attributes\UsesClass(Application::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Controller\DTO\UserRecryptionResponse::class)]
 #[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\DTO\AbstractResponseDTO::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Exceptions\EnduserNotificationException::class)]
+#[Attributes\UsesClass(\OCA\CAFEVDB\Wrapped\OCA\RotDrop\Toolkit\Listener\BeforeMessageLoggedEventListener::class)]
 #[Attributes\UsesClass(ToolkitExceptionMiddleware::class)]
 class RecryptionRequestTest extends TestCase
 {
-  private AsymmetricKeyService&MockObject $keyService;
-  private UserEncryptionService&MockObject $userEncryptionService;
+  private AsymmetricKeyService $keyService;
+  private UserEncryptionService $userEncryptionService;
+  private ContainerInterface $container;
   private EncryptionController $controller;
   private IRequest $request;
   private IL10N $l;
@@ -65,17 +67,23 @@ class RecryptionRequestTest extends TestCase
     $session->method('getUser')->willReturn($user);
     $authorization = $this->createStub(AuthorizationService::class);
     $authorization->method('isAdmin')->willReturn(false);
-    $container = $this->createStub(ContainerInterface::class);
-    $container->method('get')->willReturnMap([
+    $this->container = $this->createStub(ContainerInterface::class);
+    $this->container->method('get')->willReturnMap([
       [IUserSession::class, $session],
       [AuthorizationService::class, $authorization],
     ]);
-    $this->keyService = $this->createMock(AsymmetricKeyService::class);
-    $this->userEncryptionService = $this->createMock(UserEncryptionService::class);
+    $this->keyService = $this->createStub(AsymmetricKeyService::class);
+    $this->userEncryptionService = $this->createStub(UserEncryptionService::class);
+    $this->createController();
+  }
+
+  /** @return void */
+  private function createController(): void
+  {
     $this->controller = new EncryptionController(
       'cafevdb',
       $this->request,
-      $container,
+      $this->container,
       $this->keyService,
       $this->userEncryptionService,
       new NullLogger,
@@ -104,7 +112,10 @@ class RecryptionRequestTest extends TestCase
   /** @return void */
   public function testAnotherUsersRequestIsForbidden(): void
   {
-    $this->keyService->expects(self::never())->method('getRecryptionRequests');
+    $keyService = $this->createMock(AsymmetricKeyService::class);
+    $keyService->expects(self::never())->method('getRecryptionRequests');
+    $this->keyService = $keyService;
+    $this->createController();
     $this->expectException(OCSForbiddenException::class);
     $this->controller->getRecryptRequests('another');
   }
@@ -113,7 +124,10 @@ class RecryptionRequestTest extends TestCase
   public function testMissingRequestIsNotRecrypted(): void
   {
     $this->keyService->method('getRecryptionRequests')->willReturn([]);
-    $this->userEncryptionService->expects(self::never())->method('recrypt');
+    $userEncryptionService = $this->createMock(UserEncryptionService::class);
+    $userEncryptionService->expects(self::never())->method('recrypt');
+    $this->userEncryptionService = $userEncryptionService;
+    $this->createController();
     $this->expectException(OCSNotFoundException::class);
     $this->controller->handleRecryptRequest('member');
   }
@@ -121,18 +135,28 @@ class RecryptionRequestTest extends TestCase
   /** @return void */
   public function testPendingRequestIsRecrypted(): void
   {
-    $this->keyService->method('getRecryptionRequests')->willReturn(['member' => 123]);
-    $this->keyService->expects(self::once())->method('pushRecryptionRequestHandledNotification')
+    $keyService = $this->createMock(AsymmetricKeyService::class);
+    $keyService->method('getRecryptionRequests')->willReturn(['member' => 123]);
+    $keyService->expects(self::once())->method('pushRecryptionRequestHandledNotification')
       ->with('member')->willReturn($this->createStub(INotification::class));
-    $this->userEncryptionService->expects(self::once())->method('recrypt')->with('member')->willReturn(true);
+    $userEncryptionService = $this->createMock(UserEncryptionService::class);
+    $userEncryptionService->expects(self::once())->method('recrypt')->with('member')->willReturn(true);
+    $this->keyService = $keyService;
+    $this->userEncryptionService = $userEncryptionService;
+    $this->createController();
     self::assertSame(200, $this->controller->handleRecryptRequest('member')->getStatus());
   }
 
   /** @return void */
   public function testSilentAdministrativeRecryptionDoesNotRequireRequest(): void
   {
-    $this->keyService->expects(self::never())->method('getRecryptionRequests');
-    $this->userEncryptionService->expects(self::once())->method('recrypt')->with('member')->willReturn(true);
+    $keyService = $this->createMock(AsymmetricKeyService::class);
+    $keyService->expects(self::never())->method('getRecryptionRequests');
+    $userEncryptionService = $this->createMock(UserEncryptionService::class);
+    $userEncryptionService->expects(self::once())->method('recrypt')->with('member')->willReturn(true);
+    $this->keyService = $keyService;
+    $this->userEncryptionService = $userEncryptionService;
+    $this->createController();
     self::assertSame(200, $this->controller->handleRecryptRequest('member', notifyUser: false)->getStatus());
   }
 

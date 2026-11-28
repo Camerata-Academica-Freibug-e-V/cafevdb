@@ -216,7 +216,10 @@ class AsymmetricKeyServiceTest extends TestCase
       ->with('member', $this->mockProvider->appName, AsymmetricKeyService::RECRYPTION_REQUEST_KEY, 0)
       ->willReturn($timestamp);
     $container = $this->createStub(ContainerInterface::class);
-    $container->method('get')->with(NotificationManager::class)->willReturn($manager);
+    $container->method('get')->willReturnCallback(static function(string $service) use ($manager) {
+      self::assertSame(NotificationManager::class, $service);
+      return $manager;
+    });
     $appContainer = $this->mockProvider->getAppContainer();
 
     return new AsymmetricKeyService(
